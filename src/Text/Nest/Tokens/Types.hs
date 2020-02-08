@@ -68,11 +68,12 @@ data LexResult a = LR
     }
     deriving(Functor)
 
-data LexError = Err
-    { errloc :: Location
+data LexError = LexError
+    { errLoc :: Location
     , reason :: String
-    , expecting :: [String]
+    , suggestions :: [String]
     }
+    deriving (Show)
 
 
 ------------ Location ------------
@@ -84,6 +85,20 @@ data Location = Loc
     , toLine :: Int
     , toCol :: Int
     }
+
+instance Show Location where
+    show loc = concat [filePart, linecolPart]
+        where
+        filePart = concat [file loc, ": "]
+        linecolPart
+            | fromLine loc == toLine loc
+            , fromCol loc == toCol loc = concat
+                [show (fromLine loc), ":", show (fromCol loc)]
+            | fromLine loc == toLine loc = concat
+                [show (fromLine loc), ":", show (fromCol loc), "-", show (toCol loc)]
+            | otherwise = concat
+                [show (fromLine loc), "-", show (toLine loc), ":", show (fromCol loc), "-", show (toCol loc)]
+
 
 instance Semigroup Location where
     a <> b = Loc

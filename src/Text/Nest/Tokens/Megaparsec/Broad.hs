@@ -3,29 +3,41 @@
 {-# LANGUAGE TupleSections #-}
 
 module Text.Nest.Tokens.Megaparsec.Broad
-    ( wholeFile
+    ( parseFile
+    , parseStdin
     , stringEscapes
     , isSymbolChar
     ) where
 
-
+import Prelude hiding (lines)
 import Text.Nest.Tokens.Types
 
-import Data.Bifunctor (Bifunctor, bimap)
 import Data.Functor ((<&>))
-import Data.List (nub)
 import Data.Text (Text)
 import Data.Void (Void)
 import Text.Megaparsec (Parsec, label, (<|>), many, choice)
 import Text.Nest.Tokens.Megaparsec.Location (toLocation)
-import Text.Nest.Tokens.Types.Broad (Result, Payload(..))
+import Text.Nest.Tokens.Types.Broad (Payload(..))
 
 import qualified Data.Char as C
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
-import qualified Text.Megaparsec.Pos as P
-import qualified Text.Nest.Tokens.Types.Broad as Broad
+
+
+
+parseFile :: FilePath -> IO (Either String [LexResult Payload])
+parseFile fp = parse fp <$> T.readFile fp
+
+parseStdin :: IO (Either String [LexResult Payload])
+parseStdin = parse "<stdin>" <$> T.getContents
+
+-- FIXME parse :: FilePath -> Text -> IO [Result]
+parse :: FilePath -> Text -> Either String [LexResult Payload]
+parse fname inp = case P.parse wholeFile fname inp of
+    Right toks -> Right toks
+    Left errs -> Left $ P.errorBundlePretty errs
 
 
 type Parser = Parsec Void Text
@@ -115,11 +127,11 @@ colonWord = P.try $ do
 
 -- for more options, peek around starting at https://www.compart.com/en/unicode/category
 isSymbolChar :: Char -> Bool
-isSymbolChar c = good c && defensive c
+isSymbolChar c = good && defensive
     where
-    defensive c = c `notElem` ("\\# \t\n\r()[]{},.;:`\'\"" :: [Char])
-    good c = C.isLetter c || C.isDigit c || nonModifyingSymbol c || c `elem` ("~!@$%^&*-_=+|<>/?" :: [Char])
-    nonModifyingSymbol c = case C.generalCategory c of
+    defensive = c `notElem` ("\\# \t\n\r()[]{},.;:`\'\"" :: [Char])
+    good = C.isLetter c || C.isDigit c || nonModifyingSymbol || c `elem` ("~!@$%^&*-_=+|<>/?" :: [Char])
+    nonModifyingSymbol = case C.generalCategory c of
         C.MathSymbol -> True
         C.CurrencySymbol -> True
         _ -> False

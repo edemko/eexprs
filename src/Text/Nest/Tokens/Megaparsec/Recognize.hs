@@ -11,36 +11,52 @@ import Text.Nest.Tokens.Types
 
 import Data.Text (Text)
 import Data.Void (Void)
-import Text.Megaparsec (Parsec, (<|>), SourcePos, ParseErrorBundle)
+import Text.Megaparsec (Parsec, (<|>))
+import Text.Nest.Tokens.Types (LexError(..))
 import Text.Nest.Tokens.Megaparsec.Broad (isSymbolChar)
 import Text.Nest.Tokens.Types.Narrow (Payload(..),Result,Outcome(..))
+import Text.Nest.Tokens.Megaparsec.Error (toLexError)
 import Text.Nest.Tokens.Megaparsec.Location (fromLocation)
 
 import qualified Data.Char as C
 import qualified Data.Text as T
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
-import qualified Text.Megaparsec.Pos as P
 import qualified Text.Nest.Tokens.Types.Broad as Broad
 
 
 recognizeAtom :: LexResult Broad.Payload -> Result
 recognizeAtom t@LR{loc,orig,payload = Broad.Atom} = case P.runParser' parseAtom (stateFromToken loc orig) of
-    (_, Right atom) -> Ok (Atom atom) <$ t
-    (_, Left errs) -> undefined -- FIXME Error (P.errorBundlePretty errs)
-recognizeAtom t@LR{loc,payload} = error "Internal error: recognizeAtom called on non-atom. Please report."
+    (_, Right a) -> Ok (Atom a) <$ t
+    (_, Left errs) -> Error (toLexError loc errs){suggestions} <$ t
+        where
+        suggestions =
+            [ "insert whitespace between atoms"
+            , "remove atom's corrupted section"
+            ]
+recognizeAtom _ = error "Internal error: recognizeAtom called on non-atom. Please report."
 
 recognizeSeparator :: LexResult Broad.Payload -> Result
 recognizeSeparator t@LR{loc,orig,payload = Broad.Separator} = case P.runParser' parseSeparator (stateFromToken loc orig) of
     (_, Right sep) -> Ok (Separator sep) <$ t
-    (_, Left errs) -> undefined -- FIXME Error (P.errorBundlePretty errs)
-recognizeSeparator t@LR{loc,payload} = error "Internal error: recognizeSeparator called on non-separator. Please report."
+    (_, Left errs) -> Error (toLexError loc errs){suggestions} <$ t
+        where
+        suggestions =
+            [ "insert whitespace between punctuation"
+            , "remove punctuation's corrupted section"
+            ]
+recognizeSeparator _ = error "Internal error: recognizeSeparator called on non-separator. Please report."
 
 recognizeDepth :: LexResult Broad.Payload -> Result
 recognizeDepth t@LR{loc,orig,payload = Broad.Whitespace} = case P.runParser' parseDepth (stateFromToken loc orig) of
     (_, Right depth) -> Ok (Indent depth) <$ t
-    (_, Left errs) -> undefined -- FIXME Error (P.errorBundlePretty errs)
-recognizeDepth t@LR{loc,payload} = error "Internal error: recognizeDepth called on non-whitespace. Please report."
+    (_, Left errs) -> Error (toLexError loc errs){suggestions} <$ t
+        where
+        suggestions =
+            [ "replace tab(s) with spaces"
+            ]
+recognizeDepth _ = error "Internal error: recognizeDepth called on non-whitespace. Please report."
+
 
 parseAtom :: Parser Atom
 parseAtom = do

@@ -26,6 +26,9 @@ dependencies:
 
 library:
   source-dirs: src
+  ghc-options:
+    - -Wall
+    # - -freverse-errors
 
 executables:
   nest-exe:
@@ -35,6 +38,8 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    # - -freverse-errors
     dependencies:
     - nest
 
