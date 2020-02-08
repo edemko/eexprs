@@ -1,0 +1,38 @@
+"hello string"
+
+"hello `name`!"
+"some `with internal` fancy ` splices ` string"
+
+"\\\&\""
+
+"broken\
+  \ string"
+
+hello \
+hello
+
+
+  	  
+
+   # some comment
+
+"""END
+hello
+heredoc
+END
+END"""
+
+[0,2..10]
+
+def foo(a, b, c):
+    # ignore this line
+  let d = a + c  # yoyoyo
+  return a.thing + d  
+
+
+  
+  #ehcomment
+ 
+
+  \
+  majorWonk

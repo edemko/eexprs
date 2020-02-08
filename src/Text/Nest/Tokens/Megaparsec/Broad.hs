@@ -1,67 +1,71 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Text.Nest.Tokens.Megaparsec.Broad
     ( wholeFile
-    , string
     , stringEscapes
     , isSymbolChar
     ) where
 
-import Text.Nest.Tokens
 
+import Text.Nest.Tokens.Types
+
+import Data.Bifunctor (Bifunctor, bimap)
 import Data.Functor ((<&>))
 import Data.List (nub)
 import Data.Text (Text)
 import Data.Void (Void)
 import Text.Megaparsec (Parsec, label, (<|>), many, choice)
 import Text.Nest.Tokens.Megaparsec.Location (toLocation)
+import Text.Nest.Tokens.Types.Broad (Result, Payload(..))
 
 import qualified Data.Char as C
 import qualified Data.Text as T
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Pos as P
+import qualified Text.Nest.Tokens.Types.Broad as Broad
 
 
 type Parser = Parsec Void Text
 
 
-wholeFile :: Parser [Token]
-wholeFile = do
-    tokens <- many anyToken
-    last <- locatePayload endOfFile
-    pure $ tokens ++ [last]
+wholeFile :: Parser [LexResult Payload]
+wholeFile = many anyToken
 
-anyToken :: Parser Token
-anyToken = locatePayload (choice payloads)
-    where
-    payloads =
-        [ label "" whitespace
-        , label "atom" word
-        , label "comment" comment
-        , label "heredoc" heredoc -- WARNING this must appear before `string`, b/c they both start with `"`
-        , label "string" string
-        , label "punctuation" (bracket <|> separator)
-        ]
-
-locatePayload :: Parser TokenPayload -> Parser Token
-locatePayload action = do
-    start <- P.getSourcePos
-    payload <- action
-    stop <- P.getSourcePos
-    let loc = toLocation (start, stop)
-    pure $ Token loc payload
+-- FIXME I'd like to return a `Broad.Result`, but that means reporting erros inside some parsers (e.g. heredoc)
+anyToken :: Parser (LexResult Payload)
+anyToken = choice
+    [ whitespace
+    , word
+    , colonWord -- WARNING this must come before `separator` to extract words that start with a colon
+    , comment
+    , heredoc -- WARNING this must come before `string`, b/c they both start with `"`
+    , string
+    , bracket
+    , separator
+    -- , errToken -- TODO after returning `Result`
+    ]
 
 
 ------------ Whitespace ------------
 
-whitespace :: Parser TokenPayload
-whitespace = label "whitespace" (inline <|> newline)
+whitespace :: Parser (LexResult Payload)
+whitespace = do
+    pos0 <- P.getSourcePos
+    (tok, orig) <- inline <|> newline
+    pos' <- P.getSourcePos
+    pure $ LR
+        { loc = toLocation (pos0, pos')
+        , orig
+        , payload = tok
+        }
     where
-    inline = UnknownWhitespace . T.concat <$> P.some (simpleInline <|> splitline)
+    inline = (Whitespace,) . T.concat <$> P.some (simpleInline <|> splitline)
     simpleInline = P.takeWhile1P Nothing (`elem` (" \t" :: [Char]))
     splitline = P.string "\\\n"
-    newline = UnknownNewline <$ P.string "\n"
+    newline = (Newline,) <$> P.string "\n"
 
 -- TODO backslash-linebreak
 
@@ -70,23 +74,46 @@ whitespace = label "whitespace" (inline <|> newline)
 -- Text editors don't deal well with nesting block comments, which is what I'd like if I wanted block comments
 -- Also, a comment inside a li
 
-comment :: Parser TokenPayload
+comment :: Parser (LexResult Payload)
 comment = do
-    _ <- P.char '#'
+    pos0 <- P.getSourcePos
+    hash <- P.char '#'
     text <- P.takeWhileP Nothing (/= '\n')
-    pure Comment
-
-endOfFile :: Parser TokenPayload
-endOfFile = EndOfFile <$ P.eof
+    pos' <- P.getSourcePos
+    let orig = hash `T.cons` text
+    pure $ LR
+        { loc = toLocation (pos0, pos')
+        , orig
+        , payload = Comment
+        }
 
 
 ------------ Syntax ------------
 
-word :: Parser TokenPayload
+word :: Parser (LexResult Payload)
 word = do
-    -- for more options, peek around starting at https://www.compart.com/en/unicode/category
-    UnknownAtom <$> P.takeWhile1P Nothing isSymbolChar
+    pos0 <- P.getSourcePos
+    orig <- P.takeWhile1P Nothing isSymbolChar
+    pos' <- P.getSourcePos
+    pure LR
+        { loc = toLocation (pos0, pos')
+        , orig
+        , payload = Atom
+        }
 
+colonWord :: Parser (LexResult Payload)
+colonWord = P.try $ do
+    pos0 <- P.getSourcePos
+    colon <- P.char ':'
+    rest <- P.takeWhile1P Nothing (\c -> isSymbolChar c || c == ':')
+    pos' <- P.getSourcePos
+    pure LR
+        { loc = toLocation (pos0, pos')
+        , orig = colon `T.cons` rest
+        , payload = Atom
+        }
+
+-- for more options, peek around starting at https://www.compart.com/en/unicode/category
 isSymbolChar :: Char -> Bool
 isSymbolChar c = good c && defensive c
     where
@@ -97,16 +124,30 @@ isSymbolChar c = good c && defensive c
         C.CurrencySymbol -> True
         _ -> False
 
-separator :: Parser TokenPayload
+separator :: Parser (LexResult Payload)
 separator = do
-    cs <- P.takeWhile1P Nothing (`elem` separatorChars)
-    pure $ UnknownSeparator cs
+    pos0 <- P.getSourcePos
+    orig <- P.takeWhile1P Nothing (`elem` separatorChars)
+    pos' <- P.getSourcePos
+    pure $ LR
+        { loc = toLocation (pos0, pos')
+        , orig
+        , payload = Separator
+        }
 
-bracket :: Parser TokenPayload
-bracket = choice $ brackets <&> \(o, c) ->
-    let open = Bracket Open o c <$ P.single o
-        close = Bracket Close o c <$ P.single c
-    in open <|> close
+bracket :: Parser (LexResult Payload)
+bracket = do
+    pos0 <- P.getSourcePos
+    (tok, c) <- choice $ brackets <&> \(o, c) ->
+        let open = (Bracket Open o c,) <$> P.single o
+            close = (Bracket Close o c,) <$> P.single c
+        in open <|> close
+    pos' <- P.getSourcePos
+    pure LR
+        { loc = toLocation (pos0, pos')
+        , orig = T.singleton c
+        , payload = tok
+        }
 
 
 separatorChars :: [Char]
@@ -130,69 +171,105 @@ brackets = map (\[o,c] -> (o, c)) db
 
 ------------ Strings ------------
 
-heredoc :: Parser TokenPayload
+heredoc :: Parser (LexResult Payload)
 heredoc = do
-    P.string "\"\"\""
-    fence <- grabLine
-    let parseFence = P.string ("\n" <> fence <> "\"\"\"") :: Parser Text
-        loop soFar = P.try final <|> continue
-            where
-            final = soFar <$ parseFence
-            continue = do
-                P.single '\n'
-                line <- grabLine
-                loop (soFar <> "\n" <> line)
-    lines <- loop ""
-    pure $ String Plain lines Plain
+    pos0 <- P.getSourcePos
+    -- parse the open mark
+    quotes <- P.string "\"\"\""
+    fence <- grabToLine
+    nl <- T.singleton <$> P.char '\n'
+    let open = quotes <> fence <> nl
+    -- parse the body
+    let startLoop = P.try (endLoop "") <|> (grabToLine >>= loop)
+        loop soFar = P.try (endLoop soFar) <|> continue soFar
+        continue soFar = do
+            c <- P.char '\n'
+            line <- grabToLine
+            loop (soFar <> T.cons c line)
+    -- parse the close mark
+        endLoop soFar = (soFar,) <$> parseFence
+        parseFence = P.string ("\n" <> fence <> "\"\"\"") :: Parser Text
+    (lines, close) <- startLoop
+    pos' <- P.getSourcePos
+    pure LR
+        { loc = toLocation (pos0, pos')
+        , orig = open <> lines <> close
+        , payload = String Plain lines Plain
+        }
     where
-    grabLine = P.takeWhileP Nothing (/= '\n')
+    grabToLine :: Parser Text
+    grabToLine = P.takeWhileP Nothing (/= '\n')
 
-string :: Parser TokenPayload
+string :: Parser (LexResult Payload)
 string = do
-    open <- strTemplJoin
-    body <- T.concat <$> many stringSection
-    close <- strTemplJoin
-    pure $ String open body close
+    pos0 <- P.getSourcePos
+    (openChar, open) <- strTemplJoin
+    (orig, body) <- biconcat <$> many stringSection
+    (closeChar, close) <- strTemplJoin
+    pos' <- P.getSourcePos
+    pure LR
+        { loc = toLocation (pos0, pos')
+        , orig = openChar <> orig <> closeChar
+        , payload = String open body close
+        }
 
-stringSection :: Parser Text
+stringSection :: Parser (Text, Text)
 stringSection = plain <|> escape
     where
-    plain = P.takeWhile1P Nothing (`notElem` ("\"`\\\r\n" :: [Char]))
+    plain = dup <$> P.takeWhile1P Nothing (`notElem` ("\"`\\\r\n" :: [Char]))
     escape = do
-        P.single '\\'
+        bs <- P.single '\\'
         c <- P.oneOf (fst <$> stringEscapes)
         case lookup c stringEscapes of
-            Just p -> p
             Nothing -> error "internal error: an escape character was recognized without a corresponding escape parser"
+            Just p -> do
+                (orig, sem) <- p
+                pure (bs `T.cons` c `T.cons` orig, sem)
 
-strTemplJoin :: Parser StrTemplJoin
+strTemplJoin :: Parser (Text, StrTemplJoin)
 strTemplJoin = do
-    c <- label "end of string" $ P.oneOf ("\"`" :: [Char])
-    pure $ case c of { '\"' -> Plain ; '`' -> Templ }
+    c <- P.oneOf ("\"`" :: [Char])
+    let semantic = case c of { '\"' -> Plain ; '`' -> Templ }
+    pure (T.singleton c, semantic)
 
 
-stringEscapes :: [(Char, Parser Text)]
-stringEscapes =
-    [ ('\\', pure "\\")
-    , ('0', pure "\0")
-    , ('a', pure "\a")
-    , ('b', pure "\b")
-    , ('e', pure "\27")
-    , ('f', pure "\f")
-    , ('n', pure "\n")
-    , ('r', pure "\r")
-    , ('t', pure "\t")
-    , ('v', pure "\v")
-    , ('\'', pure "\'")
-    , ('\"', pure "\"")
-    -- WARNING: I am only allowing `\n` as a line separator; who wants to merge libraries with differing encodings for linesep?
-    , ('\n', label "'\\' to resume string after linebreak" $ do
-        _ <- P.takeWhileP Nothing (`elem` (" \t" :: [Char]))
-        P.single '\\'
-        pure ""
-      )
-    -- TODO \x[0-9a-fA-F]{2}
-    -- TODO \u[0-9a-fA-F]{4}
-    -- TODO \U(10|0[0-9a-fA-F])[0-9a-fA-F]{4}
-    , ('&', pure "")
-    ]
+stringEscapes :: [(Char, Parser (Text, Text))]
+stringEscapes = (fromBasic <$> basicEscapes) ++ fancyEscapes
+    where
+    fromBasic :: (Char, Char) -> (Char, Parser (Text, Text))
+    fromBasic (c, sem) = (c, pure $ ("", T.singleton sem))
+    basicEscapes :: [(Char, Char)]
+    basicEscapes =
+        [ ('\\', '\\')
+        , ('0', '\0')
+        , ('a', '\a')
+        , ('b', '\b')
+        , ('e', '\27')
+        , ('f', '\f')
+        , ('n', '\n')
+        , ('r', '\r')
+        , ('t', '\t')
+        , ('v', '\v')
+        , ('\'', '\'')
+        , ('\"', '\"')
+        ]
+    fancyEscapes =
+        -- TODO \x[0-9a-fA-F]{2}
+        -- TODO \u[0-9a-fA-F]{4}
+        -- TODO \U(10|0[0-9a-fA-F])[0-9a-fA-F]{4}
+        -- WARNING: I am only allowing `\n` as a line separator; who wants to merge libraries with differing encodings for linesep?
+        [ ('\n', label "'\\' to resume string after linebreak" $ do
+            leading <- P.takeWhileP Nothing (`elem` (" \t" :: [Char]))
+            resume <- P.single '\\'
+            pure (leading `T.snoc` resume , "\n")
+          )
+        , ('&', pure ("", ""))
+        ]
+
+dup :: a -> (a, a)
+dup x = (x, x)
+
+biconcat :: (Monoid a, Monoid b) => [(a, b)] -> (a, b)
+biconcat [] = (mempty, mempty)
+biconcat ((a, b) : rest) = (a <> restA, b <> restB)
+    where (restA, restB) = biconcat rest

@@ -5,6 +5,9 @@
 
 "\\\&\""
 
+"broken\
+  \ string"
+
 hello \
 hello
 
@@ -16,6 +19,7 @@ hello
 """END
 hello
 heredoc
+END
 END"""
 
 [0,2..10]
@@ -29,3 +33,6 @@ def foo(a, b, c):
   
   #ehcomment
  
+
+  \
+  majorWonk

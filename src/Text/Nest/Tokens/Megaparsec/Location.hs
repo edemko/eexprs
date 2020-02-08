@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module Text.Nest.Tokens.Megaparsec.Location where
 
-import Text.Nest.Tokens (Location(..))
+import Text.Nest.Tokens.Types (Location(..))
 import Text.Megaparsec.Pos (SourcePos(..), mkPos, unPos)
 
 
