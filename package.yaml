@@ -1,5 +1,5 @@
 name:                nest
-version:             0.1.0.0
+version:             0.0.1.0
 github:              "Zankoku-Okuno/nest"
 license:             BSD3
 author:              "Okuno Zankoku"
@@ -21,6 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/Zank
 
 dependencies:
 - base >= 4.7 && < 5
+- bytestring >= 0.10
 - megaparsec >= 8.0 && < 9
 - text >= 1.2 && < 2
 

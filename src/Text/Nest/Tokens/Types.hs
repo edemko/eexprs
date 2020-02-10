@@ -19,8 +19,9 @@ and also analyzes it in context to see if it is relevant for parsing,
 or if it should take on different semantics based on nearby whitespace.
 -}
 module Text.Nest.Tokens.Types
+    (
     -- * Payload Parts
-    ( Atom(..)
+      Atom(..)
     , StrTemplJoin(..)
     , Side(..)
     , Separator(..)
