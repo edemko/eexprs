@@ -7,7 +7,7 @@
 module Text.Lightyear.String
     ( string
     , takeWhile
-    -- , takeWhile1 -- TODO
+    , takeWhile1
     ) where
 
 import Prelude hiding (length,takeWhile)
@@ -35,10 +35,19 @@ string mkErr str = Parser $ \st -> case stateSplitN (length str) st of
 --
 -- This parser cannot fail: it returns an empty stream if no prefix characters
 -- satisfy the predicate.
-takeWhile ::
-        Stream strm
+takeWhile :: Stream strm
     => (Chr strm -> Bool)
     -> Lightyear c st strm err strm
 takeWhile p = Parser $ \st ->
     let (prefix, st') = stateSplitPred p st
      in Ok prefix st'
+
+takeWhile1 :: Stream strm
+    => MakeError st strm err
+    -> (Chr strm -> Bool)
+    -> Lightyear c st strm err strm
+takeWhile1 mkErr p = Parser $ \st ->
+    let (prefix, st') = stateSplitPred p st
+     in if length prefix == 0
+        then ZeroErr (mkErr st) st
+        else Ok prefix st'

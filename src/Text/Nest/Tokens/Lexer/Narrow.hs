@@ -3,16 +3,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
-module Text.Nest.Tokens.Megaparsec.Narrow
+module Text.Nest.Tokens.Lexer.Narrow
     ( narrowParse
     ) where
 
 import Text.Nest.Tokens.Types
 
 import Data.Bifunctor (first)
-import Text.Nest.Tokens.Types (startLocation)
 import Text.Nest.Tokens.Types.Narrow (Payload(..), Outcome(..))
-import Text.Nest.Tokens.Megaparsec.Recognize (recognizeAtom, recognizeSeparator, recognizeDepth)
+import Text.Nest.Tokens.Lexer.Recognize (recognizeAtom, recognizeSeparator, recognizeDepth)
 
 import qualified Text.Nest.Tokens.Types.Broad as Broad
 import qualified Text.Nest.Tokens.Types.Narrow as Narrow
@@ -54,10 +53,10 @@ afterNewline nl buf = pop >>= \case
     Nothing -> ignore
     Just t@LR{payload = Left err} -> afterNewline nl (buf `snoc` (Error err <$ t))
     Just t@LR{payload = Right payload} -> case payload of
-        Broad.Atom -> push t >> commit (startLocation $ loc t)
-        Broad.String _ _ _ -> push t >> commit (startLocation $ loc t)
-        Broad.Bracket _ _ _ -> push t >> commit (startLocation $ loc t)
-        Broad.Separator -> push t >> commit (startLocation $ loc t)
+        Broad.Atom -> push t >> commit (loc t)
+        Broad.String _ _ _ -> push t >> commit (loc t)
+        Broad.Bracket _ _ _ -> push t >> commit (loc t)
+        Broad.Separator -> push t >> commit (loc t)
         Broad.Newline -> push t >> ignore
         Broad.Whitespace -> afterIndent ((Ignore <$> nl) : buf) (payload <$ t) []
         Broad.Comment -> push t >> ignore

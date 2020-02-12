@@ -13,6 +13,7 @@ module Text.Lightyear.Position
 newtype BytePos = BytePos
     { byte :: Int -- ^ (zero-indexed) offset into the input stream
     }
+    deriving (Eq, Ord, Show, Read)
 
 -- | The default initial position for byte-oriented input.
 -- Starts at zero.
@@ -25,6 +26,7 @@ data TextPos = TextPos
     { line :: {-# UNPACK #-} !Int -- ^ line number (one-indexed)
     , col :: {-# UNPACK #-} !Int -- ^ column number (zero-indexed)
     }
+    deriving (Eq, Ord, Show, Read)
 
 -- | The default initial position for text-oriented input.
 -- Starts at line one, column zero
@@ -37,6 +39,7 @@ data FilePos a = FilePos
     { filename :: FilePath
     , pos :: !a
     }
+    deriving (Eq, Ord, Show, Read)
 
 -- | Sometimes, it makes sense to attach a filename to a position,
 -- but when accepting input from, say, a REPL, there is no sensible file name.

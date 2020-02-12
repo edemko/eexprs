@@ -3,23 +3,22 @@
 module Main where
 
 import Text.Nest.Tokens.Types (orig, payload)
-import Text.Nest.Tokens.Megaparsec.Broad (parseFile)
-import Text.Nest.Tokens.Megaparsec.Narrow (narrowParse)
+import Text.Nest.Tokens.Lexer.Broad (parse)
+import Text.Nest.Tokens.Lexer.Narrow (narrowParse)
 import Text.Nest.Tokens.Types.Narrow (Outcome(..))
-import System.Exit (exitFailure)
 import Control.Monad (forM_)
 
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 
 main :: IO ()
 main = do
-    broad <- parseFile "testfile.in" >>= \case
-        Left err -> putStr err >> exitFailure
-        Right val -> pure val
+    testfile <- T.readFile "testfile.in"
+    let broad = parse testfile
     writeFile "testfile.broad.orig" . T.unpack $ T.concat (orig <$> broad)
     -- mapM_ print $ (\x -> (orig x, payload x)) <$> broad
 
-    let narrow = narrowParse (fmap Right <$> broad)
+    let narrow = narrowParse broad
     writeFile "testfile.narrow.orig" . T.unpack $ T.concat (orig <$> narrow)
     forM_ narrow $ \x -> case payload x of
         Ok t -> print (orig x, t)

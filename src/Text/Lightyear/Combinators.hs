@@ -1,12 +1,16 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Text.Lightyear.Combinators
     (
     -- * Alternation
+    -- $branch
       Branch(..)
-    -- , choice -- TODO takes a non-empty list
+    , choice
+    , option
+    , option_
     -- , choice0 -- TODO takes a plain list
     -- * Sequencing
     -- $sequence
@@ -33,6 +37,8 @@ module Text.Lightyear.Combinators
     ) where
 
 import Prelude hiding (fail)
+
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Text.Lightyear.Internal
 import Text.Lightyear.Error (MakeError)
 
@@ -52,6 +58,42 @@ endOfInput mkErr = Parser $ \st -> case uncons (input st) of
 fail :: MakeError st strm err -> Lightyear c st strm err a
 fail mkErr = Parser $ \st -> ZeroErr (mkErr st) st
 
+
+------------ Alternation ------------
+
+-- $branch
+--  Alternation between parsers is based primarily on the 'Branch'
+-- typeclass, which generalizes 'Alternative'.
+--
+-- One wrinkle in this is that using 'many' or 'some' on a 'Consuming'
+-- parser will perform only about as well as a 'Backtracking' parser.
+-- This is because if we get some successes, a purely-comsuming parser
+-- would throw them all away at the first failure (i.e. the end of the
+-- repetition has ceased).
+-- Therefore, once a 'Consuming' parser has successfully parsed a single
+-- @p@ in @'many' p@ or @'some' p@, it will then carry on as if it were a
+-- backtracking parser.
+
+choice :: Branch (Lightyear c st strm err)
+    => NonEmpty (Lightyear c st strm err a)
+    -> Lightyear c st strm err a
+choice (x :| []) = x
+choice (x :| xs) = foldr1 (<|>) (x:xs)
+
+
+option :: Branch (Lightyear c st strm err)
+    => a
+    -> Lightyear c st strm err a
+    -> Lightyear c st strm err a
+option def action = action <|> pure def
+
+option_ :: Branch (Lightyear c st strm err)
+    => Lightyear c st strm err a
+    -> Lightyear c st strm err ()
+option_ action = option () (() <$ action)
+
+
+------------ Iteration ------------
 
 -- $sequence
 -- Sequencing of parsers is done mostly with 'Applicative' and 'Monad'.

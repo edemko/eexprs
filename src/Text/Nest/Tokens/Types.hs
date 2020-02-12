@@ -35,6 +35,7 @@ module Text.Nest.Tokens.Types
     ) where
 
 import Data.Text (Text)
+import Text.Lightyear.Position (TextPos(..))
 
 
 ------------ Payload Parts ------------
@@ -63,28 +64,36 @@ data Separator
 ------------ Results ------------
 
 data LexResult a = LR
-    { loc :: Location
+    { loc :: TextPos
     , orig :: Text
     , payload :: a
     }
     deriving(Functor)
 
-data LexError = LexError
-    { errLoc :: Location
-    , reason :: String
-    , suggestions :: [String]
-    }
+data LexError
+    = BadChar TextPos Char
+    | Unexpected TextPos (Maybe Char) [String] -- unexpected character/end-of-input, expected set
+    | CrammedTokens TextPos Text -- tokens after first
+    | MixedIndent TextPos Char -- unexpected whitespace char
+    | Panic String -- for when error conditions shouldn't get thrown
+    | Bundle [LexError]
     deriving (Show)
+
+instance Semigroup LexError where
+    (Panic _) <> b = b
+    a <> (Panic _) = a
+    (Bundle as) <> (Bundle bs) = Bundle (as <> bs)
+    (Bundle as) <> b = Bundle (as ++ [b])
+    a <> (Bundle bs) = Bundle (a : bs)
+    a <> b = Bundle [a, b]
 
 
 ------------ Location ------------
 
 data Location = Loc
     { file :: FilePath
-    , fromLine :: Int
-    , fromCol :: Int
-    , toLine :: Int
-    , toCol :: Int
+    , from :: TextPos
+    , to :: TextPos
     }
 
 instance Show Location where
@@ -92,26 +101,23 @@ instance Show Location where
         where
         filePart = concat [file loc, ": "]
         linecolPart
-            | fromLine loc == toLine loc
-            , fromCol loc == toCol loc = concat
-                [show (fromLine loc), ":", show (fromCol loc)]
-            | fromLine loc == toLine loc = concat
-                [show (fromLine loc), ":", show (fromCol loc), "-", show (toCol loc)]
+            | from loc == to loc = concat
+                [show $ (line . from) loc, ":", show $ (col . from) loc]
+            | (line . from) loc == (line . to) loc = concat
+                [show $ (line . from) loc, ":", show $ (col . from) loc, "-", show $ (col . to) loc]
             | otherwise = concat
-                [show (fromLine loc), "-", show (toLine loc), ":", show (fromCol loc), "-", show (toCol loc)]
+                [show $ (line . from) loc, "-", show $ (line . to) loc, ":", show $ (col . from) loc, "-", show $ (col . to) loc]
 
 
 instance Semigroup Location where
     a <> b = Loc
         { file = file a
-        , fromLine = fromLine a
-        , fromCol = fromCol a
-        , toLine = toLine b
-        , toCol = toCol b
+        , from = from a
+        , to = to b
         }
 
 startLocation :: Location -> Location
-startLocation Loc{file,fromLine,fromCol} = Loc {file, fromLine, fromCol, toLine = fromLine, toCol = fromCol}
+startLocation Loc{file,from} = Loc {file, from, to = from}
 
 endLocation :: Location -> Location
-endLocation Loc{file,toLine,toCol} = Loc {file, fromLine = toLine, fromCol = toCol, toLine, toCol}
+endLocation Loc{file,to} = Loc {file, from = to, to}

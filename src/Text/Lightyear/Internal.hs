@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -245,6 +246,12 @@ stateSplitPred p st@St{input,position} =
 
 ------------ Typeclass Instances ------------
 
+instance Functor (ParserResult c st strm err) where
+    fmap f = \case
+        Ok x st -> Ok (f x) st
+        ZeroErr err st -> ZeroErr err st
+        AdvanceErr err -> AdvanceErr err
+
 instance Functor (Lightyear c st strm err) where
     fmap = second
 
@@ -280,6 +287,24 @@ instance (Semigroup err) => Branch (Lightyear 'Consuming st strm err) where
             AdvanceErr err' -> AdvanceErr (err <> err')
         AdvanceErr err -> AdvanceErr err
     -- FIXME if I add a ZeroOk ctor to ParserResult, then this can abort when an infinite loop is detected in `many` (probably using an exception)
+    many action = Parser $ \st -> case unParser action st of
+        Ok x st' -> (x:) <$> loop st'
+        ZeroErr _ st' -> Ok [] st'
+        AdvanceErr _ -> Ok [] st
+        where
+        loop st = case unParser action st of
+            Ok x st' -> (x:) <$> loop st'
+            ZeroErr _ st' -> Ok [] st'
+            AdvanceErr _ -> Ok [] st
+    some action = Parser $ \st -> case unParser action st of
+        Ok x st' -> (x:) <$> loop st'
+        ZeroErr err st' -> ZeroErr err st'
+        AdvanceErr err -> AdvanceErr err
+        where
+        loop st = case unParser action st of
+            Ok x st' -> (x:) <$> loop st'
+            ZeroErr _ st' -> Ok [] st'
+            AdvanceErr _ -> Ok [] st
 instance (Semigroup err) => Branch (Lightyear 'Backtracking st strm err) where
     a <|> b = Parser $ \st -> case unParser a st of
         Ok x st' -> Ok x st'
