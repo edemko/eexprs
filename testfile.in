@@ -44,7 +44,6 @@ def foo(a, b, c):
   	badIndent
 ....
 
-
 """NOEND
 asdf
 asdf

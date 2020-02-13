@@ -14,6 +14,7 @@ module Text.Lightyear.Combinators
     -- , choice0 -- TODO takes a plain list
     -- * Sequencing
     -- $sequence
+    , many1
     -- * Iteration
     -- TODO
     -- * Error Management
@@ -114,6 +115,26 @@ option_ action = option () (() <$ action)
 --  'Data.Functor.<$', 'Data.Functor.$>',
 --  'Data.Functor.void',
 --  'Control.Applicative.<**>', '<*', and '*>'!
+
+many1 :: Branch (Lightyear c st strm err)
+    => Lightyear c st strm err a
+    -> Lightyear c st strm err a
+    -> Lightyear c st strm err [a]
+many1 first rest = Parser $ \st -> case unParser first st of
+    Ok x st' -> case unParser (many rest) st' of
+        Ok xs st'' -> Ok (x : xs) st''
+        ZeroOk xs -> Ok (x : xs) st'
+        ZeroErr _ -> error "Lightyear Internal Error: `many` failed"
+        AdvanceErr _ _ -> error "Lightyear Internal Error: `many` failed"
+    ZeroOk x -> case unParser (many rest) st of
+        Ok xs st' -> Ok (x : xs) st'
+        ZeroOk xs -> ZeroOk (x : xs)
+        ZeroErr _ -> error "Lightyear Internal Error: `many` failed"
+        AdvanceErr _ _ -> error "Lightyear Internal Error: `many` failed"
+    ZeroErr err -> ZeroOk []
+    AdvanceErr _ _ -> ZeroOk []
+
+-- TODO some1; as many1, but the first is mandatory (just for symmetry)
 
 
 ------------ Modified Movement ------------

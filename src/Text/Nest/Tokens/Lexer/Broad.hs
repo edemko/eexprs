@@ -184,45 +184,42 @@ brackets = map (\[o,c] -> (o, c)) db
 heredoc :: Parser 'Greedy Broad.Result
 heredoc = do
     pos0 <- P.getPosition
-    -- parse the open mark
-    quotes <- P.string (panic "start of heredoc") "\"\"\""
-    fence <- grabToLine -- FIXME should take only anphanum
-    -- FIXME if this fails, report the error
-    nl <- T.singleton <$> P.char (expect ["newline"]) '\n'
-    let open = quotes <> fence <> nl
-    P.recover (heredocBody fence) >>= \case
-        Right (lines, close) -> pure LR
+    (origOpen, fence) <- P.fromAtomic openHeredoc
+    lines <- T.concat <$> P.many1 (firstLine fence) (bodyLines fence)
+    P.recover (P.fromAtomic $ endHeredoc fence) >>= \case
+        Right origClose -> pure LR
             { loc = pos0
-            , orig = open <> lines <> close
+            , orig = origOpen <> lines <> origClose
             , payload = Right $ String Plain lines Plain
             }
         Left err -> pure LR
             { loc = pos0
-            , orig = open -- TODO
+            , orig = origOpen <> lines
             , payload = Left err
             }
     where
     grabToLine :: Parser c Text
     grabToLine = P.takeWhile (/= '\n')
-    heredocBody :: Text -> Parser 'Greedy (Text, Text)
-    -- FIXME heredoc body should use something more like `many hereLine <*> endLoop` so it can fail more like string
-    heredocBody fence = do
-        -- parse the body
-        let startLoop :: Parser 'Greedy (Text, Text)
-            startLoop = P.fromAtomic (endLoop "") <|> (grabToLine >>= loop)
-            loop :: Text -> Parser 'Greedy (Text, Text)
-            loop soFar = P.fromAtomic (endLoop soFar) <|> continue soFar
-            continue :: Text -> Parser 'Greedy (Text, Text)
-            continue soFar = do
-                c <- P.char (expect ["end of heredoc"]) '\n'
-                line <- grabToLine
-                loop (soFar <> T.cons c line)
-        -- parse the close mark
-            endLoop :: Text -> Parser 'Atomic (Text, Text)
-            endLoop soFar = (soFar,) <$> parseFence
-            parseFence :: Parser 'Atomic Text
-            parseFence = P.unsafeToAtomic $ P.string (panic "heredoc fence") ("\n" <> fence <> "\"\"\"")
-        startLoop
+    openHeredoc :: Parser 'Atomic (Text, Text)
+    openHeredoc = do
+        quotes <- P.unsafeToAtomic $ P.string (panic "start of heredoc") "\"\"\""
+        fence <- grabToLine -- FIXME should take only alphanum
+        nl <- P.unsafeToAtomic $ T.singleton <$> P.char (expect ["newline"]) '\n'
+        pure (quotes <> fence <> nl, fence)
+    firstLine :: Text -> Parser 'Greedy Text
+    firstLine fence = do
+        P.notFollowedBy (const $ Panic "heredoc fence (first line)") (endHeredocFirst fence)
+        grabToLine
+    bodyLines :: Text -> Parser 'Greedy Text
+    bodyLines fence = do
+        P.notFollowedBy (const $ Panic "heredoc fence") (endHeredoc fence)
+        c <- P.char (expect ["end of heredoc"]) '\n'
+        line <- grabToLine
+        pure (T.cons c line)
+    endHeredoc :: Text -> Parser 'Atomic Text
+    endHeredoc fence = P.unsafeToAtomic $ P.string (expect ["end of heredoc"]) ("\n" <> fence <> "\"\"\"")
+    endHeredocFirst :: Text -> Parser 'Atomic Text
+    endHeredocFirst fence = P.unsafeToAtomic $ P.string (expect ["end of heredoc"]) (fence <> "\"\"\"")
 
 string :: Parser 'Greedy Broad.Result
 string = do
