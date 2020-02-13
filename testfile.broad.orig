@@ -19,6 +19,7 @@ hello
    # some comment
 
 """END
+"""END
 hello
 heredoc
 END
@@ -44,6 +45,7 @@ def foo(a, b, c):
   	badIndent
 ....
 
+"""NOEND
 """NOEND
 asdf
 asdf

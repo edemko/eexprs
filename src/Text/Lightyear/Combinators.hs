@@ -54,7 +54,7 @@ endOfInput ::
     => MakeError st strm err
     -> Lightyear c st strm err ()
 endOfInput mkErr = Parser $ \st -> case uncons (input st) of
-    Nothing -> Ok () st
+    Nothing -> ZeroOk ()
     Just (_, _) -> ZeroErr (mkErr st)
 
 -- | Stop here and report an error.
@@ -131,7 +131,7 @@ many1 first rest = Parser $ \st -> case unParser first st of
         ZeroOk xs -> ZeroOk (x : xs)
         ZeroErr _ -> error "Lightyear Internal Error: `many` failed"
         AdvanceErr _ _ -> error "Lightyear Internal Error: `many` failed"
-    ZeroErr err -> ZeroOk []
+    ZeroErr _ -> ZeroOk []
     AdvanceErr _ _ -> ZeroOk []
 
 -- TODO some1; as many1, but the first is mandatory (just for symmetry)
@@ -210,7 +210,7 @@ notFollowedBy ::
 notFollowedBy mkErr action = Parser $ \st -> case unParser action st of
     Ok x _ -> ZeroErr (mkErr x)
     ZeroOk x -> ZeroErr (mkErr x)
-    ZeroErr _ -> Ok () st
+    ZeroErr _ -> ZeroOk ()
 
 -- TODO the same performance implications as 'try'
 advancing :: err -> Lightyear c st strm err a -> Lightyear c st strm err a 
@@ -227,7 +227,7 @@ advancing mkErr action = Parser $ \st -> case unParser action st of
 -- Lightyear never modifies this on its own (except to backtrack).
 -- See 'setState' and 'modifyState' for manipulating state.
 getState :: Lightyear c st strm err st
-getState = Parser $ \st -> Ok (userState st) st
+getState = Parser $ \st -> ZeroOk (userState st)
 
 -- | Replace the current value of the user-defined state with a new state.
 -- Lightyear never modifies user state on its own (except to backtrack).
@@ -246,4 +246,4 @@ modifyState f = Parser $ \st@St{userState} ->
 
 -- | Retrive the current position in the input stream.
 getPosition :: Lightyear c st strm err (Pos strm)
-getPosition = Parser $ \st -> Ok (position st) st
+getPosition = Parser $ \st -> ZeroOk (position st)

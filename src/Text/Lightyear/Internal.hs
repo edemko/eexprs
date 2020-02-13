@@ -249,7 +249,7 @@ instance Bifunctor (Lightyear c st strm) where
         AdvanceErr err st' -> AdvanceErr (g err) st'
 
 instance Applicative (Lightyear 'Greedy st strm err) where
-    pure x = Parser $ \st -> Ok x st
+    pure x = Parser $ \_ -> ZeroOk x
     fA <*> xA = Parser $ \st -> case unParser fA st of
         Ok f st' -> case unParser xA st' of
             Ok x st'' -> Ok (f x) st''
@@ -264,7 +264,7 @@ instance Applicative (Lightyear 'Greedy st strm err) where
         ZeroErr err -> ZeroErr err
         AdvanceErr err st' -> AdvanceErr err st'
 instance Applicative (Lightyear 'Atomic st strm err) where
-    pure x = Parser $ \st -> Ok x st
+    pure x = Parser $ \_ -> ZeroOk x
     fA <*> xA = Parser $ \st -> case unParser fA st of
         Ok f st' -> case unParser xA st' of
             Ok x st'' -> Ok (f x) st''
@@ -290,8 +290,8 @@ instance (Semigroup err) => Branch (Lightyear 'Greedy st strm err) where
     many action = Parser $ \st -> case unParser action st of
         Ok x st' -> (x:) <$> loop st'
         ZeroOk _ -> error "infinite loop detected in parser"
-        ZeroErr _ -> Ok [] st
-        AdvanceErr _ _ -> Ok [] st
+        ZeroErr _ -> ZeroOk []
+        AdvanceErr _ _ -> ZeroOk []
         where
         loop st = case unParser action st of
             Ok x st' -> (x:) <$> loop st'
@@ -320,7 +320,7 @@ instance (Semigroup err) => Branch (Lightyear 'Atomic st strm err) where
     many action = Parser $ \st -> case unParser action st of
         Ok x st' -> (x:) <$> loop st'
         ZeroOk _ -> error "infinite loop detected in parser"
-        ZeroErr _ -> Ok [] st
+        ZeroErr _ -> ZeroOk []
         where
         loop st = case unParser action st of
             Ok x st' -> (x:) <$> loop st'
@@ -344,11 +344,7 @@ instance Monad (Lightyear 'Greedy st strm err) where
             ZeroOk y -> Ok y st'
             ZeroErr err -> AdvanceErr err st'
             AdvanceErr err st'' -> AdvanceErr err st''
-        ZeroOk x -> case unParser (k x) st of
-            Ok y st' -> Ok y st'
-            ZeroOk y -> ZeroOk y
-            ZeroErr err -> ZeroErr err
-            AdvanceErr err st'' -> AdvanceErr err st''
+        ZeroOk x -> unParser (k x) st
         ZeroErr err -> ZeroErr err
         AdvanceErr err st'' -> AdvanceErr err st''
 instance Monad (Lightyear 'Atomic st strm err) where

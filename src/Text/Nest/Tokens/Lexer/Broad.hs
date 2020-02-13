@@ -38,20 +38,19 @@ type Parser c a = Lightyear c () Text LexError a
 wholeFile :: Parser 'Greedy [Broad.Result]
 wholeFile = do
     toks <- many anyToken
-    P.endOfInput (panic "next lexer failed to reach end of input")
+    P.endOfInput (panic "broad lexer failed to reach end of input")
     pure toks
 
--- FIXME I'd like to return a `Broad.Result`, but that means reporting erros inside some parsers (e.g. heredoc)
 anyToken :: Parser 'Greedy Broad.Result
 anyToken = P.choice $ NE.fromList
-    [ P.fromAtomic $ fmap Right <$> P.try whitespace
-    , P.fromAtomic $ fmap Right <$> P.try word
+    [ fmap Right <$> whitespace
+    , fmap Right <$> word
     , P.fromAtomic $ fmap Right <$> colonWord -- WARNING this must come before `separator` to extract words that start with a colon
-    , P.fromAtomic $ fmap Right <$> P.try comment
-    , P.fromAtomic $ P.try heredoc -- WARNING this must come before `string`, b/c they both start with `"`
-    , P.fromAtomic $ P.try string
-    , P.fromAtomic $ fmap Right <$> P.try bracket
-    , P.fromAtomic $ fmap Right <$> P.try separator
+    , fmap Right <$> comment
+    , heredoc -- WARNING this must come before `string`, b/c they both start with `"`
+    , string
+    , fmap Right <$> bracket
+    , fmap Right <$> separator
     , errToken
     ]
 
