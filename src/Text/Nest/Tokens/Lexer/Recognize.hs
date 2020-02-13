@@ -12,7 +12,6 @@ import Text.Nest.Tokens.Types
 
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
-import Data.Void (Void)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..))
 import Text.Nest.Tokens.Lexer.Broad (isSymbolChar)
 import Text.Nest.Tokens.Lexer.Error (expect, crammedTokens, mixedIndent, panic)
@@ -28,39 +27,39 @@ import qualified Text.Nest.Tokens.Types.Broad as Broad
 
 recognizeAtom :: LexResult Broad.Payload -> Result
 recognizeAtom t@LR{loc,orig,payload = Broad.Atom} =
-    case P.runLightyearPos parseAtom orig loc undefined of
+    case P.runLightyearPos parseAtom orig loc () of
         Right a -> Ok (Atom a) <$ t
         Left err -> Error err <$ t
 recognizeAtom _ = error "Internal error: recognizeAtom called on non-atom. Please report."
 
 recognizeSeparator :: LexResult Broad.Payload -> Result
 recognizeSeparator t@LR{loc,orig,payload = Broad.Separator} =
-    case P.runLightyearPos parseSeparator orig loc undefined of
+    case P.runLightyearPos parseSeparator orig loc () of
         Right sep -> Ok (Separator sep) <$ t
         Left err -> Error err <$ t
 recognizeSeparator _ = error "Internal error: recognizeSeparator called on non-separator. Please report."
 
 recognizeDepth :: LexResult Broad.Payload -> Result
 recognizeDepth t@LR{loc,orig,payload = Broad.Whitespace} =
-    case P.runLightyearPos parseDepth orig loc undefined of
+    case P.runLightyearPos parseDepth orig loc () of
         Right depth -> Ok (Indent depth) <$ t
         Left err -> Error err <$ t
 recognizeDepth _ = error "Internal error: recognizeDepth called on non-whitespace. Please report."
 
 
-parseAtom :: Parser 'Consuming Atom
+parseAtom :: Parser 'Greedy Atom
 parseAtom = do
     it <- atom
     P.endOfInput crammedTokens
     pure it
 
-parseSeparator :: Parser 'Consuming Separator
+parseSeparator :: Parser 'Greedy Separator
 parseSeparator = do
     it <- separator
     P.endOfInput crammedTokens
     pure it
 
-parseDepth :: Parser 'Consuming Int
+parseDepth :: Parser 'Greedy Int
 parseDepth = do
     spaces <- T.concat <$> P.many (simple <|> continue)
     P.endOfInput mixedIndent
@@ -72,14 +71,14 @@ parseDepth = do
 
 
 
-type Parser c a = Lightyear c Void Text LexError a
+type Parser c a = Lightyear c () Text LexError a
 
-atom :: Parser 'Consuming Atom
+atom :: Parser 'Greedy Atom
 atom = do
     parser <- (parseNum <$ isNum) <|> (parseSymbol <$ isSymbol)
     parser
     where
-    isNum = P.lookAhead $ do
+    isNum = P.lookAhead $ P.try $ do
         _ <- P.option_ $ P.satisfy (panic "isNum sign") (`elem` ['+', '-'])
         P.satisfy (panic "isNum digit") C.isDigit
     isSymbol = pure ()
@@ -91,7 +90,7 @@ atom = do
         pure $ IntAtom (sign * whole)
     parseSymbol = SymAtom <$> P.takeWhile1 (panic "symbol character") (\c -> isSymbolChar c || c == ':') -- WARNING is too permissive, but it doesn't matter b/c isNum is checked before isSymbol
 
-separator :: Parser 'Consuming Separator
+separator :: Parser 'Greedy Separator
 separator = P.choice $ NE.fromList
     [ sem <$ P.choice (parseStr <$> ss)
     | (sem, ss) <- separators

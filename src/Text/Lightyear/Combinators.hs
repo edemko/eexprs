@@ -18,10 +18,12 @@ module Text.Lightyear.Combinators
     -- TODO
     -- * Error Management
     , try
-    , commit
+    , recover
+    , fromAtomic
+    , unsafeToAtomic
     , label
     , fail
-    -- , ensureMoved -- TODO
+    , advancing
     -- * Miscellaneous
     , endOfInput
     -- ** Look Around
@@ -52,11 +54,11 @@ endOfInput ::
     -> Lightyear c st strm err ()
 endOfInput mkErr = Parser $ \st -> case uncons (input st) of
     Nothing -> Ok () st
-    Just (_, _) -> ZeroErr (mkErr st) st
+    Just (_, _) -> ZeroErr (mkErr st)
 
 -- | Stop here and report an error.
 fail :: MakeError st strm err -> Lightyear c st strm err a
-fail mkErr = Parser $ \st -> ZeroErr (mkErr st) st
+fail mkErr = Parser $ \st -> ZeroErr (mkErr st)
 
 
 ------------ Alternation ------------
@@ -65,12 +67,12 @@ fail mkErr = Parser $ \st -> ZeroErr (mkErr st) st
 --  Alternation between parsers is based primarily on the 'Branch'
 -- typeclass, which generalizes 'Alternative'.
 --
--- One wrinkle in this is that using 'many' or 'some' on a 'Consuming'
--- parser will perform only about as well as a 'Backtracking' parser.
+-- One wrinkle in this is that using 'many' or 'some' on a 'Greedy'
+-- parser will perform only about as well as a 'Atomic' parser.
 -- This is because if we get some successes, a purely-comsuming parser
 -- would throw them all away at the first failure (i.e. the end of the
 -- repetition has ceased).
--- Therefore, once a 'Consuming' parser has successfully parsed a single
+-- Therefore, once a 'Greedy' parser has successfully parsed a single
 -- @p@ in @'many' p@ or @'some' p@, it will then carry on as if it were a
 -- backtracking parser.
 
@@ -118,28 +120,43 @@ option_ action = option () (() <$ action)
 
 -- | Create an explicit backtrack point.
 -- If the input parser fails, this parser will not consume input.
-try :: Lightyear 'Consuming st strm err a -> Lightyear 'Backtracking st strm err a
+try :: Lightyear 'Greedy st strm err a -> Lightyear 'Atomic st strm err a
 try action = Parser $ \st -> case unParser action st of
     Ok x st' -> Ok x st'
-    ZeroErr err st' -> ZeroErr err st'
+    ZeroOk x -> ZeroOk x
+    ZeroErr err -> ZeroErr err
     -- NOTE keeping the original `st` around for this constructor is why `try` adds expense
-    AdvanceErr err -> ZeroErr err st
+    AdvanceErr err _ -> ZeroErr err
 
--- | Turn backtracking parser to a consuming parser.
--- Although the result is a consuming parser, since the input is backtracking,
--- backtracking will still be able to if this parser fails.
--- The point here is that ,if one wanted to combine a backtracking with a
---      consuming parser to create a consuming parser,
+recover :: Lightyear c st strm err a -> Lightyear c st strm err (Either err a)
+recover action = Parser $ \st -> case unParser action st of
+    Ok x st' -> Ok (Right x) st'
+    ZeroOk x -> ZeroOk (Right x)
+    ZeroErr err -> ZeroOk (Left err)
+    AdvanceErr err st' -> Ok (Left err) st'
+
+-- | Adapt an atomic parser for use in greedy contexts.
+-- Although the result is a greedy parser, since the input is atomic,
+-- atomic will still be able to if this parser fails.
+-- The point here is that ,if one wanted to combine a atomic with a
+--      greedy parser to create a greedy parser,
 --      this would be necessary to adapt the types.
 --
 -- Although the resulting parser could be polymorphic in 'Consume',
--- it doesn't make much sense to 'commit' on an already 'Consuming' parser,
--- since they implicity commit for every operation.
-commit :: Lightyear 'Backtracking st strm err a -> Lightyear 'Consuming st strm err a
-commit action = Parser $ \st -> case unParser action st of
+-- it doesn't make much sense to 'fromAtomic' an 'Atomic' parser to
+-- another 'Atomic' parser.
+fromAtomic :: Lightyear 'Atomic st strm err a -> Lightyear 'Greedy st strm err a
+fromAtomic action = Parser $ \st -> case unParser action st of
     Ok x st' -> Ok x st'
-    -- NOTE this is why ZeroErr has a state and AdvaceErr doesn't: commit will throw away the pointer to the original state
-    ZeroErr err st' -> ZeroErr err st'
+    ZeroOk x -> ZeroOk x
+    ZeroErr err -> ZeroErr err
+
+unsafeToAtomic :: Lightyear 'Greedy st strm err a -> Lightyear 'Atomic st strm err a
+unsafeToAtomic action = Parser $ \st -> case unParser action st of
+    Ok x st' -> Ok x st'
+    ZeroOk x -> ZeroOk x
+    ZeroErr err -> ZeroErr err
+    AdvanceErr _ _ -> error "unsafeToAtomic"
 
 -- | If the first parser fails with some error /without consuming input/,
 -- construct a new error to replace the original.
@@ -150,37 +167,37 @@ label :: (err -> MakeError st strm err)
     -> Lightyear c st strm err a
 label mkErr action = Parser $ \st -> case unParser action st of
     Ok x st' -> Ok x st'
-    ZeroErr err _ -> ZeroErr (mkErr err st) st
-    AdvanceErr err -> AdvanceErr err
+    ZeroOk x -> ZeroOk x
+    ZeroErr err -> ZeroErr (mkErr err st)
+    AdvanceErr err st' -> AdvanceErr err st'
 
 -- | Try the given parser here, and succeed exactly when it does.
 --
--- It generally doesn't make sense to look ahead with a 'Consuming' parser,
+-- It generally doesn't make sense to look ahead with a 'Greedy' parser,
 -- since the state will have to be reset if it succeeds anyway.
-lookAhead :: Lightyear 'Backtracking st strm err a -> Lightyear c st strm err a
+lookAhead :: Lightyear 'Atomic st strm err a -> Lightyear c st strm err a
 lookAhead action = Parser $ \st -> case unParser action st of
     Ok x _ -> Ok x st
-    ZeroErr err _ -> ZeroErr err st
+    ZeroOk x -> ZeroOk x
+    ZeroErr err -> ZeroErr err
 
 -- | Like 'lookAhead', but fail when the given parser succeeds and vice-versa.
 notFollowedBy ::
         (a -> err)
-    -> Lightyear 'Backtracking st strm err a
+    -> Lightyear 'Atomic st strm err a
     -> Lightyear c st strm err ()
 notFollowedBy mkErr action = Parser $ \st -> case unParser action st of
-    Ok x _ -> ZeroErr (mkErr x) st
-    ZeroErr _ _ -> Ok () st
+    Ok x _ -> ZeroErr (mkErr x)
+    ZeroOk x -> ZeroErr (mkErr x)
+    ZeroErr _ -> Ok () st
 
 -- TODO the same performance implications as 'try'
--- TODO if I get a ZeroOk ctor, then I can make `many` do this sort of thing automatically, even without `Eq` instances
-ensureMoved :: (Eq st, Eq strm) => err -> Lightyear c st strm err a -> Lightyear c st strm err a 
-ensureMoved mkErr action = Parser $ \st -> case unParser action st of
-    Ok x st' ->
-        if st == st'
-        then ZeroErr mkErr st' -- NOTE don't return `st`, return `st'`; I hope the compiler can figure out `st` doesn't escape
-        else Ok x st'
-    ZeroErr err st' -> ZeroErr err st'
-    AdvanceErr err -> AdvanceErr err
+advancing :: err -> Lightyear c st strm err a -> Lightyear c st strm err a 
+advancing mkErr action = Parser $ \st -> case unParser action st of
+    Ok x st' -> Ok x st'
+    ZeroOk _ -> ZeroErr mkErr
+    ZeroErr err -> ZeroErr err
+    AdvanceErr err st' -> AdvanceErr err st'
 
 
 ------------ State ------------

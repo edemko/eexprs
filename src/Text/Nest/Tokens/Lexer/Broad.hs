@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
@@ -14,7 +15,6 @@ import Text.Nest.Tokens.Types
 
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import Data.Void (Void)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..))
 import Text.Nest.Tokens.Types.Broad (Payload(..))
 import Text.Nest.Tokens.Lexer.Error (LexError(..), expect, panic)
@@ -27,34 +27,35 @@ import qualified Text.Nest.Tokens.Types.Broad as Broad
 
 
 parse :: Text -> [Broad.Result]
-parse inp = case P.runLightyear wholeFile inp undefined of
+parse inp = case P.runLightyear wholeFile inp () of
     Right toks -> toks
     Left err -> error $ "Internal Nest Error! Please report.\nLexer failed to recover: " ++ show err
 
 
-type Parser c a = Lightyear c Void Text LexError a
+type Parser c a = Lightyear c () Text LexError a
 
 
-wholeFile :: Parser 'Backtracking [Broad.Result]
+wholeFile :: Parser 'Greedy [Broad.Result]
 wholeFile = do
-    toks <- many $ (fmap Right <$> anyToken) <|> errToken
+    toks <- many anyToken
     P.endOfInput (panic "next lexer failed to reach end of input")
     pure toks
 
 -- FIXME I'd like to return a `Broad.Result`, but that means reporting erros inside some parsers (e.g. heredoc)
-anyToken :: Parser 'Backtracking (LexResult Payload)
+anyToken :: Parser 'Greedy Broad.Result
 anyToken = P.choice $ NE.fromList
-    [ P.try whitespace
-    , P.try word
-    , P.try colonWord -- WARNING this must come before `separator` to extract words that start with a colon
-    , P.try comment
-    , P.try heredoc -- WARNING this must come before `string`, b/c they both start with `"`
-    , P.try string
-    , P.try bracket
-    , P.try separator
+    [ P.fromAtomic $ fmap Right <$> P.try whitespace
+    , P.fromAtomic $ fmap Right <$> P.try word
+    , P.fromAtomic $ fmap Right <$> colonWord -- WARNING this must come before `separator` to extract words that start with a colon
+    , P.fromAtomic $ fmap Right <$> P.try comment
+    , P.fromAtomic $ P.try heredoc -- WARNING this must come before `string`, b/c they both start with `"`
+    , P.fromAtomic $ P.try string
+    , P.fromAtomic $ fmap Right <$> P.try bracket
+    , P.fromAtomic $ fmap Right <$> P.try separator
+    , errToken
     ]
 
-errToken :: Parser 'Backtracking Broad.Result
+errToken :: Parser 'Greedy Broad.Result
 errToken = fmap Left <$> do
     loc <- P.getPosition
     c <- P.any (panic "errToken")
@@ -66,7 +67,7 @@ errToken = fmap Left <$> do
 
 ------------ Whitespace ------------
 
-whitespace :: Parser 'Consuming (LexResult Payload)
+whitespace :: Parser 'Greedy (LexResult Payload)
 whitespace = do
     pos0 <- P.getPosition
     (tok, orig) <- inline <|> newline
@@ -88,7 +89,7 @@ whitespace = do
 -- Text editors don't deal well with nesting block comments, which is what I'd like if I wanted block comments
 -- Also, a comment inside a li
 
-comment :: Parser 'Consuming (LexResult Payload)
+comment :: Parser 'Greedy (LexResult Payload)
 comment = do
     pos0 <- P.getPosition
     hash <- P.char (panic "comment") '#'
@@ -103,7 +104,7 @@ comment = do
 
 ------------ Syntax ------------
 
-word :: Parser 'Consuming (LexResult Payload)
+word :: Parser 'Greedy (LexResult Payload)
 word = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "word") isSymbolChar
@@ -113,8 +114,8 @@ word = do
         , payload = Atom
         }
 
-colonWord :: Parser 'Consuming (LexResult Payload)
-colonWord = P.label (const $ expect ["colon + word"]) $ do
+colonWord :: Parser 'Atomic (LexResult Payload)
+colonWord = P.try $ do
     pos0 <- P.getPosition
     colon <- P.char (panic "colon-word") ':'
     rest <- P.takeWhile1 (panic "colon-word") (\c -> isSymbolChar c || c == ':')
@@ -135,7 +136,7 @@ isSymbolChar c = good && defensive
         C.CurrencySymbol -> True
         _ -> False
 
-separator :: Parser 'Consuming (LexResult Payload)
+separator :: Parser 'Greedy (LexResult Payload)
 separator = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "separator consumed") (`elem` separatorChars)
@@ -145,7 +146,7 @@ separator = do
         , payload = Separator
         }
 
-bracket :: Parser 'Consuming (LexResult Payload)
+bracket :: Parser 'Greedy (LexResult Payload)
 bracket = do
     pos0 <- P.getPosition
     (tok, c) <- P.choice $ NE.fromList $ brackets <&> \(o, c) ->
@@ -180,47 +181,67 @@ brackets = map (\[o,c] -> (o, c)) db
 
 ------------ Strings ------------
 
-heredoc :: Parser 'Consuming (LexResult Payload)
+heredoc :: Parser 'Greedy Broad.Result
 heredoc = do
     pos0 <- P.getPosition
     -- parse the open mark
     quotes <- P.string (panic "start of heredoc") "\"\"\""
-    fence <- grabToLine
+    fence <- grabToLine -- FIXME should take only anphanum
+    -- FIXME if this fails, report the error
     nl <- T.singleton <$> P.char (expect ["newline"]) '\n'
     let open = quotes <> fence <> nl
-    -- parse the body
-    let startLoop = endLoop "" <|> (grabToLine >>= loop)
-        loop soFar = endLoop soFar <|> continue soFar
-        continue soFar = P.label (const $ expect ["end of heredoc"]) $ do
-            c <- P.char (panic "heredoc continue") '\n'
-            line <- grabToLine
-            loop (soFar <> T.cons c line)
-    -- parse the close mark
-        endLoop soFar = (soFar,) <$> parseFence
-        parseFence = P.string (panic "heredoc fence") ("\n" <> fence <> "\"\"\"") :: Parser 'Consuming Text
-    (lines, close) <- startLoop
-    pure LR
-        { loc = pos0
-        , orig = open <> lines <> close
-        , payload = String Plain lines Plain
-        }
+    P.recover (heredocBody fence) >>= \case
+        Right (lines, close) -> pure LR
+            { loc = pos0
+            , orig = open <> lines <> close
+            , payload = Right $ String Plain lines Plain
+            }
+        Left err -> pure LR
+            { loc = pos0
+            , orig = open -- TODO
+            , payload = Left err
+            }
     where
     grabToLine :: Parser c Text
     grabToLine = P.takeWhile (/= '\n')
+    heredocBody :: Text -> Parser 'Greedy (Text, Text)
+    -- FIXME heredoc body should use something more like `many hereLine <*> endLoop` so it can fail more like string
+    heredocBody fence = do
+        -- parse the body
+        let startLoop :: Parser 'Greedy (Text, Text)
+            startLoop = P.fromAtomic (endLoop "") <|> (grabToLine >>= loop)
+            loop :: Text -> Parser 'Greedy (Text, Text)
+            loop soFar = P.fromAtomic (endLoop soFar) <|> continue soFar
+            continue :: Text -> Parser 'Greedy (Text, Text)
+            continue soFar = do
+                c <- P.char (expect ["end of heredoc"]) '\n'
+                line <- grabToLine
+                loop (soFar <> T.cons c line)
+        -- parse the close mark
+            endLoop :: Text -> Parser 'Atomic (Text, Text)
+            endLoop soFar = (soFar,) <$> parseFence
+            parseFence :: Parser 'Atomic Text
+            parseFence = P.unsafeToAtomic $ P.string (panic "heredoc fence") ("\n" <> fence <> "\"\"\"")
+        startLoop
 
-string :: Parser 'Consuming (LexResult Payload)
+string :: Parser 'Greedy Broad.Result
 string = do
     pos0 <- P.getPosition
     (openChar, open) <- strTemplJoin
     (orig, body) <- biconcat <$> many stringSection
-    (closeChar, close) <- strTemplJoin
-    pure LR
-        { loc = pos0
-        , orig = openChar <> orig <> closeChar
-        , payload = String open body close
-        }
+    P.recover strTemplJoin >>= \case
+        Right (closeChar, close) -> pure LR
+            { loc = pos0
+            , orig = openChar <> orig <> closeChar
+            , payload = Right $ String open body close
+            }
+        Left err -> pure LR
+            { loc = pos0
+            , orig = openChar <> orig
+            , payload = Left err
+            }
 
-stringSection :: Parser 'Consuming (Text, Text)
+stringSection :: Parser 'Greedy (Text, Text)
 stringSection = plain <|> escape
     where
     plain = dup <$> P.takeWhile1 (panic "plain string characters") (`notElem` ['\"', '`', '\\', '\r', '\n'])
@@ -234,17 +255,21 @@ stringSection = plain <|> escape
                 (orig, sem) <- p
                 pure (bs `T.cons` c `T.cons` orig, sem)
 
-strTemplJoin :: Parser 'Consuming (Text, StrTemplJoin)
+strTemplJoin :: Parser 'Greedy (Text, StrTemplJoin)
 strTemplJoin = do
     c <- P.satisfy (expect ["end of string", "start of splice"]) (`elem` ['\"', '`'])
     let semantic = case c of { '\"' -> Plain ; '`' -> Templ; _ -> error "Internal Nest Error" }
     pure (T.singleton c, semantic)
 
 
-stringEscapes :: [(Char, Parser 'Consuming (Text, Text))]
+stringEscapes :: [(Char, Parser 'Greedy (Text, Text))]
 stringEscapes = (fromBasic <$> basicEscapes) ++ fancyEscapes
     where
-    fromBasic :: (Char, Char) -> (Char, Parser 'Consuming (Text, Text))
+    -- Produces the character expected, as well as a parser
+    -- which is run after the character has matched.
+    -- That parser produces the original after the character
+    -- and the whole escape's semantics.
+    fromBasic :: (Char, Char) -> (Char, Parser 'Greedy (Text, Text))
     fromBasic (c, sem) = (c, pure $ ("", T.singleton sem))
     basicEscapes :: [(Char, Char)]
     basicEscapes =

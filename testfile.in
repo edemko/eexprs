@@ -39,6 +39,12 @@ def foo(a, b, c):
   \
   majorWonk
 
+"endless string
 123abc
   	badIndent
 ....
+
+
+"""NOEND
+asdf
+asdf
