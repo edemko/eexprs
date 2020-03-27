@@ -2,18 +2,23 @@
 
 module Main where
 
-import Text.Nest.Tokens.Types (orig, payload)
+import Control.Monad (forM_)
+import Data.List (intercalate)
 import Text.Nest.Tokens.Lexer.Broad (parse)
 import Text.Nest.Tokens.Lexer.Narrow (narrowParse)
+import Text.Nest.Tokens.Types (orig, payload)
 import Text.Nest.Tokens.Types.Narrow (Outcome(..))
-import Control.Monad (forM_)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import qualified Text.Nest.Tokens.Html as Html
+
 
 main :: IO ()
 main = do
-    testfile <- T.readFile "testfile.in"
+    let infile = "testfile.in"
+
+    testfile <- T.readFile infile
     let broad = parse testfile
     writeFile "testfile.broad.orig" . T.unpack $ T.concat (orig <$> broad)
     -- mapM_ print $ (\x -> (orig x, payload x)) <$> broad
@@ -25,6 +30,8 @@ main = do
         Ignore _ -> pure ()
         Error err -> print (orig x, err) -- putStrLn $ concat ["(", show (orig x), ",<error>)"]
 
+    let html = Html.prepareToken infile <$> narrow
+    writeFile "testfile.html" . intercalate "\n" $ show <$> html
 
     -- recognized <- case partitionEithers (recognize <$> raw) of
     --     ([], it) -> pure it
