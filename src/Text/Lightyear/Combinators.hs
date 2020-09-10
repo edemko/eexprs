@@ -213,6 +213,7 @@ notFollowedBy mkErr action = Parser $ \st -> case unParser action st of
     ZeroErr _ -> ZeroOk ()
 
 -- TODO the same performance implications as 'try'
+-- Run the given parser, but also require the stream to advance
 advancing :: err -> Lightyear c st strm err a -> Lightyear c st strm err a 
 advancing mkErr action = Parser $ \st -> case unParser action st of
     Ok x st' -> Ok x st'

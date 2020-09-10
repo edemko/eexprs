@@ -3,6 +3,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# OPTIONS -fno-warn-orphans #-}
+
 -- | Exposes the 'Stream' typeclass, which is instantiated
 -- for types which can be used as input streams to parsers.
 --
@@ -12,7 +14,6 @@
 --
 -- WARNING: This module /does/ contain orphan instances of 'Stream', though.
 -- So, be sure that "Text.Lightyear" /does/ export those instances.
-{-# OPTIONS -fno-warn-orphans #-}
 module Text.Lightyear.Stream
     ( Stream(..)
     ) where

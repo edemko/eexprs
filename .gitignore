@@ -1,4 +1,1 @@
-.stack-work/
-nest.cabal
-*~stack.yaml.lock
-stack.yaml.lock
+dist-newstyle/

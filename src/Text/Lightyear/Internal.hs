@@ -133,8 +133,6 @@ data ParserResult (consume :: Consume) st strm err a {-= (Either err a, ParserSt
     AdvanceErr :: err -- ^ error information
         -> ParserState st strm -- ^ the /invalid/ state (see warning above)
         -> ParserResult 'Greedy st strm err a
-    -- TODO ZeroOk, which is just Ok, but where the state is known not to have changed
-    -- that would make combinators like `many` much moreresistant to infinite looping
 
 -- | Typeclass for inputs that Lightyear can consume.
 --

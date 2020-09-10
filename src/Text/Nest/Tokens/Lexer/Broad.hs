@@ -17,7 +17,7 @@ import Data.Functor ((<&>))
 import Data.Text (Text)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..))
 import Text.Nest.Tokens.Types.Broad (Payload(..))
-import Text.Nest.Tokens.Lexer.Error (LexError(..), expect, panic)
+import Text.Nest.Tokens.Lexer.Error (expect, panic)
 
 import qualified Data.Char as C
 import qualified Data.List.NonEmpty as NE

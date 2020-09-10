@@ -2,7 +2,7 @@
 
 I'm tired of making new parsers for languages, so this is the last one.
 
-Parsing string templates, which themselves may contain arbitrary expressions is fairly difficult, but essential for any langauge that will deal with text manipulation.
+Parsing string templates, which themselves may contain arbitrary expressions is fairly difficult, but essential for any language that will deal with text manipulation.
 Further, indentation-sensitivity is difficult, but very nice.
 
 

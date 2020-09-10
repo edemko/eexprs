@@ -1,0 +1,66 @@
+cabal-version: 3.0
+
+name: nest
+version: 0.0.1.0
+synopsis: I'm tired of writing parsers for programming languages
+description: Please see the README on GitHub at <https://github.com/Zankoku-Okuno/nest#readme>
+homepage: https://github.com/Zankoku-Okuno/nest#readme
+bug-reports: https://github.com/Zankoku-Okuno/nest/issues
+author: Okuno Zankoku
+maintainer: zankoku.okuno@gmail.com
+copyright: 2020 Okuno Zankoku
+license: BSD-3-Clause
+license-file: LICENSE
+build-type: Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/Zankoku-Okuno/nest
+
+library
+  exposed-modules:
+    , Text.Nest.Tokens.Html
+    , Text.Nest.Tokens.Lexer.Broad
+    , Text.Nest.Tokens.Lexer.Error
+    , Text.Nest.Tokens.Lexer.Narrow
+    , Text.Nest.Tokens.Lexer.Recognize
+    , Text.Nest.Tokens.Stream
+    , Text.Nest.Tokens.Types
+    , Text.Nest.Tokens.Types.Broad
+    , Text.Nest.Tokens.Types.Narrow
+  other-modules:
+    , Paths_nest
+    , Text.Lightyear
+    , Text.Lightyear.Char
+    , Text.Lightyear.Combinators
+    , Text.Lightyear.Error
+    , Text.Lightyear.Internal
+    , Text.Lightyear.Position
+    , Text.Lightyear.Stream
+    , Text.Lightyear.String
+  hs-source-dirs: src
+  ghc-options: -Wall
+  build-depends:
+    , base >=4.7 && <5
+    , bytestring >=0.10
+    , containers >=0.6
+    , text >=1.2 && <2
+  default-language: Haskell2010
+
+executable nest-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_nest
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -O2
+  build-depends:
+    , base >=4.7 && <5
+    , bytestring >=0.10
+    , containers >=0.6
+    , nest
+    , text >=1.2 && <2
+  default-language: Haskell2010

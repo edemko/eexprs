@@ -15,7 +15,6 @@ import Data.Text (Text)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..))
 import Text.Nest.Tokens.Lexer.Broad (isSymbolChar)
 import Text.Nest.Tokens.Lexer.Error (expect, crammedTokens, mixedIndent, panic)
-import Text.Nest.Tokens.Types (LexError(..))
 import Text.Nest.Tokens.Types.Narrow (Payload(..),Result,Outcome(..))
 
 import qualified Data.List.NonEmpty as NE
