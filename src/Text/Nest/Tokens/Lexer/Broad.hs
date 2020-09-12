@@ -16,17 +16,15 @@ import Text.Nest.Tokens.Types
 import Data.Functor ((<&>))
 import Data.Text (Text)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..))
-import Text.Nest.Tokens.Types.Broad (Payload(..))
 import Text.Nest.Tokens.Lexer.Error (expect, panic)
+import Text.Nest.Tokens.Lexer.Recognize (isSymbolChar, recognizeAtom, recognizeSeparator)
 
-import qualified Data.Char as C
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 import qualified Text.Lightyear as P
-import qualified Text.Nest.Tokens.Types.Broad as Broad
 
 
-parse :: Text -> [Broad.Result]
+parse :: Text -> [Result]
 parse inp = case P.runLightyear wholeFile inp () of
     Right toks -> toks
     Left err -> error $ "Internal Nest Error! Please report.\nLexer failed to recover: " ++ show err
@@ -35,33 +33,33 @@ parse inp = case P.runLightyear wholeFile inp () of
 type Parser c a = Lightyear c () Text LexError a
 
 
-wholeFile :: Parser 'Greedy [Broad.Result]
+wholeFile :: Parser 'Greedy [Result]
 wholeFile = do
     toks <- many anyToken
     P.endOfInput (panic "broad lexer failed to reach end of input")
     pure toks
 
-anyToken :: Parser 'Greedy Broad.Result
+anyToken :: Parser 'Greedy Result
 anyToken = P.choice $ NE.fromList
-    [ fmap Right <$> whitespace
-    , fmap Right <$> word
-    , P.fromAtomic $ fmap Right <$> colonWord -- WARNING this must come before `separator` to extract words that start with a colon
-    , fmap Right <$> comment
+    [ fmap Ok <$> whitespace
+    , word
+    , P.fromAtomic colonWord -- WARNING this must come before `separator` to extract words that start with a colon
+    , fmap Ok <$> comment
     , heredoc -- WARNING this must come before `string`, b/c they both start with `"`
     , string
-    , fmap Right <$> bracket
-    , fmap Right <$> separator
+    , fmap Ok <$> bracket
+    , separator
     , errToken
     ]
 
-errToken :: Parser 'Greedy Broad.Result
-errToken = fmap Left <$> do
+errToken :: Parser 'Greedy Result
+errToken = do
     loc <- P.getPosition
     c <- P.any (panic "errToken")
     pure LR
         { loc
         , orig = T.singleton c
-        , payload = BadChar loc c
+        , payload = Error $ BadChar loc c
         }
 
 ------------ Whitespace ------------
@@ -103,46 +101,36 @@ comment = do
 
 ------------ Syntax ------------
 
-word :: Parser 'Greedy (LexResult Payload)
+word :: Parser 'Greedy Result
 word = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "word") isSymbolChar
     pure LR
         { loc = pos0
         , orig
-        , payload = Atom
+        , payload = recognizeAtom pos0 orig
         }
 
-colonWord :: Parser 'Atomic (LexResult Payload)
+colonWord :: Parser 'Atomic Result
 colonWord = P.try $ do
     pos0 <- P.getPosition
     colon <- P.char (panic "colon-word") ':'
     rest <- P.takeWhile1 (panic "colon-word") (\c -> isSymbolChar c || c == ':')
+    let orig = colon `T.cons` rest
     pure LR
         { loc = pos0
-        , orig = colon `T.cons` rest
-        , payload = Atom
+        , orig
+        , payload = recognizeAtom pos0 orig
         }
 
--- for more options, peek around starting at https://www.compart.com/en/unicode/category
-isSymbolChar :: Char -> Bool
-isSymbolChar c = good && defensive
-    where
-    defensive = c `notElem` ("\\# \t\n\r()[]{},.;:`\'\"" :: [Char])
-    good = C.isLetter c || C.isDigit c || nonModifyingSymbol || c `elem` ("~!@$%^&*-_=+|<>/?" :: [Char])
-    nonModifyingSymbol = case C.generalCategory c of
-        C.MathSymbol -> True
-        C.CurrencySymbol -> True
-        _ -> False
-
-separator :: Parser 'Greedy (LexResult Payload)
+separator :: Parser 'Greedy Result
 separator = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "separator consumed") (`elem` separatorChars)
     pure $ LR
         { loc = pos0
         , orig
-        , payload = Separator
+        , payload = recognizeSeparator pos0 orig
         }
 
 bracket :: Parser 'Greedy (LexResult Payload)
@@ -180,21 +168,22 @@ brackets = map (\[o,c] -> (o, c)) db
 
 ------------ Strings ------------
 
-heredoc :: Parser 'Greedy Broad.Result
+heredoc :: Parser 'Greedy Result
 heredoc = do
     pos0 <- P.getPosition
     (origOpen, fence) <- P.fromAtomic openHeredoc
     lines <- T.concat <$> P.many1 (firstLine fence) (bodyLines fence)
-    P.recover (P.fromAtomic $ endHeredoc fence) >>= \case
-        Right origClose -> pure LR
+    closeE <- P.recover (P.fromAtomic $ endHeredoc fence)
+    pure $ case closeE of
+        Right origClose -> LR
             { loc = pos0
             , orig = origOpen <> lines <> origClose
-            , payload = Right $ String Plain lines Plain
+            , payload = Ok $ String Plain lines Plain
             }
-        Left err -> pure LR
+        Left err -> LR
             { loc = pos0
             , orig = origOpen <> lines
-            , payload = Left err
+            , payload = Error err
             }
     where
     grabToLine :: Parser c Text
@@ -220,21 +209,22 @@ heredoc = do
     endHeredocFirst :: Text -> Parser 'Atomic Text
     endHeredocFirst fence = P.unsafeToAtomic $ P.string (expect ["end of heredoc"]) (fence <> "\"\"\"")
 
-string :: Parser 'Greedy Broad.Result
+string :: Parser 'Greedy Result
 string = do
     pos0 <- P.getPosition
     (openChar, open) <- strTemplJoin
     (orig, body) <- biconcat <$> many stringSection
-    P.recover strTemplJoin >>= \case
-        Right (closeChar, close) -> pure LR
+    closeE <- P.recover strTemplJoin
+    pure $ case closeE of
+        Right (closeChar, close) -> LR
             { loc = pos0
             , orig = openChar <> orig <> closeChar
-            , payload = Right $ String open body close
+            , payload = Ok $ String open body close
             }
-        Left err -> pure LR
+        Left err -> LR
             { loc = pos0
             , orig = openChar <> orig
-            , payload = Left err
+            , payload = Error err
             }
 
 stringSection :: Parser 'Greedy (Text, Text)

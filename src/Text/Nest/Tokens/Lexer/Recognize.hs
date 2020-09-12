@@ -3,7 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Text.Nest.Tokens.Lexer.Recognize
-    ( recognizeAtom
+    ( isSymbolChar
+    , recognizeAtom
     , recognizeSeparator
     , recognizeDepth
     ) where
@@ -12,34 +13,38 @@ import Text.Nest.Tokens.Types
 
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
-import Text.Lightyear (Lightyear, Consume(..), Branch(..))
-import Text.Nest.Tokens.Lexer.Broad (isSymbolChar)
+import Text.Lightyear (Lightyear, Consume(..), Branch(..), TextPos)
 import Text.Nest.Tokens.Lexer.Error (expect, crammedTokens, mixedIndent, panic)
-import Text.Nest.Tokens.Types.Narrow (Payload(..),Result,Outcome(..))
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Char as C
 import qualified Data.Text as T
 import qualified Text.Lightyear as P
-import qualified Text.Nest.Tokens.Types.Broad as Broad
 
 
-recognizeAtom :: LexResult Broad.Payload -> Result
-recognizeAtom t@LR{loc,orig,payload = Broad.Atom} =
-    case P.runLightyearPos parseAtom orig loc () of
-        Right a -> Ok (Atom a) <$ t
-        Left err -> Error err <$ t
-recognizeAtom _ = error "Internal error: recognizeAtom called on non-atom. Please report."
+-- for more options, peek around starting at https://www.compart.com/en/unicode/category
+isSymbolChar :: Char -> Bool
+isSymbolChar c = good && defensive
+    where
+    defensive = c `notElem` ("\\# \t\n\r()[]{},.;:`\'\"" :: [Char])
+    good = C.isLetter c || C.isDigit c || nonModifyingSymbol || c `elem` ("~!@$%^&*-_=+|<>/?" :: [Char])
+    nonModifyingSymbol = case C.generalCategory c of
+        C.MathSymbol -> True
+        C.CurrencySymbol -> True
+        _ -> False
 
-recognizeSeparator :: LexResult Broad.Payload -> Result
-recognizeSeparator t@LR{loc,orig,payload = Broad.Separator} =
-    case P.runLightyearPos parseSeparator orig loc () of
-        Right sep -> Ok (Separator sep) <$ t
-        Left err -> Error err <$ t
-recognizeSeparator _ = error "Internal error: recognizeSeparator called on non-separator. Please report."
+recognizeAtom :: TextPos -> Text -> Outcome
+recognizeAtom loc orig = case P.runLightyearPos parseAtom orig loc () of
+    Right a -> Ok $ Atom a
+    Left err -> Error err
 
-recognizeDepth :: LexResult Broad.Payload -> Result
-recognizeDepth t@LR{loc,orig,payload = Broad.Whitespace} =
+recognizeSeparator :: TextPos -> Text -> Outcome
+recognizeSeparator loc orig = case P.runLightyearPos parseSeparator orig loc () of
+    Right sep -> Ok $ Separator sep
+    Left err -> Error err
+
+recognizeDepth :: LexResult Payload -> Result
+recognizeDepth t@LR{loc,orig,payload = Whitespace} =
     case P.runLightyearPos parseDepth orig loc () of
         Right depth -> Ok (Indent depth) <$ t
         Left err -> Error err <$ t

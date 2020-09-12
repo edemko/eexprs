@@ -38,10 +38,10 @@ prepareToken file LR{loc,orig,payload} = RawLexInfo
     Narrow.Space -> ["whitespace", "inline"]
     Narrow.Indent _ -> ["whitespace", "indentation"]
   getCategory (Narrow.Ignore broad) = case broad of
-    Broad.Atom -> ["atom"]
+    Broad.UnknownAtom -> ["atom"]
     Broad.String _ _ _ -> ["atom"]
     Broad.Bracket _ _ _ -> ["punctuation", "bracketing"]
-    Broad.Separator -> ["punctuation", "separator"]
+    Broad.UnknownSeparator -> ["punctuation", "separator"]
     Broad.Newline -> ["whitespace", "newline"]
     Broad.Whitespace -> ["whitespace", "inline"]
     Broad.Comment -> ["comment", "line"]

@@ -21,11 +21,14 @@ or if it should take on different semantics based on nearby whitespace.
 module Text.Nest.Tokens.Types
     (
     -- * Payload Parts
-      Atom(..)
+      Payload(..)
+    , Atom(..)
     , StrTemplJoin(..)
     , Side(..)
     , Separator(..)
     -- * Results
+    , Result
+    , Outcome(..)
     , LexResult(..)
     , LexError(..)
     -- * Location
@@ -38,7 +41,22 @@ import Data.Text (Text)
 import Text.Lightyear.Position (TextPos(..))
 
 
------------- Payload Parts ------------
+------------ Payload ------------
+
+-- FIXME use a GADT to say which forms are allowable after narrow lexing has occurred
+data Payload
+    = UnknownAtom
+    | Atom Atom
+    | String StrTemplJoin Text StrTemplJoin
+    | Bracket Side Char Char
+    | UnknownSeparator
+    | Separator Separator
+    | Newline
+    | Whitespace
+    | Comment
+    | Space
+    | Indent Int
+    deriving(Show)
 
 data Atom
     = IntAtom Integer
@@ -63,12 +81,19 @@ data Separator
 
 ------------ Results ------------
 
+type Result = LexResult Outcome
+
 data LexResult a = LR
     { loc :: TextPos
     , orig :: Text
     , payload :: a
     }
     deriving(Functor)
+
+data Outcome
+    = Ok Payload
+    | Ignore Payload
+    | Error LexError
 
 data LexError
     = BadChar TextPos Char

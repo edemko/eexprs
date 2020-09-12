@@ -13,6 +13,7 @@ Here's how to edit some things I expect to change.
 
 I'm not solid on which characters should be allowed in atoms.
 To edit this, look for the `word` parser in `Text.Nest.Tokens.Megaparsec.Broad`.
+, and `isSymbolChar` in `Text.Nest.Tokens.Lexer.Recognize`.
 
 So far, I am only allowing UNIX-style linebreaks.
 On the one hand, this is inflexible, and should probably be changed.
