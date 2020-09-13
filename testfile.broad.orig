@@ -23,7 +23,6 @@ hello
    # some comment
 
 """END
-"""END
 hello
 heredoc
 END
@@ -61,7 +60,6 @@ some . dots .(here) yo. yo.#
 
 ( ( )() ())
 
-"""NOEND
 """NOEND
 asdf
 asdf
