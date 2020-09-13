@@ -184,7 +184,7 @@ brackets = map (\[o,c] -> (o, c)) db
 heredoc :: Parser 'Greedy Broad.Result
 heredoc = do
     pos0 <- P.getPosition
-    (origOpen, fence) <- P.fromAtomic openHeredoc
+    (origOpen, fence) <- openHeredoc
     lines <- T.concat <$> P.many1 (firstLine fence) (bodyLines fence)
     P.recover (P.fromAtomic $ endHeredoc fence) >>= \case
         Right origClose -> pure LR
@@ -200,11 +200,11 @@ heredoc = do
     where
     grabToLine :: Parser c Text
     grabToLine = P.takeWhile (/= '\n')
-    openHeredoc :: Parser 'Atomic (Text, Text)
+    openHeredoc :: Parser 'Greedy (Text, Text)
     openHeredoc = do
-        quotes <- P.unsafeToAtomic $ P.string (panic "start of heredoc") "\"\"\""
-        fence <- grabToLine -- FIXME should take only alphanum
-        nl <- P.unsafeToAtomic $ T.singleton <$> P.char (expect ["newline"]) '\n'
+        quotes <- P.string (panic "start of heredoc") "\"\"\""
+        fence <- grabToLine -- FIXME should take only alphanum (and be non-empty?)
+        nl <- T.singleton <$> P.char (expect ["newline"]) '\n'
         pure (quotes <> fence <> nl, fence)
     firstLine :: Text -> Parser 'Greedy Text
     firstLine fence = do
