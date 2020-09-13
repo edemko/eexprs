@@ -1,0 +1,199 @@
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] String Plain "hello string" Plain
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] String Plain "hello " Templ
+[OK ] Atom (SymAtom "name")
+[OK ] String Templ "!" Plain
+[OK ] UnknownNewline
+[OK ] String Plain "some " Templ
+[OK ] Atom (SymAtom "with")
+[OK ] Space
+[OK ] Atom (SymAtom "internal")
+[OK ] String Templ " fancy " Templ
+[OK ] Space
+[OK ] Atom (SymAtom "splices")
+[OK ] Space
+[OK ] String Templ " string" Plain
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] String Plain "\\\"" Plain
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] String Plain "multiline\n string" Plain
+[OK ] UnknownNewline
+[OK ] String Plain "one line" Templ
+[OK ] Space
+[OK ] String Plain "" Plain
+[OK ] Space
+[OK ] String Templ "string" Plain
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Atom (SymAtom "hello")
+[OK ] Space
+[OK ] Atom (SymAtom "hello")
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] String Plain "hello\nnewline" Plain
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Comment
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] String Plain "hello\nheredoc\nEND" Plain
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Combiner Open Brack
+[OK ] Atom (IntAtom 0)
+[OK ] Separator Comma
+[OK ] Atom (IntAtom 2)
+[OK ] Separator Ellipsis
+[OK ] Atom (IntAtom 10)
+[OK ] Combiner Close Brack
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Atom (SymAtom "def")
+[OK ] Space
+[OK ] Atom (SymAtom "foo")
+[OK ] Combiner Open Paren
+[OK ] Atom (SymAtom "a")
+[OK ] Separator Comma
+[OK ] Space
+[OK ] Atom (SymAtom "b")
+[OK ] Separator Comma
+[OK ] Space
+[OK ] Atom (SymAtom "c")
+[OK ] Combiner Close Paren
+[OK ] SensitiveColon
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Comment
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "let")
+[OK ] Space
+[OK ] Atom (SymAtom "d")
+[OK ] Space
+[OK ] Atom (SymAtom "=")
+[OK ] Space
+[OK ] Atom (SymAtom "a")
+[OK ] Space
+[OK ] Atom (SymAtom "+")
+[OK ] Space
+[OK ] Atom (SymAtom "c")
+[OK ] Space
+[OK ] Comment
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "return")
+[OK ] Space
+[OK ] Atom (SymAtom "a")
+[OK ] SensitiveDot
+[OK ] Atom (SymAtom "thing")
+[OK ] Space
+[OK ] Atom (SymAtom "+")
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "d")
+[OK ] Space
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Comment
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Atom (SymAtom "top")
+[OK ] Space
+[OK ] SensitiveColon
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "indent")
+[OK ] Space
+[OK ] Atom (IntAtom 1)
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "indent")
+[OK ] Space
+[OK ] Atom (IntAtom 2)
+[OK ] Space
+[OK ] SensitiveColon
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "nested")
+[OK ] Space
+[OK ] Atom (IntAtom 1)
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "nested")
+[OK ] Space
+[OK ] Atom (IntAtom 2)
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Combiner Open Brace
+[OK ] Space
+[OK ] Atom (SymAtom "some")
+[OK ] SensitiveColon
+[OK ] Space
+[OK ] Atom (SymAtom "dict")
+[OK ] Space
+[OK ] Combiner Close Brace
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Atom (SymAtom "some")
+[OK ] Space
+[OK ] SensitiveDot
+[OK ] Space
+[OK ] Atom (SymAtom "dots")
+[OK ] Space
+[OK ] SensitiveDot
+[OK ] Combiner Open Paren
+[OK ] Atom (SymAtom "here")
+[OK ] Combiner Close Paren
+[OK ] Space
+[OK ] Atom (SymAtom "yo")
+[OK ] SensitiveDot
+[OK ] Space
+[OK ] Atom (SymAtom "yo")
+[OK ] SensitiveDot
+[OK ] Comment
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "majorWonk")
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[ERR] (TextPos {line = 56, col = 1},Unexpected (TextPos {line = 56, col = 16}) (Just '\n') ["end of string","start of splice"])
+[OK ] UnknownNewline
+[ERR] (TextPos {line = 57, col = 1},CrammedTokens (TextPos {line = 57, col = 4}) "abc")
+[OK ] UnknownNewline
+[OK ] Space
+[OK ] Atom (SymAtom "badIndent")
+[OK ] UnknownNewline
+[ERR] (TextPos {line = 59, col = 1},CrammedTokens (TextPos {line = 59, col = 3}) "..")
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] Combiner Open Paren
+[OK ] Space
+[OK ] Combiner Open Paren
+[OK ] Space
+[OK ] Combiner Close Paren
+[OK ] Combiner Open Paren
+[OK ] Combiner Close Paren
+[OK ] Space
+[OK ] Combiner Open Paren
+[OK ] Combiner Close Paren
+[OK ] Combiner Close Paren
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[ERR] (TextPos {line = 63, col = 1},Unexpected (TextPos {line = 66, col = 1}) Nothing ["end of heredoc"])

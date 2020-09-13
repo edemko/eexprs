@@ -1,0 +1,224 @@
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ERR] (TextPos {line = 3, col = 1},IllegalIndent)
+[OK ] String Plain "hello string" Plain
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] String Plain "hello " Templ
+[OK ] Atom (SymAtom "name")
+[OK ] String Templ "!" Plain
+[OK ] Separator Newline
+[ign] Space
+[OK ] String Plain "some " Templ
+[OK ] Atom (SymAtom "with")
+[OK ] Space
+[OK ] Atom (SymAtom "internal")
+[OK ] String Templ " fancy " Templ
+[ign] Space
+[OK ] Atom (SymAtom "splices")
+[ign] Space
+[OK ] String Templ " string" Plain
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] String Plain "\\\"" Plain
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] String Plain "multiline\n string" Plain
+[OK ] Separator Newline
+[ign] Space
+[OK ] String Plain "one line" Templ
+[ign] Space
+[OK ] String Plain "" Plain
+[ign] Space
+[OK ] String Templ "string" Plain
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] Atom (SymAtom "hello")
+[OK ] Space
+[OK ] Atom (SymAtom "hello")
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] String Plain "hello\nnewline" Plain
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ign] Space
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ign] Space
+[ign] Comment
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ign] Space
+[OK ] String Plain "hello\nheredoc\nEND" Plain
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] Combiner Open Brack
+[OK ] Atom (IntAtom 0)
+[OK ] Separator Comma
+[OK ] Atom (IntAtom 2)
+[OK ] Separator Ellipsis
+[OK ] Atom (IntAtom 10)
+[OK ] Combiner Close Brack
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] Atom (SymAtom "def")
+[OK ] Space
+[OK ] Atom (SymAtom "foo")
+[OK ] Combiner Open Paren
+[OK ] Atom (SymAtom "a")
+[OK ] Separator Comma
+[ign] Space
+[OK ] Atom (SymAtom "b")
+[OK ] Separator Comma
+[ign] Space
+[OK ] Atom (SymAtom "c")
+[OK ] Combiner Close Paren
+[ign] StartIndent
+[ign] UnknownNewline
+[ign] Space
+[ign] Comment
+[ign] UnknownNewline
+[OK ] Combiner Open Indent
+[OK ] Atom (SymAtom "let")
+[OK ] Space
+[OK ] Atom (SymAtom "d")
+[OK ] Space
+[OK ] Atom (SymAtom "=")
+[OK ] Space
+[OK ] Atom (SymAtom "a")
+[OK ] Space
+[OK ] Atom (SymAtom "+")
+[OK ] Space
+[OK ] Atom (SymAtom "c")
+[ign] Space
+[ign] Comment
+[OK ] Separator Newline
+[ign] Space
+[OK ] Atom (SymAtom "return")
+[OK ] Space
+[OK ] Atom (SymAtom "a")
+[OK ] ChainDot
+[OK ] Atom (SymAtom "thing")
+[OK ] Space
+[OK ] Atom (SymAtom "+")
+[ign] UnknownNewline
+[ERR] (TextPos {line = 37, col = 1},IllegalIndent)
+[OK ] Separator Newline
+[OK ] Atom (SymAtom "d")
+[ign] Space
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ign] Space
+[ign] UnknownNewline
+[ign] Space
+[ign] Comment
+[ign] UnknownNewline
+[ign] Space
+[ign] UnknownNewline
+[ign] UnknownNewline
+[OK ] Combiner Close Indent
+[ign] Space
+[OK ] Separator Newline
+[OK ] Atom (SymAtom "top")
+[OK ] Space
+[ign] StartIndent
+[ign] UnknownNewline
+[OK ] Combiner Open Indent
+[OK ] Atom (SymAtom "indent")
+[OK ] Space
+[OK ] Atom (IntAtom 1)
+[OK ] Separator Newline
+[ign] Space
+[OK ] Atom (SymAtom "indent")
+[OK ] Space
+[OK ] Atom (IntAtom 2)
+[OK ] Space
+[ign] StartIndent
+[ign] UnknownNewline
+[OK ] Combiner Open Indent
+[OK ] Atom (SymAtom "nested")
+[OK ] Space
+[OK ] Atom (IntAtom 1)
+[OK ] Separator Newline
+[ign] Space
+[OK ] Atom (SymAtom "nested")
+[OK ] Space
+[OK ] Atom (IntAtom 2)
+[ign] UnknownNewline
+[ign] UnknownNewline
+[OK ] Combiner Close Indent
+[OK ] Combiner Close Indent
+[ign] Space
+[OK ] Separator Newline
+[OK ] Combiner Open Brace
+[ign] Space
+[OK ] Atom (SymAtom "some")
+[OK ] Separator Colon
+[ign] Space
+[OK ] Atom (SymAtom "dict")
+[ign] Space
+[OK ] Combiner Close Brace
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] Atom (SymAtom "some")
+[ign] Space
+[OK ] Separator Dot
+[ign] Space
+[OK ] Atom (SymAtom "dots")
+[OK ] Space
+[OK ] SyntheticDot
+[OK ] Combiner Open Paren
+[OK ] Atom (SymAtom "here")
+[OK ] Combiner Close Paren
+[OK ] Space
+[OK ] Atom (SymAtom "yo")
+[ERR] (TextPos {line = 51, col = 23},IllegalDot)
+[OK ] Space
+[OK ] Atom (SymAtom "yo")
+[ERR] (TextPos {line = 51, col = 27},IllegalDot)
+[ign] Comment
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ERR] (TextPos {line = 53, col = 1},IllegalIndent)
+[OK ] Separator Newline
+[OK ] Atom (SymAtom "majorWonk")
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[ERR] (TextPos {line = 56, col = 1},Unexpected (TextPos {line = 56, col = 16}) (Just '\n') ["end of string","start of splice"])
+[OK ] Separator Newline
+[ign] Space
+[ERR] (TextPos {line = 57, col = 1},CrammedTokens (TextPos {line = 57, col = 4}) "abc")
+[ign] UnknownNewline
+[ERR] (TextPos {line = 58, col = 1},MixedIndent (TextPos {line = 58, col = 3}) '\t')
+[OK ] Atom (SymAtom "badIndent")
+[OK ] Separator Newline
+[ign] Space
+[ERR] (TextPos {line = 59, col = 1},CrammedTokens (TextPos {line = 59, col = 3}) "..")
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[OK ] Combiner Open Paren
+[ign] Space
+[OK ] Combiner Open Paren
+[ign] Space
+[OK ] Combiner Close Paren
+[OK ] Combiner Open Paren
+[OK ] Combiner Close Paren
+[OK ] Space
+[OK ] Combiner Open Paren
+[OK ] Combiner Close Paren
+[OK ] Combiner Close Paren
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] Space
+[ERR] (TextPos {line = 63, col = 1},Unexpected (TextPos {line = 66, col = 1}) Nothing ["end of heredoc"])

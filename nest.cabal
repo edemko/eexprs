@@ -63,3 +63,15 @@ executable nest-exe
     , nest
     , text >=1.2 && <2
   default-language: Haskell2010
+
+test-suite test-correct
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  default-language: Haskell2010
+  build-depends:
+    , base
+    , nest
+    , tasty >=1.3
+    , tasty-golden >=2.3
+    , text
