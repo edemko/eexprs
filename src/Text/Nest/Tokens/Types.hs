@@ -25,6 +25,7 @@ module Text.Nest.Tokens.Types
     , Atom(..)
     , StrTemplJoin(..)
     , Side(..)
+    , Combiner(..)
     , Separator(..)
     -- * Results
     , Result
@@ -45,17 +46,18 @@ import Text.Lightyear.Position (TextPos(..))
 
 -- FIXME use a GADT to say which forms are allowable after narrow lexing has occurred
 data Payload
-    = UnknownAtom
-    | Atom Atom
+    = Atom Atom
     | String StrTemplJoin Text StrTemplJoin
-    | Bracket Side Char Char
-    | UnknownSeparator
+    | Combiner Side Combiner
     | Separator Separator
-    | Newline
-    | Whitespace
+    | ChainDot
+    | SyntheticDot
+    | StartIndent
     | Comment
     | Space
-    | Indent Int
+    | UnknownNewline
+    | SensitiveDot
+    | SensitiveColon
     deriving(Show)
 
 data Atom
@@ -70,12 +72,20 @@ data StrTemplJoin = Plain | Templ
 data Side = Open | Close
     deriving(Eq, Show, Read)
 
+data Combiner
+    = Paren
+    | Brack
+    | Brace
+    | Indent
+    deriving (Show)
+
 data Separator
     = Comma
     | Dot
     | Ellipsis
     | Semicolon
     | Colon
+    | Newline
     deriving (Show)
 
 
@@ -88,18 +98,21 @@ data LexResult a = LR
     , orig :: Text
     , payload :: a
     }
-    deriving(Functor)
+    deriving(Functor,Show)
 
 data Outcome
     = Ok Payload
     | Ignore Payload
     | Error LexError
+    deriving (Show)
 
 data LexError
     = BadChar TextPos Char
     | Unexpected TextPos (Maybe Char) [String] -- unexpected character/end-of-input, expected set
     | CrammedTokens TextPos Text -- tokens after first
     | MixedIndent TextPos Char -- unexpected whitespace char
+    | IllegalDot -- dot with whitespace after, but not before
+    | IllegalIndent -- if file starts with indent, or indent is smaller than previous level
     | Panic String -- for when error conditions shouldn't get thrown
     | Bundle [LexError]
     deriving (Show)

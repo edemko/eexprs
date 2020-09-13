@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
-module Text.Nest.Tokens.Lexer.Broad
+module Text.Nest.Tokens.Lexer.ContextFree
     ( parse
     , stringEscapes
     , isSymbolChar
@@ -74,17 +74,16 @@ whitespace = do
         , payload = tok
         }
     where
-    inline = (Whitespace,) . T.concat <$> P.some (simpleInline <|> splitline)
+    inline = (Space,) . T.concat <$> P.some (simpleInline <|> splitline)
     simpleInline = P.takeWhile1 (panic "simple whitespace") (`elem` [' ', '\t'])
     splitline = P.string (panic "split whitespace") "\\\n"
-    newline = (Newline,) <$> P.string (panic "newline") "\n"
+    newline = (UnknownNewline,) <$> P.string (panic "newline") "\n"
 
 -- TODO backslash-linebreak
 
 
--- NOTE: I'm thinking that inline comments are not so useful
+-- NOTE: I'm thinking that block comments are not so useful
 -- Text editors don't deal well with nesting block comments, which is what I'd like if I wanted block comments
--- Also, a comment inside a li
 
 comment :: Parser 'Greedy (LexResult Payload)
 comment = do
@@ -136,9 +135,9 @@ separator = do
 bracket :: Parser 'Greedy (LexResult Payload)
 bracket = do
     pos0 <- P.getPosition
-    (tok, c) <- P.choice $ NE.fromList $ brackets <&> \(o, c) ->
-        let open = (Bracket Open o c,) <$> P.char (panic "open bracket") o
-            close = (Bracket Close o c,) <$> P.char (panic "close bracket") c
+    (tok, c) <- P.choice $ NE.fromList $ combiners <&> \(sem, o, c) ->
+        let open = (Combiner Open sem,) <$> P.char (panic "open bracket") o
+            close = (Combiner Close sem,) <$> P.char (panic "close bracket") c
         in open <|> close
     pure LR
         { loc = pos0
@@ -150,13 +149,13 @@ bracket = do
 separatorChars :: [Char]
 separatorChars = ",.;:"
 
-brackets :: [(Char, Char)]
-brackets = map (\[o,c] -> (o, c)) db
+combiners :: [(Combiner, Char, Char)]
+combiners = map (\(sem, [o,c]) -> (sem, o, c)) db
     where
     db =
-        [ "()"
-        , "[]"
-        , "{}"
+        [ (Paren, "()")
+        , (Brack, "[]")
+        , (Brace, "{}")
         -- TODO a mix of fancier ones, or mixfixes
         -- I'm thinking that mixfixes handle one thing, but enclose and separate handles another.
         -- Thus, `operator none (_ + _) add` defines (i.e. `'operator' ('left'|'right'|'none') '(' '_'? (<name> '_')* <name>? ')' <name>`)

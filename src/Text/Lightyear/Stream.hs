@@ -61,7 +61,7 @@ instance Stream Text where
     startPosition _ = startTextPos
     -- WARNING This may give slightly incorrect positions for Windows-style newlines in edge cases.
     -- Also, it will deinitely fail for a number of other legacy newlines, see https://en.wikipedia.org/wiki/Newline#Representation
-    advanceOne _ '\n' TextPos{line} = TextPos{line = line + 1, col = 0}
+    advanceOne _ '\n' TextPos{line} = TextPos{line = line + 1, col = 1}
     advanceOne _ _ pos@TextPos{col} = pos{col = col + 1}
 
 instance forall a. Stream a => Stream (WithFilePath a) where

@@ -31,7 +31,7 @@ data TextPos = TextPos
 -- | The default initial position for text-oriented input.
 -- Starts at line one, column zero
 startTextPos :: TextPos
-startTextPos = TextPos{line = 1, col = 0}
+startTextPos = TextPos{line = 1, col = 1}
 
 
 -- | Attach a file name to an existing position type.

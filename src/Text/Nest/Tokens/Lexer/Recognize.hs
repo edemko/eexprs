@@ -40,15 +40,13 @@ recognizeAtom loc orig = case P.runLightyearPos parseAtom orig loc () of
 
 recognizeSeparator :: TextPos -> Text -> Outcome
 recognizeSeparator loc orig = case P.runLightyearPos parseSeparator orig loc () of
+    Right Dot -> Ok SensitiveDot
+    Right Colon -> Ok SensitiveColon
     Right sep -> Ok $ Separator sep
     Left err -> Error err
 
-recognizeDepth :: LexResult Payload -> Result
-recognizeDepth t@LR{loc,orig,payload = Whitespace} =
-    case P.runLightyearPos parseDepth orig loc () of
-        Right depth -> Ok (Indent depth) <$ t
-        Left err -> Error err <$ t
-recognizeDepth _ = error "Internal error: recognizeDepth called on non-whitespace. Please report."
+recognizeDepth :: TextPos -> Text -> Either LexError Int
+recognizeDepth loc orig = P.runLightyearPos parseDepth orig loc ()
 
 
 parseAtom :: Parser 'Greedy Atom

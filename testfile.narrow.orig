@@ -1,12 +1,16 @@
-"hello string"
+
+
+  "hello string"
 
 "hello `name`!"
 "some `with internal` fancy ` splices ` string"
 
 "\\\&\""
 
-"broken\
+"multiline\
   \ string"
+"one line` ""\
+  `string"
 
 hello \
 hello
@@ -30,14 +34,22 @@ END"""
 def foo(a, b, c):
     # ignore this line
   let d = a + c  # yoyoyo
-  return a.thing + d  
-
+  return a.thing +
+    d  
 
   
   #ehcomment
  
 
-some . dots .(here) .yo
+top :
+  indent 1
+  indent 2 :
+    nested 1
+    nested 2
+
+{ some: dict }
+
+some . dots .(here) yo. yo.#
 
   \
   majorWonk
@@ -46,6 +58,8 @@ some . dots .(here) .yo
 123abc
   	badIndent
 ....
+
+( ( )() ())
 
 """NOEND
 """NOEND

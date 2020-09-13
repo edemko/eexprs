@@ -23,9 +23,9 @@ source-repository head
 library
   exposed-modules:
     -- , Text.Nest.Tokens.Html
-    , Text.Nest.Tokens.Lexer.Broad
+    , Text.Nest.Tokens.Lexer.ContextFree
     , Text.Nest.Tokens.Lexer.Error
-    -- , Text.Nest.Tokens.Lexer.Narrow
+    , Text.Nest.Tokens.Lexer.ContextSensitive
     , Text.Nest.Tokens.Lexer.Recognize
     -- , Text.Nest.Tokens.Stream
     , Text.Nest.Tokens.Types
