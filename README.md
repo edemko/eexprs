@@ -20,14 +20,14 @@ On the other hand, multiple visually-distinct methods of marking structures allo
 Secondarily, the special syntax (esp. dot for cons, the various quoting ticks/unticks) is geared specifically towards lisps rather than being more general; I think the separation between syntax trees and languages could be cleaner.
 
 As a sidenote, a lisper might object that the parsimony of the s-expression grammar that leads to visual uniformity allows Lisp to be homoiconic and manipulate its own code.
-To which I say no: a focus on homiconicity was a separate genius design move.
+To which I say no: a focus on homoiconicity was a separate genius design move.
 I'll admit, s-expressions made it easier to innovate this form of metaprogramming, but several non-sexpr languages have quasiquotation today; it simply takes a little more work to design the syntax.
 
 Nest defines a tree-shaped inductive datatype "nest expressions" and a partial mapping from text files to this datatype (a concrete syntax).
 Nest expressions aim to be completely language-agnostic: they focus only on combination and separation of atoms.
 To build a specific language on top of nest, you still must define a concrete syntax mapping nest trees into your language's abstract syntax, but at least _this_ parsing is only tree-rewriting: all the hard work of manipulating text has already been done by nest.
 
-Ultimately, I want to be able to move very rapidly from an academic description of a new language into a convienient implementation.
+Ultimately, I want to be able to move very rapidly from an academic description of a new language into a convenient implementation.
 (By convenient, I mean that the syntax is reasonably familiar, errors are diagnosed descriptively, but performance is perhaps still as for a toy, though a mature system could be built on top of the existing implementation.)
 Nest is the first step of this project.
 
@@ -40,7 +40,6 @@ Not this time.
 This list is just known upcoming stuff; items are deleted not checked off.
 
   * design choices
-    * lift indent-beyond restriction
     * choose a name:
       * `nest` I don't really like it
       * `mexpr` evocative, but confusable with historical uses
@@ -56,8 +55,6 @@ This list is just known upcoming stuff; items are deleted not checked off.
   * small enhancements
     * include both start and end locations in `LexResult`s
   * technical debt
-    * `Space` → `UnknownSpace` and `Separator Space`
-    * use GADTs in token `Payload`
     * create and test JSON output (token locations will be tested here)
     * test that token stream locations are contiguous
     * test indentation and whitespace sensitivity more rigorously

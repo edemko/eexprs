@@ -1,5 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 {- |
@@ -28,37 +31,43 @@ module Text.Nest.Tokens.Types
     , Combiner(..)
     , Separator(..)
     -- * Results
+    , Phase(..)
     , Result
     , Outcome(..)
     , LexResult(..)
     , LexError(..)
+    , SomeResult
+    , SomeOutcome(..)
     -- * Location
     , Location(..)
     , startLocation
     , endLocation
     ) where
 
+import Data.Kind
+
 import Data.Text (Text)
+import GHC.Show (showSpace)
 import Text.Lightyear.Position (TextPos(..))
 
 
 ------------ Payload ------------
 
--- FIXME use a GADT to say which forms are allowable after narrow lexing has occurred
-data Payload
-    = Atom Atom
-    | String StrTemplJoin Text StrTemplJoin
-    | Combiner Side Combiner
-    | Separator Separator
-    | ChainDot
-    | SyntheticDot
-    | StartIndent
-    | Comment
-    | Space
-    | UnknownNewline
-    | SensitiveDot
-    | SensitiveColon
-    deriving(Show)
+data Phase = Free | Sens
+
+data Payload :: Phase -> Type where
+    Atom :: Atom -> Payload phase
+    String :: StrTemplJoin -> Text -> StrTemplJoin -> Payload phase
+    Combiner :: Side -> Combiner phase -> Payload phase
+    Separator :: Separator phase -> Payload phase
+    ChainDot :: Payload 'Sens
+    SyntheticDot :: Payload 'Sens
+    StartIndent :: Payload 'Free -- FIXME not actually allowable except in the midst of context-sensitive parsing
+    Comment :: Payload 'Free
+    UnknownSpace :: Payload 'Free
+    UnknownNewline :: Payload 'Free
+    UnknownDot :: Payload 'Free -- FIXME rename to UnknownDot
+    UnknownColon :: Payload 'Free -- FIXME rename to UnknownColon
 
 data Atom
     = IntAtom Integer
@@ -72,26 +81,28 @@ data StrTemplJoin = Plain | Templ
 data Side = Open | Close
     deriving(Eq, Show, Read)
 
-data Combiner
-    = Paren
-    | Brack
-    | Brace
-    | Indent
-    deriving (Show)
+data Combiner :: Phase -> Type where
+    Paren :: Combiner phase
+    Brack :: Combiner phase
+    Brace :: Combiner phase
+    Indent :: Combiner 'Sens
 
-data Separator
-    = Comma
-    | Dot
-    | Ellipsis
-    | Semicolon
-    | Colon
-    | Newline
-    deriving (Show)
+data Separator :: Phase -> Type where
+    Comma :: Separator phase
+    Dot :: Separator 'Sens
+    Ellipsis :: Separator phase
+    Semicolon :: Separator phase
+    Colon :: Separator 'Sens
+    Space :: Separator 'Sens
+    Newline :: Separator 'Sens
 
 
 ------------ Results ------------
 
-type Result = LexResult Outcome
+type Result phase = LexResult (Outcome phase)
+
+type SomeResult = LexResult SomeOutcome
+data SomeOutcome = forall phase. SO (Outcome phase)
 
 data LexResult a = LR
     { loc :: TextPos
@@ -100,11 +111,10 @@ data LexResult a = LR
     }
     deriving(Functor,Show)
 
-data Outcome
-    = Ok Payload
-    | Ignore Payload
-    | Error LexError
-    deriving (Show)
+data Outcome :: Phase -> Type where
+    Ok :: Payload phase -> Outcome phase
+    Ignore :: Payload phase -> Outcome 'Sens
+    Error :: LexError -> Outcome phase
 
 data LexError
     = BadChar TextPos Char
@@ -159,3 +169,43 @@ startLocation Loc{file,from} = Loc {file, from, to = from}
 
 endLocation :: Location -> Location
 endLocation Loc{file,to} = Loc {file, from = to, to}
+
+------------ Show Instances ------------
+
+instance Show (Outcome phase) where
+    showsPrec p tok = showParen (p >= 11) $
+        case tok of
+            Ok x -> showString "Ok " . showsPrec 11 x
+            Ignore x -> showString "Ignore " . showsPrec 11 x
+            Error err -> showString "Error " . showsPrec 11 err
+
+instance Show (Payload phase) where
+    showsPrec p tok = showParen (p >= 11) $
+        case tok of
+            Atom a -> showString "Atom " . showsPrec 11 a
+            String o str c -> showString "String " . showsPrec 11 o . showSpace . showsPrec 11 str . showSpace . showsPrec 11 c
+            Combiner s c -> showString "Combiner " . showsPrec 11 s . showSpace . showsPrec 11 c
+            Separator s -> showString "Separator " . showsPrec 11 s
+            ChainDot -> showString "ChainDot"
+            SyntheticDot -> showString "SyntheticDot"
+            StartIndent -> showString "StartIndent"
+            Comment -> showString "Comment"
+            UnknownSpace -> showString "UnknownSpace"
+            UnknownNewline -> showString "UnknownNewline"
+            UnknownDot -> showString "UnknownDot"
+            UnknownColon -> showString "UnknownColon"
+
+instance Show (Combiner phase) where
+    show Paren = "Paren"
+    show Brack = "Brack"
+    show Brace = "Brace"
+    show Indent = "Indent"
+
+instance Show (Separator phase) where
+    show Comma = "Comma"
+    show Dot = "Dot"
+    show Ellipsis = "Ellipsis"
+    show Semicolon = "Semicolon"
+    show Colon = "Colon"
+    show Space = "Space"
+    show Newline = "Newline"

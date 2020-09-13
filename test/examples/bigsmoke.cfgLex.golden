@@ -1,6 +1,6 @@
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] String Plain "hello string" Plain
 [OK ] UnknownNewline
 [OK ] UnknownNewline
@@ -10,12 +10,12 @@
 [OK ] UnknownNewline
 [OK ] String Plain "some " Templ
 [OK ] Atom (SymAtom "with")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "internal")
 [OK ] String Templ " fancy " Templ
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "splices")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] String Templ " string" Plain
 [OK ] UnknownNewline
 [OK ] UnknownNewline
@@ -25,14 +25,14 @@
 [OK ] String Plain "multiline\n string" Plain
 [OK ] UnknownNewline
 [OK ] String Plain "one line" Templ
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] String Plain "" Plain
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] String Templ "string" Plain
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] Atom (SymAtom "hello")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "hello")
 [OK ] UnknownNewline
 [OK ] UnknownNewline
@@ -40,10 +40,10 @@
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Comment
 [OK ] UnknownNewline
 [OK ] UnknownNewline
@@ -60,140 +60,165 @@
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] Atom (SymAtom "def")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "foo")
 [OK ] Combiner Open Paren
 [OK ] Atom (SymAtom "a")
 [OK ] Separator Comma
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "b")
 [OK ] Separator Comma
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "c")
 [OK ] Combiner Close Paren
-[OK ] SensitiveColon
+[OK ] UnknownColon
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Comment
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "let")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "d")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "=")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "a")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "+")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "c")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Comment
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "return")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "a")
-[OK ] SensitiveDot
+[OK ] UnknownDot
 [OK ] Atom (SymAtom "thing")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "+")
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "d")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Comment
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] Atom (SymAtom "top")
-[OK ] Space
-[OK ] SensitiveColon
+[OK ] UnknownSpace
+[OK ] UnknownColon
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "indent")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (IntAtom 1)
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "indent")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (IntAtom 2)
-[OK ] Space
-[OK ] SensitiveColon
+[OK ] UnknownSpace
+[OK ] UnknownColon
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "nested")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (IntAtom 1)
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "nested")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (IntAtom 2)
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] Combiner Open Brace
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "some")
-[OK ] SensitiveColon
-[OK ] Space
+[OK ] UnknownColon
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "dict")
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Combiner Close Brace
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] Atom (SymAtom "some")
-[OK ] Space
-[OK ] SensitiveDot
-[OK ] Space
+[OK ] UnknownSpace
+[OK ] UnknownDot
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "dots")
-[OK ] Space
-[OK ] SensitiveDot
+[OK ] UnknownSpace
+[OK ] UnknownDot
 [OK ] Combiner Open Paren
 [OK ] Atom (SymAtom "here")
 [OK ] Combiner Close Paren
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "yo")
-[OK ] SensitiveDot
-[OK ] Space
+[OK ] UnknownDot
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "yo")
-[OK ] SensitiveDot
+[OK ] UnknownDot
 [OK ] Comment
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "majorWonk")
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[ERR] (TextPos {line = 56, col = 1},Unexpected (TextPos {line = 56, col = 16}) (Just '\n') ["end of string","start of splice"])
+[OK ] Atom (SymAtom "class")
+[OK ] UnknownSpace
+[OK ] Atom (SymAtom "Thing")
+[OK ] UnknownColon
 [OK ] UnknownNewline
-[ERR] (TextPos {line = 57, col = 1},CrammedTokens (TextPos {line = 57, col = 4}) "abc")
+[OK ] UnknownSpace
+[OK ] Atom (SymAtom "def")
+[OK ] UnknownSpace
+[OK ] Atom (SymAtom "method")
+[OK ] UnknownColon
 [OK ] UnknownNewline
-[OK ] Space
+[OK ] UnknownSpace
+[OK ] Atom (SymAtom "body")
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[OK ] UnknownSpace
+[OK ] Atom (SymAtom "def")
+[OK ] UnknownSpace
+[OK ] Atom (SymAtom "meth")
+[OK ] UnknownColon
+[OK ] UnknownNewline
+[OK ] UnknownSpace
+[OK ] Atom (SymAtom "dedbody")
+[OK ] UnknownNewline
+[OK ] UnknownNewline
+[ERR] (TextPos {line = 63, col = 1},Unexpected (TextPos {line = 63, col = 16}) (Just '\n') ["end of string","start of splice"])
+[OK ] UnknownNewline
+[ERR] (TextPos {line = 64, col = 1},CrammedTokens (TextPos {line = 64, col = 4}) "abc")
+[OK ] UnknownNewline
+[OK ] UnknownSpace
 [OK ] Atom (SymAtom "badIndent")
 [OK ] UnknownNewline
-[ERR] (TextPos {line = 59, col = 1},CrammedTokens (TextPos {line = 59, col = 3}) "..")
+[ERR] (TextPos {line = 66, col = 1},CrammedTokens (TextPos {line = 66, col = 3}) "..")
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] Combiner Open Paren
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Combiner Open Paren
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Combiner Close Paren
 [OK ] Combiner Open Paren
 [OK ] Combiner Close Paren
-[OK ] Space
+[OK ] UnknownSpace
 [OK ] Combiner Open Paren
 [OK ] Combiner Close Paren
 [OK ] Combiner Close Paren
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[ERR] (TextPos {line = 63, col = 1},Unexpected (TextPos {line = 66, col = 1}) Nothing ["end of heredoc"])
+[ERR] (TextPos {line = 70, col = 1},Unexpected (TextPos {line = 73, col = 1}) Nothing ["end of heredoc"])

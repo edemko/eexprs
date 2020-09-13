@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main (main) where
@@ -27,7 +28,6 @@ tests = testGroup "Golden Lexing"
           let cfgLex = parse contents
               renderLines = cfgLex <&> \LR{..} -> case payload of
                 Ok x -> "[OK ] " ++ show x ++ "\n"
-                Ignore x -> "[ign] " ++ show x ++ "\n"
                 Error err -> "[ERR] " ++ show (loc, err) ++ "\n"
           writeBinaryFile "test/examples/bigsmoke.cfgLex.output" $ concat renderLines
     , goldenVsFile "context-sensitive stage"

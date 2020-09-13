@@ -24,7 +24,7 @@ import qualified Data.Text as T
 import qualified Text.Lightyear as P
 
 
-parse :: Text -> [Result]
+parse :: Text -> [Result 'Free]
 parse inp = case P.runLightyear wholeFile inp () of
     Right toks -> toks
     Left err -> error $ "Internal Nest Error! Please report.\nLexer failed to recover: " ++ show err
@@ -33,13 +33,13 @@ parse inp = case P.runLightyear wholeFile inp () of
 type Parser c a = Lightyear c () Text LexError a
 
 
-wholeFile :: Parser 'Greedy [Result]
+wholeFile :: Parser 'Greedy [Result 'Free]
 wholeFile = do
     toks <- many anyToken
     P.endOfInput (panic "broad lexer failed to reach end of input")
     pure toks
 
-anyToken :: Parser 'Greedy Result
+anyToken :: Parser 'Greedy (Result 'Free)
 anyToken = P.choice $ NE.fromList
     [ fmap Ok <$> whitespace
     , word
@@ -52,7 +52,7 @@ anyToken = P.choice $ NE.fromList
     , errToken
     ]
 
-errToken :: Parser 'Greedy Result
+errToken :: Parser 'Greedy (Result 'Free)
 errToken = do
     loc <- P.getPosition
     c <- P.any (panic "errToken")
@@ -64,7 +64,7 @@ errToken = do
 
 ------------ Whitespace ------------
 
-whitespace :: Parser 'Greedy (LexResult Payload)
+whitespace :: Parser 'Greedy (LexResult (Payload 'Free))
 whitespace = do
     pos0 <- P.getPosition
     (tok, orig) <- inline <|> newline
@@ -74,7 +74,7 @@ whitespace = do
         , payload = tok
         }
     where
-    inline = (Space,) . T.concat <$> P.some (simpleInline <|> splitline)
+    inline = (UnknownSpace,) . T.concat <$> P.some (simpleInline <|> splitline)
     simpleInline = P.takeWhile1 (panic "simple whitespace") (`elem` [' ', '\t'])
     splitline = P.string (panic "split whitespace") "\\\n"
     newline = (UnknownNewline,) <$> P.string (panic "newline") "\n"
@@ -85,7 +85,7 @@ whitespace = do
 -- NOTE: I'm thinking that block comments are not so useful
 -- Text editors don't deal well with nesting block comments, which is what I'd like if I wanted block comments
 
-comment :: Parser 'Greedy (LexResult Payload)
+comment :: Parser 'Greedy (LexResult (Payload 'Free))
 comment = do
     pos0 <- P.getPosition
     hash <- P.char (panic "comment") '#'
@@ -100,7 +100,7 @@ comment = do
 
 ------------ Syntax ------------
 
-word :: Parser 'Greedy Result
+word :: Parser 'Greedy (Result 'Free)
 word = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "word") isSymbolChar
@@ -110,7 +110,7 @@ word = do
         , payload = recognizeAtom pos0 orig
         }
 
-colonWord :: Parser 'Atomic Result
+colonWord :: Parser 'Atomic (Result 'Free)
 colonWord = P.try $ do
     pos0 <- P.getPosition
     colon <- P.char (panic "colon-word") ':'
@@ -122,7 +122,7 @@ colonWord = P.try $ do
         , payload = recognizeAtom pos0 orig
         }
 
-separator :: Parser 'Greedy Result
+separator :: Parser 'Greedy (Result 'Free)
 separator = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "separator consumed") (`elem` separatorChars)
@@ -132,7 +132,7 @@ separator = do
         , payload = recognizeSeparator pos0 orig
         }
 
-bracket :: Parser 'Greedy (LexResult Payload)
+bracket :: Parser 'Greedy (LexResult (Payload 'Free))
 bracket = do
     pos0 <- P.getPosition
     (tok, c) <- P.choice $ NE.fromList $ combiners <&> \(sem, o, c) ->
@@ -149,7 +149,7 @@ bracket = do
 separatorChars :: [Char]
 separatorChars = ",.;:"
 
-combiners :: [(Combiner, Char, Char)]
+combiners :: [(Combiner 'Free, Char, Char)]
 combiners = map (\(sem, [o,c]) -> (sem, o, c)) db
     where
     db =
@@ -167,7 +167,7 @@ combiners = map (\(sem, [o,c]) -> (sem, o, c)) db
 
 ------------ Strings ------------
 
-heredoc :: Parser 'Greedy Result
+heredoc :: Parser 'Greedy (Result 'Free)
 heredoc = do
     pos0 <- P.getPosition
     (origOpen, fence) <- openHeredoc
@@ -208,7 +208,7 @@ heredoc = do
     endHeredocFirst :: Text -> Parser 'Atomic Text
     endHeredocFirst fence = P.unsafeToAtomic $ P.string (expect ["end of heredoc"]) (fence <> "\"\"\"")
 
-string :: Parser 'Greedy Result
+string :: Parser 'Greedy (Result 'Free)
 string = do
     pos0 <- P.getPosition
     (openChar, open) <- strTemplJoin

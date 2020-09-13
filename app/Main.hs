@@ -1,13 +1,15 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Main where
 
+import Text.Nest.Tokens.Types
+
 import Control.Monad (forM_)
-import Data.List (intercalate)
 import System.Exit (exitFailure)
 import Text.Nest.Tokens.Lexer.ContextFree (parse)
 import Text.Nest.Tokens.Lexer.ContextSensitive (contextualize)
-import Text.Nest.Tokens.Types (orig, payload, Result, Outcome(..), Payload, LexResult(LR), LexError)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -42,11 +44,11 @@ main = do
             putStrLn $ case length errs of
                 1 -> "Lexer error:"
                 len -> "Lexer errors (" ++ show len ++ "):"
-            putStrLn (intercalate "\n" (show <$> errs))
+            forM_ errs print
             exitFailure
     mapM_ (print . payload) simple
 
-partitionErrors :: [Result] -> ([LexResult LexError], [LexResult Payload])
+partitionErrors :: [Result 'Sens] -> ([LexResult LexError], [LexResult (Payload 'Sens)])
 partitionErrors = go [] []
     where
     go l r [] = (reverse l, reverse r)

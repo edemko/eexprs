@@ -33,16 +33,14 @@ isSymbolChar c = good && defensive
         C.CurrencySymbol -> True
         _ -> False
 
-recognizeAtom :: TextPos -> Text -> Outcome
+recognizeAtom :: TextPos -> Text -> Outcome phase
 recognizeAtom loc orig = case P.runLightyearPos parseAtom orig loc () of
     Right a -> Ok $ Atom a
     Left err -> Error err
 
-recognizeSeparator :: TextPos -> Text -> Outcome
+recognizeSeparator :: TextPos -> Text -> Outcome 'Free
 recognizeSeparator loc orig = case P.runLightyearPos parseSeparator orig loc () of
-    Right Dot -> Ok SensitiveDot
-    Right Colon -> Ok SensitiveColon
-    Right sep -> Ok $ Separator sep
+    Right tok -> Ok tok
     Left err -> Error err
 
 recognizeDepth :: TextPos -> Text -> Either LexError Int
@@ -55,7 +53,7 @@ parseAtom = do
     P.endOfInput crammedTokens
     pure it
 
-parseSeparator :: Parser 'Greedy Separator
+parseSeparator :: Parser 'Greedy (Payload 'Free)
 parseSeparator = do
     it <- separator
     P.endOfInput crammedTokens
@@ -92,7 +90,7 @@ atom = do
         pure $ IntAtom (sign * whole)
     parseSymbol = SymAtom <$> P.takeWhile1 (panic "symbol character") (\c -> isSymbolChar c || c == ':') -- WARNING is too permissive, but it doesn't matter b/c isNum is checked before isSymbol
 
-separator :: Parser 'Greedy Separator
+separator :: Parser 'Greedy (Payload 'Free)
 separator = P.choice $ NE.fromList
     [ sem <$ P.choice (parseStr <$> ss)
     | (sem, ss) <- separators
@@ -101,14 +99,14 @@ separator = P.choice $ NE.fromList
     parseStr s = P.string (expect [T.unpack s]) s
 
 
-separators :: [(Separator, NonEmpty Text)]
+separators :: [(Payload 'Free, NonEmpty Text)]
 separators =
     -- WARNING: each token must come after all tokens it prefixes
-    [ (Comma, "," :| [])
-    , (Ellipsis, ".." :| [])
-    , (Dot, "." :| [])
-    , (Semicolon, ";" :| [])
-    , (Colon, ":" :| [])
+    [ (Separator Comma, "," :| [])
+    , (Separator Ellipsis, ".." :| [])
+    , (UnknownDot, "." :| [])
+    , (Separator Semicolon, ";" :| [])
+    , (UnknownColon, ":" :| [])
     ]
 
 
