@@ -33,17 +33,17 @@ isSymbolChar c = good && defensive
         C.CurrencySymbol -> True
         _ -> False
 
-recognizeAtom :: TextPos -> Text -> Outcome phase
+recognizeAtom :: TextPos -> Text -> Result phase
 recognizeAtom loc orig = case P.runLightyearPos parseAtom orig loc () of
     Right a -> Ok $ Atom a
     Left err -> Error err
 
-recognizeSeparator :: TextPos -> Text -> Outcome 'Free
+recognizeSeparator :: TextPos -> Text -> Result 'Free
 recognizeSeparator loc orig = case P.runLightyearPos parseSeparator orig loc () of
     Right tok -> Ok tok
     Left err -> Error err
 
-recognizeDepth :: TextPos -> Text -> Either LexError Int
+recognizeDepth :: TextPos -> Text -> Either Error Int
 recognizeDepth loc orig = P.runLightyearPos parseDepth orig loc ()
 
 
@@ -53,7 +53,7 @@ parseAtom = do
     P.endOfInput crammedTokens
     pure it
 
-parseSeparator :: Parser 'Greedy (Payload 'Free)
+parseSeparator :: Parser 'Greedy (Token 'Free)
 parseSeparator = do
     it <- separator
     P.endOfInput crammedTokens
@@ -71,7 +71,7 @@ parseDepth = do
 
 
 
-type Parser c a = Lightyear c () Text LexError a
+type Parser c a = Lightyear c () Text Error a
 
 atom :: Parser 'Greedy Atom
 atom = do
@@ -89,8 +89,9 @@ atom = do
         whole <- read . T.unpack <$> P.takeWhile1 (panic "parseNum digit") C.isDigit
         pure $ IntAtom (sign * whole)
     parseSymbol = SymAtom <$> P.takeWhile1 (panic "symbol character") (\c -> isSymbolChar c || c == ':') -- WARNING is too permissive, but it doesn't matter b/c isNum is checked before isSymbol
+    -- NOTE symbols cannot start with `-` b/c `-n` might be confused with unary minus of a variable
 
-separator :: Parser 'Greedy (Payload 'Free)
+separator :: Parser 'Greedy (Token 'Free)
 separator = P.choice $ NE.fromList
     [ sem <$ P.choice (parseStr <$> ss)
     | (sem, ss) <- separators
@@ -99,7 +100,7 @@ separator = P.choice $ NE.fromList
     parseStr s = P.string (expect [T.unpack s]) s
 
 
-separators :: [(Payload 'Free, NonEmpty Text)]
+separators :: [(Token 'Free, NonEmpty Text)]
 separators =
     -- WARNING: each token must come after all tokens it prefixes
     [ (Separator Comma, "," :| [])

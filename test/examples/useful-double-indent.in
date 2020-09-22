@@ -1,0 +1,5 @@
+someFunc :
+    Big old pattern@(Match{its=very -> Complicated})
+    Another giant funky pattern@(Match{its=(also <$>) . very -> Not good _ for 1 line})
+  :
+    (ah finally, the function body)

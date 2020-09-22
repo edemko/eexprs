@@ -82,3 +82,17 @@ It is important that the set of `separatorChars` agree with `separators`.
 
 Brackets must be single-character, as they may appear together but must be kept separate.
 The `brackets` list should be an isomorphism.
+
+## A Big Visually-Undifferentiated Mass
+
+I mentioned above that Lisp is hard to read because it offers no landmarks.
+Although it's obvious to me, it may not be to others, so this section is for supporting evidence and arguments.
+
+Understanding source code occurs over a noisy channel.
+Noise can be introduces by reading quickly, making implicit assumptions, unfamiliarity with language edge-cases, and so on (oh, and also if your font or color scheme are bad).
+
+There are some slides from [Is natural language a good code from aninformation-theoretic perspective?](http://www.coli.uni-saarland.de/~vera/goodcode.pdf) which give some of the groundwork for understanding what makes a code good generally.
+
+As a particular example, consider the NATO alphabet, in which a single letter is transfered using multisyllabic words.
+This is an absurd amount of redundancy for a reliable transmission medium, but it makes it so much easier to understand spelling over the phones/radio/&c.
+I posit that reading quickly (as programmers are both wont and required to do) introduces significant noisiness relative to say reading/writing to disk, and perhaps even comparable to phone noise.

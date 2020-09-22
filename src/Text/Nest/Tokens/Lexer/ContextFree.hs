@@ -24,22 +24,22 @@ import qualified Data.Text as T
 import qualified Text.Lightyear as P
 
 
-parse :: Text -> [Result 'Free]
+parse :: Text -> [Lexeme (Result 'Free)]
 parse inp = case P.runLightyear wholeFile inp () of
     Right toks -> toks
     Left err -> error $ "Internal Nest Error! Please report.\nLexer failed to recover: " ++ show err
 
 
-type Parser c a = Lightyear c () Text LexError a
+type Parser c a = Lightyear c () Text Error a
 
 
-wholeFile :: Parser 'Greedy [Result 'Free]
+wholeFile :: Parser 'Greedy [Lexeme (Result 'Free)]
 wholeFile = do
     toks <- many anyToken
     P.endOfInput (panic "broad lexer failed to reach end of input")
     pure toks
 
-anyToken :: Parser 'Greedy (Result 'Free)
+anyToken :: Parser 'Greedy (Lexeme (Result 'Free))
 anyToken = P.choice $ NE.fromList
     [ fmap Ok <$> whitespace
     , word
@@ -52,11 +52,11 @@ anyToken = P.choice $ NE.fromList
     , errToken
     ]
 
-errToken :: Parser 'Greedy (Result 'Free)
+errToken :: Parser 'Greedy (Lexeme (Result 'Free))
 errToken = do
     loc <- P.getPosition
     c <- P.any (panic "errToken")
-    pure LR
+    pure L
         { loc
         , orig = T.singleton c
         , payload = Error $ BadChar loc c
@@ -64,11 +64,11 @@ errToken = do
 
 ------------ Whitespace ------------
 
-whitespace :: Parser 'Greedy (LexResult (Payload 'Free))
+whitespace :: Parser 'Greedy (Lexeme (Token 'Free))
 whitespace = do
     pos0 <- P.getPosition
     (tok, orig) <- inline <|> newline
-    pure $ LR
+    pure $ L
         { loc = pos0
         , orig
         , payload = tok
@@ -85,13 +85,13 @@ whitespace = do
 -- NOTE: I'm thinking that block comments are not so useful
 -- Text editors don't deal well with nesting block comments, which is what I'd like if I wanted block comments
 
-comment :: Parser 'Greedy (LexResult (Payload 'Free))
+comment :: Parser 'Greedy (Lexeme (Token 'Free))
 comment = do
     pos0 <- P.getPosition
     hash <- P.char (panic "comment") '#'
     text <- P.takeWhile (/= '\n')
     let orig = hash `T.cons` text
-    pure $ LR
+    pure $ L
         { loc = pos0
         , orig
         , payload = Comment
@@ -100,46 +100,46 @@ comment = do
 
 ------------ Syntax ------------
 
-word :: Parser 'Greedy (Result 'Free)
+word :: Parser 'Greedy (Lexeme (Result 'Free))
 word = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "word") isSymbolChar
-    pure LR
+    pure L
         { loc = pos0
         , orig
         , payload = recognizeAtom pos0 orig
         }
 
-colonWord :: Parser 'Atomic (Result 'Free)
+colonWord :: Parser 'Atomic (Lexeme (Result 'Free))
 colonWord = P.try $ do
     pos0 <- P.getPosition
     colon <- P.char (panic "colon-word") ':'
     rest <- P.takeWhile1 (panic "colon-word") (\c -> isSymbolChar c || c == ':')
     let orig = colon `T.cons` rest
-    pure LR
+    pure L
         { loc = pos0
         , orig
         , payload = recognizeAtom pos0 orig
         }
 
-separator :: Parser 'Greedy (Result 'Free)
+separator :: Parser 'Greedy (Lexeme (Result 'Free))
 separator = do
     pos0 <- P.getPosition
     orig <- P.takeWhile1 (panic "separator consumed") (`elem` separatorChars)
-    pure $ LR
+    pure $ L
         { loc = pos0
         , orig
         , payload = recognizeSeparator pos0 orig
         }
 
-bracket :: Parser 'Greedy (LexResult (Payload 'Free))
+bracket :: Parser 'Greedy (Lexeme (Token 'Free))
 bracket = do
     pos0 <- P.getPosition
     (tok, c) <- P.choice $ NE.fromList $ combiners <&> \(sem, o, c) ->
         let open = (Combiner Open sem,) <$> P.char (panic "open bracket") o
             close = (Combiner Close sem,) <$> P.char (panic "close bracket") c
         in open <|> close
-    pure LR
+    pure L
         { loc = pos0
         , orig = T.singleton c
         , payload = tok
@@ -167,19 +167,19 @@ combiners = map (\(sem, [o,c]) -> (sem, o, c)) db
 
 ------------ Strings ------------
 
-heredoc :: Parser 'Greedy (Result 'Free)
+heredoc :: Parser 'Greedy (Lexeme (Result 'Free))
 heredoc = do
     pos0 <- P.getPosition
     (origOpen, fence) <- openHeredoc
     lines <- T.concat <$> P.many1 (firstLine fence) (bodyLines fence)
     closeE <- P.recover (P.fromAtomic $ endHeredoc fence)
     pure $ case closeE of
-        Right origClose -> LR
+        Right origClose -> L
             { loc = pos0
             , orig = origOpen <> lines <> origClose
             , payload = Ok $ String Plain lines Plain
             }
-        Left err -> LR
+        Left err -> L
             { loc = pos0
             , orig = origOpen <> lines
             , payload = Error err
@@ -208,19 +208,19 @@ heredoc = do
     endHeredocFirst :: Text -> Parser 'Atomic Text
     endHeredocFirst fence = P.unsafeToAtomic $ P.string (expect ["end of heredoc"]) (fence <> "\"\"\"")
 
-string :: Parser 'Greedy (Result 'Free)
+string :: Parser 'Greedy (Lexeme (Result 'Free))
 string = do
     pos0 <- P.getPosition
     (openChar, open) <- strTemplJoin
     (orig, body) <- biconcat <$> many stringSection
     closeE <- P.recover strTemplJoin
     pure $ case closeE of
-        Right (closeChar, close) -> LR
+        Right (closeChar, close) -> L
             { loc = pos0
             , orig = openChar <> orig <> closeChar
             , payload = Ok $ String open body close
             }
-        Left err -> LR
+        Left err -> L
             { loc = pos0
             , orig = openChar <> orig
             , payload = Error err

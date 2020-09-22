@@ -17,7 +17,7 @@ import Text.Lightyear.Stream (advance)
 import Text.Nest.Tokens.Lexer.Recognize (recognizeDepth)
 
 
-contextualize :: [Result 'Free] -> [Result 'Sens]
+contextualize :: [Lexeme (Result 'Free)] -> [Lexeme (Result 'Sens)]
 contextualize xs =
        map packFree
     -- when thinking about indentation, I don't want to think about trailing whitespace/comments
@@ -35,32 +35,32 @@ contextualize xs =
     |> map ensureSensitive
     $ xs
 
-ignoreTrailing :: [SomeResult] -> [SomeResult]
+ignoreTrailing :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 ignoreTrailing = go [] []
     where
     go buf acc [] = reverse (buf ++ acc)
     -- space and comment might get ignored
-    go buf acc (x@LR{payload=OK UnknownSpace} : xs) = go (x:buf) acc xs
-    go buf acc (x@LR{payload=OK Comment} : xs) = go (x:buf) acc xs
+    go buf acc (x@L{payload=OK UnknownSpace} : xs) = go (x:buf) acc xs
+    go buf acc (x@L{payload=OK Comment} : xs) = go (x:buf) acc xs
     -- and obviously already-ignored stuff is still ignored
-    go buf acc (x@LR{payload=IGN _} : xs) = go (x:buf) acc xs
+    go buf acc (x@L{payload=IGN _} : xs) = go (x:buf) acc xs
     -- do ignore them when you find a newline immediately after
-    go buf acc (x@LR{payload=OK UnknownNewline} : xs) = go [] (x : fmap ignore buf ++ acc) xs
+    go buf acc (x@L{payload=OK UnknownNewline} : xs) = go [] (x : fmap ignore buf ++ acc) xs
     -- don't ignore them if you find something other than a newline first
     go buf acc (x:xs) = go [] (x:buf ++ acc) xs
 
-ignoreBlanklines :: [SomeResult] -> [SomeResult]
+ignoreBlanklines :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 ignoreBlanklines = go (Just []) []
     where
     go Nothing acc [] = reverse acc
     go (Just buf) acc [] = reverse (fmap ignore buf ++ acc)
     -- a newline starts possible ignoring
-    go Nothing acc (x@LR{payload=OK UnknownNewline} : xs) = go (Just []) (x:acc) xs
+    go Nothing acc (x@L{payload=OK UnknownNewline} : xs) = go (Just []) (x:acc) xs
     -- but nothing else switches to ignoring mode
     go Nothing acc (x : xs) = go Nothing (x:acc) xs
     -- adjacent newlines get ignored, and obvs also already-ignored stuff
-    go (Just buf) acc (x@LR{payload=OK UnknownNewline} : xs) = go (Just $ x:buf) acc xs
-    go (Just buf) acc (x@LR{payload=IGN _} : xs) = go (Just $ x:buf) acc xs
+    go (Just buf) acc (x@L{payload=OK UnknownNewline} : xs) = go (Just $ x:buf) acc xs
+    go (Just buf) acc (x@L{payload=IGN _} : xs) = go (Just $ x:buf) acc xs
     -- once something other than a newline is found, go back to normal
     go (Just buf) acc (x : xs) = go Nothing (x : fmap ignore buf ++ acc) xs
 
@@ -69,31 +69,31 @@ data IndentState
     = StartOfFile
     | Search
     | FoundColon
-    | FoundNewline [SomeResult] SomeResult
-detectIndentation :: [SomeResult] -> [SomeResult]
+    | FoundNewline [Lexeme SomeResult] (Lexeme SomeResult)
+detectIndentation :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 detectIndentation = go StartOfFile [0] []
     where
     go ::
            IndentState
         -> [Int] -- stack of depths for each indent level, deepest on top
-        -> [SomeResult] -- accumulator, in reverse order
-        -> [SomeResult] -- remaining input stream
-        -> [SomeResult]
+        -> [Lexeme SomeResult] -- accumulator, in reverse order
+        -> [Lexeme SomeResult] -- remaining input stream
+        -> [Lexeme SomeResult]
     -- I've written this so that it's easier to see the state machine
     go StartOfFile lvs acc = \case
         [] -> reverse acc
-        x@LR{payload=IGN _} : xs -> go StartOfFile lvs (x:acc) xs
-        x@LR{payload=OK UnknownSpace} : xs -> go Search lvs (x{payload=ERR IllegalIndent} : acc) xs
+        x@L{payload=IGN _} : xs -> go StartOfFile lvs (x:acc) xs
+        x@L{payload=OK UnknownSpace} : xs -> go Search lvs (x{payload=ERR IllegalIndent} : acc) xs
         x : xs -> go Search lvs (x : acc) xs
     go Search lvs acc = \case
         [] -> reverse acc
-        x@LR{payload=OK StartIndent} : xs -> go FoundColon lvs (x:acc) xs
-        x@LR{payload=OK UnknownNewline} : xs -> go (FoundNewline [] x) lvs acc xs
+        x@L{payload=OK StartIndent} : xs -> go FoundColon lvs (x:acc) xs
+        x@L{payload=OK UnknownNewline} : xs -> go (FoundNewline [] x) lvs acc xs
         x : xs -> go Search lvs (x:acc) xs
     go FoundColon lvs acc = \case
-        x@LR{payload=IGN _} : xs -> go FoundColon lvs (x:acc) xs
-        x@LR{payload=OK UnknownNewline} : xs -> go FoundColon lvs (ignore x:acc) xs
-        x@LR{loc,orig,payload=OK UnknownSpace} : xs -> case recognizeDepth loc orig of
+        x@L{payload=IGN _} : xs -> go FoundColon lvs (x:acc) xs
+        x@L{payload=OK UnknownNewline} : xs -> go FoundColon lvs (ignore x:acc) xs
+        x@L{loc,orig,payload=OK UnknownSpace} : xs -> case recognizeDepth loc orig of
             Left err -> go Search lvs (x{payload=ERR err}:acc) xs
             Right depth' -> if depth' > head lvs
                 then go Search (depth':lvs) (x{payload=OK (Combiner Open Indent)}:acc) xs
@@ -102,25 +102,25 @@ detectIndentation = go StartOfFile [0] []
             where
             err = case acc of
                 [] -> error "detectIndentation: found colon but nothing is in the accumulator. please report"
-                LR{loc,orig} : _ -> LR{loc=orig `advance` loc,orig="", payload=ERR IllegalIndent}
+                L{loc,orig} : _ -> L{loc=orig `advance` loc,orig="", payload=ERR IllegalIndent}
     go (FoundNewline buf nl) lvs acc = \case
-        x@LR{payload=IGN _} : xs -> go (FoundNewline (x:buf) nl) lvs acc xs
-        x@LR{payload=OK UnknownSpace} : xs ->
+        x@L{payload=IGN _} : xs -> go (FoundNewline (x:buf) nl) lvs acc xs
+        x@L{payload=OK UnknownSpace} : xs ->
             offsides lvs x buf nl acc xs
         xs ->
             let zero = case acc of
                     [] -> error "detectIndentation: found newline but nothing is in the accumulator. please report"
-                    LR{loc,orig} : _ -> LR{loc=orig `advance` loc,orig="", payload=OK UnknownSpace}
+                    L{loc,orig} : _ -> L{loc=orig `advance` loc,orig="", payload=OK UnknownSpace}
              in offsides lvs zero buf nl acc xs
     offsides ::
            [Int] -- indentation stack
-        -> SomeResult -- the spaces (incl. zero spaces)
-        -> [SomeResult] -- buffer after newline
-        -> SomeResult -- the newline
-        -> [SomeResult] -- accumulator
-        -> [SomeResult] -- the rest of the input stream
-        -> [SomeResult] -- recurse back into `go`
-    offsides lvs0 x@LR{loc,orig} buf nl acc xs = case recognizeDepth loc orig of
+        -> Lexeme SomeResult -- the spaces (incl. zero spaces)
+        -> [Lexeme SomeResult] -- buffer after newline
+        -> Lexeme SomeResult -- the newline
+        -> [Lexeme SomeResult] -- accumulator
+        -> [Lexeme SomeResult] -- the rest of the input stream
+        -> [Lexeme SomeResult] -- recurse back into `go`
+    offsides lvs0 x@L{loc,orig} buf nl acc xs = case recognizeDepth loc orig of
         Left err -> go Search lvs0 (x{payload=ERR err} : buf ++ ignore nl : acc) xs
         Right depth' -> drain lvs0 []
             where
@@ -134,25 +134,25 @@ detectIndentation = go StartOfFile [0] []
                     else go Search (lv:lvs) (nl' : x{payload=ERR IllegalIndent} : dedents ++ buf ++ ignore nl : acc) xs
                 | otherwise = error "wat"
             drain [] _ = error "detectIndentation: empty indentation stack. please report"
-            dedent' = LR{loc,orig="",payload=OK (Combiner Close Indent)}
-            nl' = LR{loc=orig `advance` loc,orig="",payload=OK (Separator Newline)}
+            dedent' = L{loc,orig="",payload=OK (Combiner Close Indent)}
+            nl' = L{loc=orig `advance` loc,orig="",payload=OK (Separator Newline)}
 
-ignoreStartIndents :: [SomeResult] -> [SomeResult]
+ignoreStartIndents :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 ignoreStartIndents = map go
     where
-    go x@LR{payload=OK StartIndent} = ignore x
+    go x@L{payload=OK StartIndent} = ignore x
     go x = x
 
-recognizeDots :: [SomeResult] -> [SomeResult]
+recognizeDots :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 recognizeDots = window3 go
     where
     -- I can get away with only checking for `Space` because newline and comments will only appear at beginning/end of line
     -- which don't count as a space anyway
-    go :: SomeResult -> SomeResult -> SomeResult -> Maybe [SomeResult]
-    go x@LR{payload=OK UnknownSpace} y@LR{payload=OK UnknownDot} z@LR{payload=OK UnknownSpace}
+    go :: Lexeme SomeResult -> Lexeme SomeResult -> Lexeme SomeResult -> Maybe [Lexeme SomeResult]
+    go x@L{payload=OK UnknownSpace} y@L{payload=OK UnknownDot} z@L{payload=OK UnknownSpace}
         = Just [ignore x, y{payload=OK (Separator Dot)}, ignore z]
     -- except for illegal dots, where we can't ignore end-of-line stuff
-    go x y@LR{payload=OK UnknownDot} z@LR{payload}
+    go x y@L{payload=OK UnknownDot} z@L{payload}
         | isSpacey payload = Just [x, y{payload=ERR IllegalDot}, z]
         where
         isSpacey (OK UnknownSpace) = True
@@ -160,61 +160,61 @@ recognizeDots = window3 go
         isSpacey (OK UnknownNewline) = True
         isSpacey (IGN _) = True
         isSpacey _ = False
-    go x@LR{payload=OK UnknownSpace} y@LR{payload=OK UnknownDot} z
+    go x@L{payload=OK UnknownSpace} y@L{payload=OK UnknownDot} z
         = Just [x, y{payload=OK SyntheticDot}, z]
-    go x y@LR{payload=OK UnknownDot} z
+    go x y@L{payload=OK UnknownDot} z
         = Just [x, y{payload=OK ChainDot}, z]
     go _ _ _ = Nothing
 
-recognizeColons :: [SomeResult] -> [SomeResult]
+recognizeColons :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 recognizeColons = go Nothing []
     where
     go ::
-           Maybe ([SomeResult], SomeResult) -- colon and buffer of following  tokens in reverse order
-        -> [SomeResult] -- accumulator in reverse order
-        -> [SomeResult] -- remaining input
-        -> [SomeResult]
+           Maybe ([Lexeme SomeResult], Lexeme SomeResult) -- colon and buffer of following  tokens in reverse order
+        -> [Lexeme SomeResult] -- accumulator in reverse order
+        -> [Lexeme SomeResult] -- remaining input
+        -> [Lexeme SomeResult]
     go Nothing acc [] = reverse acc
     -- end-of-file counts as newline for indentation purposes
     -- look for colons and switch mode when found
-    go Nothing acc (x@LR{payload=OK UnknownColon} : xs) =
+    go Nothing acc (x@L{payload=OK UnknownColon} : xs) =
         go (Just ([], x)) acc xs
     go Nothing acc (x : xs) = go Nothing (x : acc) xs
     -- if the first-non-ignored is a newline, then it's a start of indent
-    go (Just (buf, colon)) acc (x@LR{payload=IGN _} : xs) =
+    go (Just (buf, colon)) acc (x@L{payload=IGN _} : xs) =
         go (Just (x:buf, colon)) acc xs
-    go (Just (buf, colon)) acc (x@LR{payload=OK UnknownNewline} : xs) =
+    go (Just (buf, colon)) acc (x@L{payload=OK UnknownNewline} : xs) =
         go Nothing (x : buf ++ colon{payload = OK StartIndent} : acc) xs
     go (Just (buf, colon)) acc [] = reverse $ buf ++ colon{payload=OK StartIndent} : acc
     -- otherwise, it's just a separator
     go (Just (buf, colon)) acc (x : xs) = go Nothing (buf ++ colon{payload=OK (Separator Colon)} : acc) (x : xs)
 
-recognizeSpaces :: [SomeResult] -> [SomeResult]
+recognizeSpaces :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 recognizeSpaces = mkSeparatorSpaces . ignoreCombinerSpace . ignoreSeparatorSpace
     where
     ignoreSeparatorSpace = window2 go
         where
-        go :: SomeResult -> SomeResult -> Maybe [SomeResult]
-        go x@LR{payload=OK UnknownSpace} y@LR{payload=OK (Separator _)} = Just [ignore x, y]
-        go x@LR{payload=OK (Separator _)} y@LR{payload=OK UnknownSpace} = Just [x, ignore y]
+        go :: Lexeme SomeResult -> Lexeme SomeResult -> Maybe [Lexeme SomeResult]
+        go x@L{payload=OK UnknownSpace} y@L{payload=OK (Separator _)} = Just [ignore x, y]
+        go x@L{payload=OK (Separator _)} y@L{payload=OK UnknownSpace} = Just [x, ignore y]
         go _ _ = Nothing
     ignoreCombinerSpace = window2 go
         where
-        go :: SomeResult -> SomeResult -> Maybe [SomeResult]
-        go x@LR{payload=OK UnknownSpace} y@LR{payload=OK (Combiner Close _)} = Just [ignore x, y]
-        go x@LR{payload=OK (Combiner Open _)} y@LR{payload=OK UnknownSpace} = Just [x, ignore y]
-        go x@LR{payload=OK UnknownSpace} y@LR{payload=OK (String Templ _ _)} = Just [ignore x, y]
-        go x@LR{payload=OK (String _ _ Templ)} y@LR{payload=OK UnknownSpace} = Just [x, ignore y]
+        go :: Lexeme SomeResult -> Lexeme SomeResult -> Maybe [Lexeme SomeResult]
+        go x@L{payload=OK UnknownSpace} y@L{payload=OK (Combiner Close _)} = Just [ignore x, y]
+        go x@L{payload=OK (Combiner Open _)} y@L{payload=OK UnknownSpace} = Just [x, ignore y]
+        go x@L{payload=OK UnknownSpace} y@L{payload=OK (String Templ _ _)} = Just [ignore x, y]
+        go x@L{payload=OK (String _ _ Templ)} y@L{payload=OK UnknownSpace} = Just [x, ignore y]
         go _ _ = Nothing
     mkSeparatorSpaces = map $ \case
-        x@LR{payload=OK UnknownSpace} -> x{payload=OK (Separator Space)}
+        x@L{payload=OK UnknownSpace} -> x{payload=OK (Separator Space)}
         x -> x
 
-packFree :: Result 'Free -> SomeResult
-packFree x@LR{payload} = x{payload=SO payload}
+packFree :: Lexeme (Result 'Free) -> Lexeme SomeResult
+packFree x@L{payload} = x{payload=SO payload}
 
-ensureSensitive :: SomeResult -> Result 'Sens
-ensureSensitive tok@LR{payload} = tok{payload=go payload}
+ensureSensitive :: Lexeme SomeResult -> Lexeme (Result 'Sens)
+ensureSensitive tok@L{payload} = tok{payload=go payload}
     where
     go (OK (Atom x)) = Ok $ Atom x
     go (OK (String o str c)) = Ok $ String o str c
@@ -245,8 +245,8 @@ ensureSensitive tok@LR{payload} = tok{payload=go payload}
     go (ERR err) = Error err
 
 
-ignore :: SomeResult -> SomeResult
-ignore r@LR{payload} = r{payload=go payload}
+ignore :: Lexeme SomeResult -> Lexeme SomeResult
+ignore r@L{payload} = r{payload=go payload}
     where
     go (OK x) = IGN x
     go x = x
@@ -257,9 +257,9 @@ infixl 9 |>
 (|>) = flip (.)
 
 {-# COMPLETE OK, IGN, ERR #-}
-pattern OK :: Payload phase -> SomeOutcome
+pattern OK :: Token phase -> SomeResult
 pattern OK x = SO (Ok x)
-pattern IGN :: Payload phase -> SomeOutcome
+pattern IGN :: Token phase -> SomeResult
 pattern IGN x = SO (Ignore x)
-pattern ERR :: LexError -> SomeOutcome
+pattern ERR :: Error -> SomeResult
 pattern ERR err = SO (Error err)

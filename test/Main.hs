@@ -26,7 +26,7 @@ tests = testGroup "Golden Lexing"
         $ do
           contents <- T.readFile "test/examples/bigsmoke.input"
           let cfgLex = parse contents
-              renderLines = cfgLex <&> \LR{..} -> case payload of
+              renderLines = cfgLex <&> \L{..} -> case payload of
                 Ok x -> "[OK ] " ++ show x ++ "\n"
                 Error err -> "[ERR] " ++ show (loc, err) ++ "\n"
           writeBinaryFile "test/examples/bigsmoke.cfgLex.output" $ concat renderLines
@@ -36,7 +36,7 @@ tests = testGroup "Golden Lexing"
         $ do
           contents <- T.readFile "test/examples/bigsmoke.input"
           let fullLex = (contextualize . parse) contents
-              renderLines = fullLex <&> \LR{..} -> case payload of
+              renderLines = fullLex <&> \L{..} -> case payload of
                 Ok x -> "[OK ] " ++ show x ++ "\n"
                 Ignore x -> "[ign] " ++ show x ++ "\n"
                 Error err -> "[ERR] " ++ show (loc, err) ++ "\n"

@@ -48,10 +48,10 @@ main = do
             exitFailure
     mapM_ (print . payload) simple
 
-partitionErrors :: [Result 'Sens] -> ([LexResult LexError], [LexResult (Payload 'Sens)])
+partitionErrors :: [Lexeme (Result 'Sens)] -> ([Lexeme Error], [Lexeme (Token 'Sens)])
 partitionErrors = go [] []
     where
     go l r [] = (reverse l, reverse r)
-    go l r (x@LR{payload=Ok tok} : xs) = go l (x{payload=tok}:r) xs
-    go l r (LR{payload=Ignore _} : xs) = go l r xs
-    go l r (x@LR{payload=Error err} : xs) = go (x{payload=err}:l) r xs
+    go l r (x@L{payload=Ok tok} : xs) = go l (x{payload=tok}:r) xs
+    go l r (L{payload=Ignore _} : xs) = go l r xs
+    go l r (x@L{payload=Error err} : xs) = go (x{payload=err}:l) r xs
