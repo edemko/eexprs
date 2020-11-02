@@ -21,7 +21,7 @@ The 'Token' type is further indexed by the phase(s) of lexing within which it is
     'Sens' for the context-sensitive portion, or
     polymorphic for either phase.
 Thus, the overal progress of lexing is
-    @Text -> [Lexeme (Result 'Free)] -> [Lexeme (Result 'Sens)] -> Lexeme (Token 'Sens)@
+    @Text -> [Lexeme (Result 'Free)] -> [Lexeme (Result 'Sens)] -> [Lexeme (Token 'Sens)]@
 
 Lexing happens in two stages: broad and narrow.
 The broad phase extracts out where token boundaries are definitely going to be,
@@ -163,7 +163,7 @@ instance Semigroup Error where
 ------------ Location ------------
 
 data Location = Loc
-    { file :: FilePath
+    { file :: Maybe FilePath
     , from :: TextPos
     , to :: TextPos
     }
@@ -171,7 +171,7 @@ data Location = Loc
 instance Show Location where
     show loc = concat [filePart, linecolPart]
         where
-        filePart = concat [file loc, ": "]
+        filePart = maybe "" (++": ") (file loc)
         linecolPart
             | from loc == to loc = concat
                 [show $ (line . from) loc, ":", show $ (col . from) loc]

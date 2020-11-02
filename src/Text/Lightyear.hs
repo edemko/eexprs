@@ -3,7 +3,7 @@
 -- Parser combinators face a choice on failure between comsuming input or backtracking.
 -- If the former, then
 --      in the successful branches, the stream can be consumed and the memory footprint can stay smaller,
---      but ususual errors can be generated if the parser writer doesn't use 'try' in the right places.
+--      but unusual errors can be generated if the parser writer doesn't use 'try' in the right places.
 -- If the latter, then
 --      it's much easier to write correct parsers, but
 --      unless the writer uses 'commit' in just the right places,
@@ -14,7 +14,7 @@
 -- Less sensitive users can still pick one of the strategies above by limiting themselves to one type of parser.
 --
 -- Lightyear also parameterizes the error and position types for parsers.
--- On many occaisions a libraries' fixed position types are unsuitable
+-- On many occaisions a library's fixed position types are unsuitable
 --     (e.g. taking input from non-file sources shouldn't have a filename;
 --     parsing bytes should just give an offset not line:col).
 -- Here, the 'Stream' class has an accosiated 'Pos' type.

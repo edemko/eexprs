@@ -22,12 +22,14 @@ source-repository head
 
 library
   exposed-modules:
+    , Data.Nest.Types
     -- , Text.Nest.Tokens.Html
     , Text.Nest.Tokens.Lexer.ContextFree
     , Text.Nest.Tokens.Lexer.Error
     , Text.Nest.Tokens.Lexer.ContextSensitive
     , Text.Nest.Tokens.Lexer.Recognize
-    -- , Text.Nest.Tokens.Stream
+    , Text.Nest.Tokens.Parser
+    , Text.Nest.Tokens.Stream
     , Text.Nest.Tokens.Types
   other-modules:
     , Paths_nest
@@ -40,7 +42,7 @@ library
     , Text.Lightyear.Stream
     , Text.Lightyear.String
   hs-source-dirs: src
-  ghc-options: -Wall
+  ghc-options: -Wall -Wunticked-promoted-constructors
   build-depends:
     , base >=4.7 && <5
     , bytestring >=0.10

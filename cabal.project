@@ -3,4 +3,4 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/Zankoku-Okuno/fenster
-    tag: 2f7033fe0d74a64f94d9ee90d261c8c8aefcac91
+    tag: 6272f254c2a7899a236065bb452b6ac099b0ef60
