@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Text.Nest.Tokens.Parser
   ( parse
@@ -10,6 +12,7 @@ module Text.Nest.Tokens.Parser
 import Text.Nest.Tokens.Parser.Types
 import Text.Nest.Tokens.Stream
 
+import Data.Bifunctor (bimap)
 import Text.Lightyear (Lightyear, Consume(..), MakeError)
 import Text.Nest.Tokens.Types (Location(..))
 
@@ -29,77 +32,90 @@ parse inp = case Seq.viewl inp of
 
 parseWorker :: Parser 'Greedy [Nest ph]
 parseWorker = do
-  xs <- combine `P.sepBy` newline -- TODO is this the right starting point?
+  xs <- pairing `P.sepBy` newline -- TODO is this the right starting point?
   P.endOfInput (expect ["end of input"])
   pure xs
 
 
-semicolonExprs :: Parser 'Greedy (Nest ph)
-semicolonExprs = around (\l -> Separate l Semicolon) commaExprs semicolon
+-- surround -- TODO nil atoms, string template
+surround :: Parser 'Greedy (Nest ph)
+surround = do
+  (t, brak) <- open
+  case brak of
+    Tok.Indent -> do
+      elems <- combine `P.sepBy` newline -- TODO I've chosen `combine` b/c I figure an indent should act much the same as the file top-level. However, it might be useful for it to be a pairing (e.g. for case/match/switch exprs)
+      -- FIXME elems must be non-empty
+      let l = (location $ head elems){to = (to . location) $ last elems}
+      finish t Indent (Separate l Newline elems)
+    _ -> separate >>= finish t (fromInlineSurrounder brak)
+  -- TODO some form of error recovery when the enclosers don't match
+  where
+  finish t brak inner = do
+    t' <- close brak
+    let l = (loc t){to = (to . loc) t'}
+    pure $ Surround l brak inner
+  fromInlineSurrounder :: Tok.Combiner 'Tok.Sens -> Surrounder 'Inline
+  fromInlineSurrounder Tok.Paren = Paren
+  fromInlineSurrounder Tok.Brack = Bracket
+  fromInlineSurrounder Tok.Brace = Brace
+  fromInlineSurrounder Tok.Indent = errorWithoutStackTrace "Internal Nest Error! Please report.\nfromInlineSurrounder: attempt to create inline surrounder from Tok.Indent"
 
-commaExprs :: Parser 'Greedy (Nest ph)
-commaExprs = around (\l -> Separate l Comma) colonExpr comma
+separate :: Parser 'Greedy (Nest ph)
+separate = do
+  (leadSep, leadSepTok) <- checkSep
+  x <- pairing
+  theSep <- case leadSep of
+    Nothing -> fst <$> P.fromAtomic (P.lookAhead (P.try checkSep))
+    Just it -> pure $ Just it
+  case theSep of
+    Nothing -> pure x
+    Just punct -> do
+      xs <- P.many (separator punct >> pairing)
+      trailSep <- P.option Nothing (Just <$> separator punct)
+      let l0 = maybe (location x) loc leadSepTok
+          l' = if | Just t' <- trailSep -> loc t'
+                  | null xs -> location x
+                  | otherwise -> location (last xs)
+          l = l0{to = to l'}
+      pure $ Separate l punct (x : xs)
+  where
+  checkSep = P.option (Nothing, Nothing) (bimap Just Just <$> someSeparator)
 
-colonExpr :: Parser 'Greedy (Nest ph)
-colonExpr = do
+pairing :: Parser 'Greedy (Nest ph)
+pairing = do
   left <- combine
   P.option Nothing (Just <$> colon) >>= \case
     Nothing -> pure left
     Just _ -> do
       right <- combine
       let l = (location left){to = (to . location) right}
-      pure $ Colon l left right
+      pure $ Separate l Colon (left, right)
 
 combine :: Parser 'Greedy (Nest ph)
 combine = within Combine chain space
 
--- FIXME prefix dot is a thing
 chain :: Parser 'Greedy (Nest ph)
-chain = within Chain baseTerm chainDot
+chain = P.option Nothing (Just <$> syntheticDot) >>= \case
+  -- FIXME allow chains segments not explicitly separated by dots
+  Nothing -> within (\l -> Chain l Standard) baseTerm chainDot
+  Just t0 -> within (\l -> Chain l{from = (from . loc) t0} Naked) baseTerm chainDot
 
 baseTerm :: Parser 'Greedy (Nest ph)
-baseTerm = enclosed P.<|> atom -- TODO <|> ellipsis
-
--- enclosed -- TODO parens, brackets, braces, indent, string template
-enclosed :: Parser 'Greedy (Nest ph)
-enclosed = do
-  (t, encloser) <- open
-  case encloser of
-    Tok.Indent -> do
-      inner <- combine `P.sepBy` newline -- TODO I've chosen `combine` b/c I figure an indent should act much the same as the file top-level. However, it might be useful for it to be a colonExpr (e.g. for case/match/switch exprs)
-      t' <- close encloser
-      -- TODO some form of error recovery when the enclosers don't match
-      let l = (loc t){to = (to . loc) t'}
-      pure $ Indent l inner
-    _ -> do
-      inside <- semicolonExprs
-      t' <- close encloser
-      -- TODO some form of error recovery when the enclosers don't match
-      let l = (loc t){to = (to . loc) t'}
-      pure $ Enclose l (fromEncloser encloser) inside
-      -- TODO
-      -- pure $ case inside of
-      --   Nothing -> NilAtom l (fromEncloser encloser)
-      --   Just inner -> Enclose l (fromEncloser encloser) inner
-  where
-  fromEncloser Tok.Paren = Paren
-  fromEncloser Tok.Brack = Bracket
-  fromEncloser Tok.Brace = Brace
-  fromEncloser Tok.Indent = errorWithoutStackTrace "fromEncloser called on Tok.Indent"
-
-
+baseTerm = surround P.<|> atom -- TODO <|> ellipsis
 
 atom :: Parser 'Greedy (Nest ph)
 atom = fromAtom <$> P.satisfy (expect ["atom"]) isAtom -- FIXME is this good error reporting?
   where
   isAtom Lex{tok=Tok.Atom _} = True
   isAtom Lex{tok=Tok.String Tok.Plain _ Tok.Plain} = True
+  isAtom Lex{tok=Tok.Separator Tok.Ellipsis} = True
   isAtom _ = False
   fromAtom Lex{loc,orig,tok=Tok.Atom a} = case a of
     Tok.IntAtom i -> IntAtom loc orig i
     Tok.RatAtom r -> RatAtom loc orig r
     Tok.SymAtom x -> SymAtom loc x
   fromAtom Lex{loc,tok=Tok.String Tok.Plain s Tok.Plain} = StrAtom loc s
+  fromAtom Lex{loc,tok=Tok.Separator Tok.Ellipsis} = Ellipsis loc
   fromAtom _ = errorWithoutStackTrace "fromAtom called when isAtom == False"
 
 
@@ -113,20 +129,20 @@ open = fromOpen <$> P.satisfy (expect ["open paren", "open bracket", "open brace
   fromOpen t@Lex{tok=Tok.Combiner Tok.Open it} = (t, it)
   fromOpen _ = errorWithoutStackTrace "fromopen called when isOpen == False"
 
-close :: Tok.Combiner 'Tok.Sens -> Parser 'Greedy LexElem
-close Tok.Paren = P.satisfy (expect ["close paren"]) isClose
+close :: Surrounder anyInline -> Parser 'Greedy LexElem
+close Paren = P.satisfy (expect ["close paren"]) isClose
   where
   isClose Lex{tok = Tok.Combiner Tok.Close Tok.Paren} = True
   isClose _ = False
-close Tok.Brack = P.satisfy (expect ["close bracket"]) isClose
+close Bracket = P.satisfy (expect ["close bracket"]) isClose
   where
   isClose Lex{tok = Tok.Combiner Tok.Close Tok.Brack} = True
   isClose _ = False
-close Tok.Brace = P.satisfy (expect ["close brace"]) isClose
+close Brace = P.satisfy (expect ["close brace"]) isClose
   where
   isClose Lex{tok = Tok.Combiner Tok.Close Tok.Brace} = True
   isClose _ = False
-close Tok.Indent = P.satisfy (expect ["dedent"]) isClose
+close Indent = P.satisfy (expect ["dedent"]) isClose
   where
   isClose Lex{tok = Tok.Combiner Tok.Close Tok.Indent} = True
   isClose _ = False
@@ -144,29 +160,43 @@ space = P.satisfy (expect ["space"]) isSpace
   isSpace Lex{tok=Tok.Separator Tok.Space} = True
   isSpace _ = False
 
+separator :: Punctuation 'Listy 'Inline -> Parser 'Greedy LexElem
+separator = \case
+  Comma -> P.satisfy (expect ["comma"]) (isSep Comma)
+  Semicolon -> P.satisfy (expect ["semicolon"]) (isSep Semicolon)
+  where
+  isSep :: Punctuation 'Listy 'Inline -> LexElem -> Bool
+  isSep Comma Lex{tok=Tok.Separator Tok.Comma} = True
+  isSep Semicolon Lex{tok=Tok.Separator Tok.Semicolon} = True
+  isSep _ _ = False
+
+someSeparator :: Parser 'Greedy (Punctuation 'Listy 'Inline, LexElem)
+someSeparator = fromSep <$> P.satisfy (expect ["comma", "semicolon"]) isSep
+  where
+  isSep Lex{tok=Tok.Separator Tok.Comma} = True
+  isSep Lex{tok=Tok.Separator Tok.Semicolon} = True
+  isSep _ = False
+  fromSep t@Lex{tok=Tok.Separator Tok.Comma} = (Comma, t)
+  fromSep t@Lex{tok=Tok.Separator Tok.Semicolon} = (Semicolon, t)
+  fromSep _ = errorWithoutStackTrace "fromSep called when isSep == False"
+
 colon :: Parser 'Greedy LexElem
 colon = P.satisfy (expect ["colon"]) isColon
   where
   isColon Lex{tok=Tok.Separator Tok.Colon} = True
   isColon _ = False
 
-semicolon :: Parser 'Greedy LexElem
-semicolon = P.satisfy (expect ["semicolon"]) isSemicolon
+syntheticDot :: Parser 'Greedy LexElem
+syntheticDot = P.satisfy (expect ["dot"]) isDot
   where
-  isSemicolon Lex{tok=Tok.Separator Tok.Semicolon} = True
-  isSemicolon _ = False
+  isDot Lex{tok=Tok.SyntheticDot} = True
+  isDot _ = False
 
 chainDot :: Parser 'Greedy LexElem
 chainDot = P.satisfy (expect ["dot"]) isDot
   where
   isDot Lex{tok=Tok.ChainDot} = True
   isDot _ = False
-
-comma :: Parser 'Greedy LexElem
-comma = P.satisfy (expect ["comma"]) isComma
-  where
-  isComma Lex{tok=Tok.Separator Tok.Comma} = True
-  isComma _ = False
 
 
 ------ Helpers ------
@@ -186,24 +216,6 @@ within f next sep = do
       let tLast = if null ts then t2 else last ts
           l = (location t1){to=(to . location) tLast}
       pure $ f l (t1:t2:ts)
-
-around ::
-     (Location -> [Nest ph] -> Nest ph) -- create this node
-  -> Parser 'Greedy (Nest ph) -- next level down
-  -> Parser 'Greedy LexElem -- separator
-  -> Parser 'Greedy (Nest ph)
-around f next sep = do
-  sep0 <- P.option Nothing (Just <$> sep)
-  ts <- next `P.sepBy` sep
-  sep' <- P.option Nothing (Just <$> sep)
-  case (sep0, ts, sep') of
-    (Nothing, [], Nothing) -> error "TODO unimplemented"
-    (Just t, [], Nothing) -> pure $ f (loc t) []
-    (Nothing, [], Just t) -> pure $ f (loc t) []
-    (t0, _, t') ->
-      let l0 = maybe (location $ head ts) loc t0
-          l = l0{to = to $ maybe (location $ last ts) loc t'}
-       in pure $ f l ts
 
 
 ------ Errors ------

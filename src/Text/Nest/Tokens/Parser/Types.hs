@@ -1,12 +1,17 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Text.Nest.Tokens.Parser.Types
   ( Nest(..)
-  , Encloser(..)
-  , Separator(..)
+  , Surrounder(..)
+  , Punctuation(..)
+  , Listy(..)
+  , Inline(..)
+  , Nakedness(..)
   , location
   , pattern StrAtom
   , Phase(..)
@@ -37,53 +42,66 @@ data Phase = Correct | Recovered
 -- WARNING: There are plenty of forms that the parser is unable to construct
 -- I'd much prefer a more accurate type, but I think w/o a dependently typed lang, it's not worth the indexing
 data Nest :: Phase -> Type where
-  NilAtom   :: Location -> Encloser                     -> Nest phase
-  -- TODO what about `{:}`? I guess I need a colon-styled nil
-  IntAtom   :: Location -> Text -> Integer              -> Nest phase
-  RatAtom   :: Location -> Text -> Rational             -> Nest phase
-  SymAtom   :: Location -> Text                         -> Nest phase
-  StrTempl  :: Location -> Text -> [(Nest phase, Text)] -> Nest phase
-  Ellipsis  :: Location                                 -> Nest phase
+  Ellipsis  :: Location -> Nest phase
+  NilAtom   :: Location
+            -> Surrounder 'Inline
+            -> Maybe (Punctuation anyListy 'Inline)
+            -> Nest phase
+  IntAtom   :: Location -> Text -> Integer -> Nest phase
+  RatAtom   :: Location -> Text -> Rational -> Nest phase
+  SymAtom   :: Location -> Text -> Nest phase
   -- combinations
-  Enclose   :: Location -> Encloser -> Nest phase       -> Nest phase
-  Indent    :: Location -> [Nest phase]                 -> Nest phase
-  Separate  :: Location -> Separator -> [Nest phase]    -> Nest phase
-  Colon     :: Location -> Nest phase -> Nest phase     -> Nest phase
-  Combine   :: Location -> [Nest phase]                 -> Nest phase
-  PrefixDot :: Location -> Nest phase                   -> Nest phase
-  Chain     :: Location -> [Nest phase]                 -> Nest phase
+  StrTempl  :: Location
+            -> Text -> [(Nest phase, Text)]
+            -> Nest phase
+  Surround  :: Location
+            -> Surrounder anyInline
+            -> Nest phase
+            -> Nest phase
+  Separate  :: Location
+            -> Punctuation anyListy anyInline
+            -> Split anyListy (Nest phase) -- FIXME NonEmpty
+            -> Nest phase
+  Combine   :: Location -> [Nest phase] -> Nest phase
+  Chain     :: Location -> Nakedness -> [Nest phase] -> Nest phase
   -- errors
-  Error     :: Error                                    -> Nest 'Recovered
+  Error     :: Error -> Nest 'Recovered
 
-data Encloser
-  = Paren
-  | Bracket
-  | Brace
-  deriving(Show)
+data Nakedness = Standard | Naked
+data Listy = Listy | Pairy
+data Inline = Inline | NotInline
 
-data Separator
-  = Comma
-  | Semicolon
-  deriving(Show)
+data Punctuation :: Listy -> Inline -> Type where
+  Colon :: Punctuation 'Pairy 'Inline
+  Comma :: Punctuation 'Listy 'Inline
+  Semicolon :: Punctuation 'Listy 'Inline
+  Newline :: Punctuation 'Listy 'NotInline
+
+data Surrounder :: Inline -> Type where
+  Paren :: Surrounder 'Inline
+  Bracket :: Surrounder 'Inline
+  Brace :: Surrounder 'Inline
+  Indent :: Surrounder 'NotInline
+
+type family Split (l :: Listy) a :: Type where
+  Split 'Listy a = [a]
+  Split 'Pairy a = (a, a)
 
 pattern StrAtom :: Location -> Text -> Nest st
 pattern StrAtom a str = StrTempl a str []
 
 
 location :: Nest ph -> Location
-location (NilAtom l _) = l
+location (Ellipsis l) = l
+location (NilAtom l _ _) = l
 location (IntAtom l _ _) = l
 location (RatAtom l _ _) = l
 location (SymAtom l _) = l
 location (StrTempl l _ _) = l
-location (Ellipsis l) = l
-location (Enclose l _ _) = l
-location (Indent l _) = l
+location (Surround l _ _) = l
 location (Separate l _ _) = l
-location (Colon l _  _) = l
 location (Combine l _) = l
-location (PrefixDot l _) = l
-location (Chain l _) = l
+location (Chain l _ _) = l
 location (Error _) = error "TODO call `location` on `Error`"
 
 
