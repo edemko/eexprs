@@ -16,7 +16,8 @@ module Text.Lightyear.Combinators
     -- $sequence
     , many1
     -- * Iteration
-    -- TODO
+    , sepBy
+    -- TODO sepBy variants
     -- * Error Management
     , try
     , recover
@@ -136,6 +137,11 @@ many1 first rest = Parser $ \st -> case unParser first st of
 
 -- TODO some1; as many1, but the first is mandatory (just for symmetry)
 
+sepBy :: (Branch (Lightyear 'Greedy st strm err))
+    => Lightyear 'Greedy st strm err a -- ^ the parser to repeat
+    -> Lightyear 'Greedy st strm err b -- ^ the parser to separate with
+    -> Lightyear 'Greedy st strm err [a]
+sepBy body sep = many1 body (sep >> body)
 
 ------------ Modified Movement ------------
 

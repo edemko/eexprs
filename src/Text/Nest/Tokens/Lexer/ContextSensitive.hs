@@ -23,6 +23,7 @@ contextualize xs =
     -- when thinking about indentation, I don't want to think about trailing whitespace/comments
     -- and any blank lines (modulo whitespace/comments)
     -- ignore these early so we only have one thing to worry about later (ignoring `IGN`, which shouldn't be hard)
+    |> map ignoreComment
     |> ignoreTrailing
     |> ignoreBlanklines
     -- these coordinate detecting and nexting indentation
@@ -33,15 +34,19 @@ contextualize xs =
     |> recognizeDots
     |> recognizeSpaces
     |> map ensureSensitive
+    |> trailingNewline
     $ xs
+
+ignoreComment :: Lexeme SomeResult -> Lexeme SomeResult
+ignoreComment x@L{payload = OK Comment} = ignore x
+ignoreComment x = x
 
 ignoreTrailing :: [Lexeme SomeResult] -> [Lexeme SomeResult]
 ignoreTrailing = go [] []
     where
     go buf acc [] = reverse (buf ++ acc)
-    -- space and comment might get ignored
+    -- space might get ignored
     go buf acc (x@L{payload=OK UnknownSpace} : xs) = go (x:buf) acc xs
-    go buf acc (x@L{payload=OK Comment} : xs) = go (x:buf) acc xs
     -- and obviously already-ignored stuff is still ignored
     go buf acc (x@L{payload=IGN _} : xs) = go (x:buf) acc xs
     -- do ignore them when you find a newline immediately after
@@ -243,6 +248,16 @@ ensureSensitive tok@L{payload} = tok{payload=go payload}
     go (OK UnknownColon) = error "unexpected UnknownColon after context-sensitive lexing. please report"
     go (IGN x) = Ignore x
     go (ERR err) = Error err
+
+trailingNewline :: [Lexeme (Result 'Sens)] -> [Lexeme (Result 'Sens)]
+trailingNewline  = reverse . go . reverse
+    where
+    go [] = []
+    -- FIXME emit a warning (special Error) about "no trailing newline"
+    go (t@L{payload=Ok (Separator Newline)} : rest) = t{payload = Ignore (Separator Newline)} : rest
+    go (t@L{payload=Ok _} : rest) = t : rest
+    go (t@L{payload=Error _} : rest) = t : rest
+    go (t@L{payload=Ignore _} : rest) = t : go rest
 
 
 ignore :: Lexeme SomeResult -> Lexeme SomeResult

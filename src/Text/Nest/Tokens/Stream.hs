@@ -14,6 +14,7 @@ module Text.Nest.Tokens.Stream
 import Prelude hiding (length)
 import Text.Nest.Tokens.Types
 
+import Data.Text (Text)
 import Data.Sequence (Seq, (|>), ViewL(..), ViewR(..))
 import Text.Lightyear.Position (TextPos)
 import Text.Lightyear.Stream (Stream(..))
@@ -23,6 +24,7 @@ import qualified Data.Sequence as Seq
 
 data LexElem = Lex
   { loc :: Location
+  , orig :: Text
   , tok :: Token 'Sens
   }
 
@@ -38,6 +40,7 @@ mkStream file xs0 = go [] Seq.empty xs0
     Ok tok ->
       let x' = Lex
             { loc = Loc file loc (advance orig loc)
+            , orig
             , tok
             }
         in go errs (acc |> x') xs
