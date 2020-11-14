@@ -1,4 +1,4 @@
-# nest
+# eexprs
 
 I'm tired of making new parsers for languages, so this is the last one.
 
@@ -23,13 +23,13 @@ As a sidenote, a lisper might object that the parsimony of the s-expression gram
 To which I say no: a focus on homoiconicity was a separate genius design move.
 I'll admit, s-expressions made it easier to innovate this form of metaprogramming, but several non-sexpr languages have quasiquotation today; it simply takes a little more work to design the syntax.
 
-Nest defines a tree-shaped inductive datatype "nest expressions" and a partial mapping from text files to this datatype (a concrete syntax).
-Nest expressions aim to be completely language-agnostic: they focus only on combination and separation of atoms.
-To build a specific language on top of nest, you still must define a concrete syntax mapping nest trees into your language's abstract syntax, but at least _this_ parsing is only tree-rewriting: all the hard work of manipulating text has already been done by nest.
+Eexprs define a tree-shaped inductive datatype "eexprs" and a partial mapping from text files to this datatype (a concrete syntax).
+Eexprs aim to be completely language-agnostic: they focus only on combination and separation of atoms.
+To build a specific language on top of eexprs, you still must define a concrete syntax mapping eexprs trees into your language's abstract syntax, but at least _this_ parsing is only tree-rewriting: all the hard work of manipulating text has already been done by eexprs.
 
 Ultimately, I want to be able to move very rapidly from an academic description of a new language into a convenient implementation.
 (By convenient, I mean that the syntax is reasonably familiar, errors are diagnosed descriptively, but performance is perhaps still as for a toy, though a mature system could be built on top of the existing implementation.)
-Nest is the first step of this project.
+Eexprs is the first step of this project.
 
 
 ## To-do List
@@ -43,6 +43,7 @@ This list is just known upcoming stuff; items are deleted not checked off.
     * choose a name:
       * `nest` I don't really like it
       * `mexpr` evocative, but confusable with historical uses
+      * `eexpr` for "elaborate expressions", which is descriptive and thematic
     * quasiquote-supporting syntax (perhaps just steal Haskell's)
   * major features
     * parsing
@@ -65,18 +66,18 @@ This list is just known upcoming stuff; items are deleted not checked off.
 Here's how to edit some things I expect to change.
 
 I'm not solid on which characters should be allowed in atoms.
-To edit this, look for the `word` parser in `Text.Nest.Tokens.Megaparsec.Broad`.
-, and `isSymbolChar` in `Text.Nest.Tokens.Lexer.Recognize`.
+To edit this, look for the `word` parser in `Text.EExprs.Tokens.Megaparsec.Broad`.
+, and `isSymbolChar` in `Text.EExprs.Tokens.Lexer.Recognize`.
 
 So far, I am only allowing UNIX-style linebreaks.
 On the one hand, this is inflexible, and should probably be changed.
 On the other hand, who wants to allow a corporation to dictate that
     combining source files from multiple sources may result in inconsistent linebreaks?
 
-The set of escape characters that are allowed in strings is given in `stringEscapes` in `Text.Nest.Tokens.Megaparsec.Broad`.
+The set of escape characters that are allowed in strings is given in `stringEscapes` in `Text.EExprs.Tokens.Megaparsec.Broad`.
 
-The set of punctuation characters, is given by `brackets` and `separators` in `Text.Nest.Tokens.Megaparsec.Broad`.
-The valid separators are given in `separators` in `Text.Nest.Tokens.Megaparsec.Recognize`.
+The set of punctuation characters, is given by `brackets` and `separators` in `Text.EExprs.Tokens.Megaparsec.Broad`.
+The valid separators are given in `separators` in `Text.EExprs.Tokens.Megaparsec.Recognize`.
 Adjacent separator chars are treated as a single token, though that token may be invalid.
 It is important that the set of `separatorChars` agree with `separators`.
 

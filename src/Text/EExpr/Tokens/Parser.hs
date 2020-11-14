@@ -5,32 +5,32 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Text.Nest.Tokens.Parser
+module Text.EExpr.Tokens.Parser
   ( parse
   ) where
 
-import Text.Nest.Tokens.Parser.Types
-import Text.Nest.Tokens.Stream
+import Text.EExpr.Tokens.Parser.Types
+import Text.EExpr.Tokens.Stream
 
 import Data.Bifunctor (bimap)
+import Text.EExpr.Tokens.Types (Location(..))
 import Text.Lightyear (Lightyear, Consume(..), MakeError)
-import Text.Nest.Tokens.Types (Location(..))
 
 import qualified Data.Sequence as Seq
+import qualified Text.EExpr.Tokens.Types as Tok
 import qualified Text.Lightyear as P
-import qualified Text.Nest.Tokens.Types as Tok
 
 
 type Parser c a = Lightyear c () LexStream Error a
 
 
 
-parse :: LexStream -> Either Error [Nest ph]
+parse :: LexStream -> Either Error [EExpr ph]
 parse inp = case Seq.viewl inp of
   Seq.EmptyL -> Right []
   x Seq.:< _ -> P.runLightyearPos parseWorker inp (from (loc x)) ()
 
-parseWorker :: Parser 'Greedy [Nest ph]
+parseWorker :: Parser 'Greedy [EExpr ph]
 parseWorker = do
   xs <- pairing `P.sepBy` newline -- TODO is this the right starting point?
   P.endOfInput (expect ["end of input"])
@@ -38,7 +38,7 @@ parseWorker = do
 
 
 -- surround -- TODO nil atoms, string template
-surround :: Parser 'Greedy (Nest ph)
+surround :: Parser 'Greedy (EExpr ph)
 surround = do
   (t, brak) <- open
   case brak of
@@ -58,9 +58,9 @@ surround = do
   fromInlineSurrounder Tok.Paren = Paren
   fromInlineSurrounder Tok.Brack = Bracket
   fromInlineSurrounder Tok.Brace = Brace
-  fromInlineSurrounder Tok.Indent = errorWithoutStackTrace "Internal Nest Error! Please report.\nfromInlineSurrounder: attempt to create inline surrounder from Tok.Indent"
+  fromInlineSurrounder Tok.Indent = errorWithoutStackTrace "Internal EExpr Error! Please report.\nfromInlineSurrounder: attempt to create inline surrounder from Tok.Indent"
 
-separate :: Parser 'Greedy (Nest ph)
+separate :: Parser 'Greedy (EExpr ph)
 separate = do
   (leadSep, leadSepTok) <- checkSep
   x <- pairing
@@ -81,7 +81,7 @@ separate = do
   where
   checkSep = P.option (Nothing, Nothing) (bimap Just Just <$> someSeparator)
 
-pairing :: Parser 'Greedy (Nest ph)
+pairing :: Parser 'Greedy (EExpr ph)
 pairing = do
   left <- combine
   P.option Nothing (Just <$> colon) >>= \case
@@ -91,19 +91,19 @@ pairing = do
       let l = (location left){to = (to . location) right}
       pure $ Separate l Colon (left, right)
 
-combine :: Parser 'Greedy (Nest ph)
+combine :: Parser 'Greedy (EExpr ph)
 combine = within Combine chain space
 
-chain :: Parser 'Greedy (Nest ph)
+chain :: Parser 'Greedy (EExpr ph)
 chain = P.option Nothing (Just <$> syntheticDot) >>= \case
   -- FIXME allow chains segments not explicitly separated by dots
   Nothing -> within (\l -> Chain l Standard) baseTerm chainDot
   Just t0 -> within (\l -> Chain l{from = (from . loc) t0} Naked) baseTerm chainDot
 
-baseTerm :: Parser 'Greedy (Nest ph)
+baseTerm :: Parser 'Greedy (EExpr ph)
 baseTerm = surround P.<|> atom -- TODO <|> ellipsis
 
-atom :: Parser 'Greedy (Nest ph)
+atom :: Parser 'Greedy (EExpr ph)
 atom = fromAtom <$> P.satisfy (expect ["atom"]) isAtom -- FIXME is this good error reporting?
   where
   isAtom Lex{tok=Tok.Atom _} = True
@@ -202,10 +202,10 @@ chainDot = P.satisfy (expect ["dot"]) isDot
 ------ Helpers ------
 
 within ::
-     (Location -> [Nest ph] -> Nest ph) -- create this node
-  -> Parser 'Greedy (Nest ph) -- next level down
+     (Location -> [EExpr ph] -> EExpr ph) -- create this node
+  -> Parser 'Greedy (EExpr ph) -- next level down
   -> Parser 'Greedy LexElem -- separator
-  -> Parser 'Greedy (Nest ph)
+  -> Parser 'Greedy (EExpr ph)
 within f next sep = do
   t1 <- next
   P.option Nothing (Just <$> sep) >>= \case

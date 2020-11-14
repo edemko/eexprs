@@ -3,13 +3,13 @@
 
 module Main (main) where
 
-import Text.Nest.Tokens.Types
+import Text.EExpr.Tokens.Types
 
 import Data.Functor ((<&>))
 import Test.Tasty (defaultMain,TestTree,testGroup)
 import Test.Tasty.Golden (goldenVsFile,writeBinaryFile)
-import Text.Nest.Tokens.Lexer.ContextFree (parse)
-import Text.Nest.Tokens.Lexer.ContextSensitive (contextualize)
+import Text.EExpr.Tokens.Lexer.ContextFree (parse)
+import Text.EExpr.Tokens.Lexer.ContextSensitive (contextualize)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T

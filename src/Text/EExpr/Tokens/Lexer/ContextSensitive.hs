@@ -6,15 +6,15 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TupleSections #-}
 
-module Text.Nest.Tokens.Lexer.ContextSensitive
+module Text.EExpr.Tokens.Lexer.ContextSensitive
     ( contextualize
     ) where
 
-import Text.Nest.Tokens.Types
+import Text.EExpr.Tokens.Types
 
 import Control.Window.List (window2, window3)
+import Text.EExpr.Tokens.Lexer.Recognize (recognizeDepth)
 import Text.Lightyear.Stream (advance)
-import Text.Nest.Tokens.Lexer.Recognize (recognizeDepth)
 
 
 contextualize :: [Lexeme (Result 'Free)] -> [Lexeme (Result 'Sens)]

@@ -30,7 +30,7 @@ Narrow lexing analyzes each body to ensure it is a single recognizable token,
 and also analyzes it in context to see if it is relevant for parsing,
 or if it should take on different semantics based on nearby whitespace.
 -}
-module Text.Nest.Tokens.Types
+module Text.EExpr.Tokens.Types
     (
     -- * Token Parts
       Token(..)

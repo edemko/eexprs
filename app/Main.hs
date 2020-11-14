@@ -4,18 +4,18 @@
 
 module Main where
 
-import Text.Nest.Tokens.Types
+import Text.EExpr.Tokens.Types
 
 import Control.Monad (forM_,when)
 import System.Exit (exitFailure)
-import Text.Nest.Tokens.Lexer.ContextSensitive (contextualize)
-import Text.Nest.Tokens.Stream (mkStream,tok)
+import Text.EExpr.Tokens.Lexer.ContextSensitive (contextualize)
+import Text.EExpr.Tokens.Stream (mkStream,tok)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
--- import qualified Text.Nest.Tokens.Html as Html
-import qualified Text.Nest.Tokens.Lexer.ContextFree as Lexer
-import qualified Text.Nest.Tokens.Parser as Parser
+-- import qualified Text.EExpr.Tokens.Html as Html
+import qualified Text.EExpr.Tokens.Lexer.ContextFree as Lexer
+import qualified Text.EExpr.Tokens.Parser as Parser
 
 
 main :: IO ()

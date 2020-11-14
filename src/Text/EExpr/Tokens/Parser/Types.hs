@@ -5,8 +5,8 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Text.Nest.Tokens.Parser.Types
-  ( Nest(..)
+module Text.EExpr.Tokens.Parser.Types
+  ( EExpr(..)
   , Surrounder(..)
   , Punctuation(..)
   , Listy(..)
@@ -21,18 +21,9 @@ module Text.Nest.Tokens.Parser.Types
 import Data.Kind (Type)
 import Data.Text (Text)
 import Text.Lightyear (TextPos)
-import Text.Nest.Tokens.Types (Location)
+import Text.EExpr.Tokens.Types (Location)
 
-import qualified Text.Nest.Tokens.Types as Tok
-
-
--- FIXME
--- I expect that nested separators will be used uniformly
--- that is, if two terms are semi-colon-separated, and the first term is comma-separated, then the second term should also be comma-separated
--- this should probably be enforced in the type system if I can manage it
--- otherwise, I'd want a uniformicity pass
--- 
--- ultimately, this scheme wuold be due to the idea that separators "belong" to their enclosers
+import qualified Text.EExpr.Tokens.Types as Tok
 
 
 type Token = Tok.Token 'Tok.Sens
@@ -41,31 +32,31 @@ data Phase = Correct | Recovered
 
 -- WARNING: There are plenty of forms that the parser is unable to construct
 -- I'd much prefer a more accurate type, but I think w/o a dependently typed lang, it's not worth the indexing
-data Nest :: Phase -> Type where
-  Ellipsis  :: Location -> Nest phase
+data EExpr :: Phase -> Type where
+  Ellipsis  :: Location -> EExpr phase
   NilAtom   :: Location
             -> Surrounder 'Inline
             -> Maybe (Punctuation anyListy 'Inline)
-            -> Nest phase
-  IntAtom   :: Location -> Text -> Integer -> Nest phase
-  RatAtom   :: Location -> Text -> Rational -> Nest phase
-  SymAtom   :: Location -> Text -> Nest phase
+            -> EExpr phase
+  IntAtom   :: Location -> Text -> Integer -> EExpr phase
+  RatAtom   :: Location -> Text -> Rational -> EExpr phase
+  SymAtom   :: Location -> Text -> EExpr phase
   -- combinations
   StrTempl  :: Location
-            -> Text -> [(Nest phase, Text)]
-            -> Nest phase
+            -> Text -> [(EExpr phase, Text)]
+            -> EExpr phase
   Surround  :: Location
             -> Surrounder anyInline
-            -> Nest phase
-            -> Nest phase
+            -> EExpr phase
+            -> EExpr phase
   Separate  :: Location
             -> Punctuation anyListy anyInline
-            -> Split anyListy (Nest phase) -- FIXME NonEmpty
-            -> Nest phase
-  Combine   :: Location -> [Nest phase] -> Nest phase
-  Chain     :: Location -> Nakedness -> [Nest phase] -> Nest phase
+            -> Split anyListy (EExpr phase) -- FIXME NonEmpty
+            -> EExpr phase
+  Combine   :: Location -> [EExpr phase] -> EExpr phase
+  Chain     :: Location -> Nakedness -> [EExpr phase] -> EExpr phase
   -- errors
-  Error     :: Error -> Nest 'Recovered
+  Error     :: Error -> EExpr 'Recovered
 
 data Nakedness = Standard | Naked
 data Listy = Listy | Pairy
@@ -87,11 +78,11 @@ type family Split (l :: Listy) a :: Type where
   Split 'Listy a = [a]
   Split 'Pairy a = (a, a)
 
-pattern StrAtom :: Location -> Text -> Nest st
+pattern StrAtom :: Location -> Text -> EExpr st
 pattern StrAtom a str = StrTempl a str []
 
 
-location :: Nest ph -> Location
+location :: EExpr ph -> Location
 location (Ellipsis l) = l
 location (NilAtom l _ _) = l
 location (IntAtom l _ _) = l

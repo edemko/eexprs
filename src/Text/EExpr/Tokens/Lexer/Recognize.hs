@@ -2,19 +2,19 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Text.Nest.Tokens.Lexer.Recognize
+module Text.EExpr.Tokens.Lexer.Recognize
     ( isSymbolChar
     , recognizeAtom
     , recognizeSeparator
     , recognizeDepth
     ) where
 
-import Text.Nest.Tokens.Types
+import Text.EExpr.Tokens.Types
 
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
+import Text.EExpr.Tokens.Lexer.Error (expect, crammedTokens, mixedIndent, panic)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..), TextPos)
-import Text.Nest.Tokens.Lexer.Error (expect, crammedTokens, mixedIndent, panic)
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Char as C

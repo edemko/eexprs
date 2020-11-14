@@ -5,14 +5,14 @@
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS -fno-warn-orphans #-}
-module Text.Nest.Tokens.Stream
+module Text.EExpr.Tokens.Stream
   ( LexStream
   , LexElem(..)
   , mkStream
   ) where
 
 import Prelude hiding (length)
-import Text.Nest.Tokens.Types
+import Text.EExpr.Tokens.Types
 
 import Data.Text (Text)
 import Data.Sequence (Seq, (|>), ViewL(..), ViewR(..))

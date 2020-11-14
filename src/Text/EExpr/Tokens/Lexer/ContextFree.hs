@@ -4,20 +4,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
-module Text.Nest.Tokens.Lexer.ContextFree
+module Text.EExpr.Tokens.Lexer.ContextFree
     ( parse
     , stringEscapes
     , isSymbolChar
     ) where
 
 import Prelude hiding (lines)
-import Text.Nest.Tokens.Types
+import Text.EExpr.Tokens.Types
 
 import Data.Functor ((<&>))
 import Data.Text (Text)
+import Text.EExpr.Tokens.Lexer.Error (expect, panic)
+import Text.EExpr.Tokens.Lexer.Recognize (isSymbolChar, recognizeAtom, recognizeSeparator)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..))
-import Text.Nest.Tokens.Lexer.Error (expect, panic)
-import Text.Nest.Tokens.Lexer.Recognize (isSymbolChar, recognizeAtom, recognizeSeparator)
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
@@ -27,7 +27,7 @@ import qualified Text.Lightyear as P
 parse :: Text -> [Lexeme (Result 'Free)]
 parse inp = case P.runLightyear wholeFile inp () of
     Right toks -> toks
-    Left err -> error $ "Internal Nest Error! Please report.\nLexer failed to recover: " ++ show err
+    Left err -> error $ "Internal EExpr Error! Please report.\nLexer failed to recover: " ++ show err
 
 
 type Parser c a = Lightyear c () Text Error a
@@ -243,7 +243,7 @@ stringSection = plain <|> escape
 strTemplJoin :: Parser 'Greedy (Text, StrTemplJoin)
 strTemplJoin = do
     c <- P.satisfy (expect ["end of string", "start of splice"]) (`elem` ['\"', '`'])
-    let semantic = case c of { '\"' -> Plain ; '`' -> Templ; _ -> error "Internal Nest Error" }
+    let semantic = case c of { '\"' -> Plain ; '`' -> Templ; _ -> error "Internal EExpr Error" }
     pure (T.singleton c, semantic)
 
 

@@ -1,5 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
-module Text.Nest.Tokens.Lexer.Error
+module Text.EExpr.Tokens.Lexer.Error
     ( Error(..)
     , expect
     , crammedTokens
@@ -11,7 +11,7 @@ import Text.Lightyear ()
 import Text.Lightyear.Error
 
 import Data.Text (Text)
-import Text.Nest.Tokens.Types (Error(..))
+import Text.EExpr.Tokens.Types (Error(..))
 
 import qualified Data.Text as T
 
