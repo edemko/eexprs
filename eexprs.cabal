@@ -22,7 +22,7 @@ source-repository head
 
 library
   exposed-modules:
-    -- , Text.EExpr.Tokens.Html
+    , Text.EExpr.SExpr
     , Text.EExpr.Tokens.Lexer.ContextFree
     , Text.EExpr.Tokens.Lexer.ContextSensitive
     , Text.EExpr.Tokens.Lexer.Error
@@ -31,6 +31,7 @@ library
     , Text.EExpr.Tokens.Parser.Types
     , Text.EExpr.Tokens.Stream
     , Text.EExpr.Tokens.Types
+    -- , Text.EExpr.Tokens.Html
   other-modules:
     , Paths_eexprs
     , Text.Lightyear

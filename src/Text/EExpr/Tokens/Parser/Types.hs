@@ -1,99 +1,75 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Text.EExpr.Tokens.Parser.Types
   ( EExpr(..)
-  , Surrounder(..)
-  , Punctuation(..)
-  , Listy(..)
-  , Inline(..)
-  , Nakedness(..)
+  , Atom(..)
+  , Combiner(..)
   , location
   , pattern StrAtom
-  , Phase(..)
+  -- , Phase(..)
   , Error(..)
+  , NonEmpty2(..)
   ) where
 
 import Data.Kind (Type)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
-import Text.Lightyear (TextPos)
 import Text.EExpr.Tokens.Types (Location)
+import Text.Lightyear (TextPos)
 
 import qualified Text.EExpr.Tokens.Types as Tok
 
 
 type Token = Tok.Token 'Tok.Sens
 
-data Phase = Correct | Recovered
-
 -- WARNING: There are plenty of forms that the parser is unable to construct
 -- I'd much prefer a more accurate type, but I think w/o a dependently typed lang, it's not worth the indexing
-data EExpr :: Phase -> Type where
-  Ellipsis  :: Location -> EExpr phase
-  NilAtom   :: Location
-            -> Surrounder 'Inline
-            -> Maybe (Punctuation anyListy 'Inline)
-            -> EExpr phase
-  IntAtom   :: Location -> Text -> Integer -> EExpr phase
-  RatAtom   :: Location -> Text -> Rational -> EExpr phase
-  SymAtom   :: Location -> Text -> EExpr phase
-  -- combinations
-  StrTempl  :: Location
-            -> Text -> [(EExpr phase, Text)]
-            -> EExpr phase
-  Surround  :: Location
-            -> Surrounder anyInline
-            -> EExpr phase
-            -> EExpr phase
-  Separate  :: Location
-            -> Punctuation anyListy anyInline
-            -> Split anyListy (EExpr phase) -- FIXME NonEmpty
-            -> EExpr phase
-  Combine   :: Location -> [EExpr phase] -> EExpr phase
-  Chain     :: Location -> Nakedness -> [EExpr phase] -> EExpr phase
-  -- errors
-  Error     :: Error -> EExpr 'Recovered
+data EExpr :: Type where
+  Atom      :: Location
+            -> Atom
+            -> EExpr
+  Combine   :: Location
+            -> Combiner t_subexprs
+            -> t_subexprs
+            -> EExpr
+  -- TODO errors, only available in a phase
 
-data Nakedness = Standard | Naked
-data Listy = Listy | Pairy
-data Inline = Inline | NotInline
+data Atom
+  = IntAtom Text Integer
+  | RatAtom Text Rational
+  | SymAtom Text
 
-data Punctuation :: Listy -> Inline -> Type where
-  Colon :: Punctuation 'Pairy 'Inline
-  Comma :: Punctuation 'Listy 'Inline
-  Semicolon :: Punctuation 'Listy 'Inline
-  Newline :: Punctuation 'Listy 'NotInline
-
-data Surrounder :: Inline -> Type where
-  Paren :: Surrounder 'Inline
-  Bracket :: Surrounder 'Inline
-  Brace :: Surrounder 'Inline
-  Indent :: Surrounder 'NotInline
-
-type family Split (l :: Listy) a :: Type where
-  Split 'Listy a = [a]
-  Split 'Pairy a = (a, a)
-
-pattern StrAtom :: Location -> Text -> EExpr st
-pattern StrAtom a str = StrTempl a str []
+data Combiner :: Type -> Type where
+  -- strings
+  StrTempl :: Combiner (Text, [(EExpr, Text)])
+  -- enclosers
+  Paren :: Combiner (Maybe EExpr)
+  Bracket :: Combiner (Maybe EExpr)
+  Brace :: Combiner (Maybe EExpr)
+  Indent :: Combiner (NonEmpty EExpr)
+  -- separators
+  Apply :: Combiner (NonEmpty EExpr)
+  Ellipsis :: Combiner (Maybe EExpr, Maybe EExpr)
+  Colon :: Combiner (EExpr, EExpr)
+  Comma :: Combiner [EExpr]
+  Semicolon :: Combiner [EExpr]
+  -- other
+  Chain :: Combiner (NonEmpty2 EExpr)
+  SyntheticDot :: Combiner EExpr
+  Mixfix :: Combiner (EExpr, [EExpr]) -- TODO or should I have a non-empty list?
+    -- TODO ^ after mixfix processing is another phase
 
 
-location :: EExpr ph -> Location
-location (Ellipsis l) = l
-location (NilAtom l _ _) = l
-location (IntAtom l _ _) = l
-location (RatAtom l _ _) = l
-location (SymAtom l _) = l
-location (StrTempl l _ _) = l
-location (Surround l _ _) = l
-location (Separate l _ _) = l
-location (Combine l _) = l
-location (Chain l _ _) = l
-location (Error _) = error "TODO call `location` on `Error`"
+pattern StrAtom :: Location -> Text -> EExpr
+pattern StrAtom a str = Combine a StrTempl (str, [])
+
+
+location :: EExpr -> Location
+location (Atom l _) = l
+location (Combine l _ _) = l
 
 
 ------ Errors ------
@@ -113,3 +89,9 @@ instance Semigroup Error where
     a <> (Bundle bs) = Bundle (a : bs)
     a <> b = Bundle [a, b]
     -- TODO when multiple `Unexpected`s occur at same location, merge expectation list
+
+
+------ Helper ------
+
+infixr 5 :||
+data NonEmpty2 a = (a, a) :|| [a]

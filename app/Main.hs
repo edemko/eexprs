@@ -10,6 +10,7 @@ import Control.Monad (forM_,when)
 import System.Exit (exitFailure)
 import Text.EExpr.Tokens.Lexer.ContextSensitive (contextualize)
 import Text.EExpr.Tokens.Stream (mkStream,tok)
+import Text.EExpr.SExpr (ppReaderMacros)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -50,10 +51,10 @@ main = do
       exitFailure
   when False $ mapM_ (print . tok) tokStream -- DEBUG
 
-  errfulExpr <- case Parser.parse tokStream of
+  errfulExprs <- case Parser.parse tokStream of
     Left err -> do
       putStrLn "Parse error:"
       print err
       exitFailure
     Right expr -> pure expr
-  when True $ putStrLn "OK." -- DEBUG
+  when True $ mapM_ (T.putStrLn . ppReaderMacros) errfulExprs -- DEBUG
