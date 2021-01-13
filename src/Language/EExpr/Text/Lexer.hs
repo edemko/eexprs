@@ -4,20 +4,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
-module Text.EExpr.Tokens.Lexer.ContextFree
+module Language.EExpr.Text.Lexer
     ( parse
-    , stringEscapes
+    , depth
     , isSymbolChar
+    , stringEscapes
     ) where
 
 import Prelude hiding (lines)
-import Text.EExpr.Tokens.Types
+
+import Language.EExpr.Text.Lexer.Types
 
 import Control.Monad (void)
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import Text.EExpr.Tokens.Lexer.Error (expect, panic)
-import Text.Lightyear (Lightyear, Consume(..), Branch(..))
+import Language.EExpr.Text.Lexer.Results (Result(..), Error(..), expect, mixedIndent, panic)
+import Text.Lightyear (Lightyear, Consume(..), Branch(..), TextPos)
 
 import qualified Data.Char as C
 import qualified Data.List.NonEmpty as NE
@@ -25,7 +27,7 @@ import qualified Data.Text as T
 import qualified Text.Lightyear as P
 
 
------------- Character Classes ------------
+------------ Choices ------------
 
 -- for more options, peek around starting at https://www.compart.com/en/unicode/category
 isSymbolChar :: Char -> Bool
@@ -38,17 +40,66 @@ isSymbolChar c = good && defensive
         C.CurrencySymbol -> True
         _ -> False
 
+stringEscapes :: [(Char, Parser 'Greedy (Text, Text))]
+stringEscapes = (fromBasic <$> basicEscapes) ++ fancyEscapes
+    where
+    -- Produces the character expected, as well as a parser
+    -- which is run after the character has matched.
+    -- That parser produces the original after the character
+    -- and the whole escape's semantics.
+    fromBasic :: (Char, Char) -> (Char, Parser 'Greedy (Text, Text))
+    fromBasic (c, sem) = (c, pure $ ("", T.singleton sem))
+    basicEscapes :: [(Char, Char)]
+    basicEscapes =
+        [ ('\\', '\\')
+        , ('0', '\0')
+        , ('a', '\a')
+        , ('b', '\b')
+        , ('e', '\27')
+        , ('f', '\f')
+        , ('n', '\n')
+        , ('r', '\r')
+        , ('t', '\t')
+        , ('v', '\v')
+        , ('\'', '\'')
+        , ('\"', '\"')
+        , ('`', '`')
+        ]
+    fancyEscapes =
+        -- TODO \x[0-9a-fA-F]{2}
+        -- TODO \u[0-9a-fA-F]{4}
+        -- TODO \U(10|0[0-9a-fA-F])[0-9a-fA-F]{4}
+        -- WARNING: I am only allowing `\n` as a line separator; who wants to merge libraries with differing encodings for linesep?
+        [ ('\n', do
+            leading <- P.takeWhile (`elem` [' ', '\t'])
+            resume <- P.char (expect ["'\\' to resume string after linebreak"]) '\\'
+            pure (leading `T.snoc` resume , "")
+          )
+        , ('&', pure ("", ""))
+        ]
 
------------- Driver ------------
+
+------------ Drivers ------------
 
 parse :: Text -> [Lexeme (Result 'Free)]
 parse inp = case P.runLightyear wholeFile inp () of
     Right toks -> toks
     Left err -> error $ "Internal EExpr Error! Please report.\nLexer failed to recover: " ++ show err
 
+depth :: TextPos -> Text -> Either Error Int
+depth loc orig = P.runLightyearPos parseDepth orig loc ()
+    where
+    parseDepth :: Parser 'Greedy Int
+    parseDepth = do
+        spaces <- T.concat <$> P.many (simple <|> continue)
+        P.endOfInput mixedIndent
+        pure $ T.length spaces
+        where
+        simple = P.takeWhile1 (panic "spaces") (==' ')
+        continue = "" <$ P.string (panic "line continue") "\\\n"
+
 
 type Parser c a = Lightyear c () Text Error a
-
 
 wholeFile :: Parser 'Greedy [Lexeme (Result 'Free)]
 wholeFile = do
@@ -212,6 +263,7 @@ number = do
 
 ------------ Strings ------------
 
+-- FIXME I think I can simplify this implementation; check the syntax docs
 heredoc :: Parser 'Greedy (Lexeme (Result 'Free))
 heredoc = do
     pos0 <- P.getPosition
@@ -291,44 +343,6 @@ strTemplJoin = do
     let semantic = case c of { '\"' -> Plain ; '`' -> Templ; _ -> error "Internal EExpr Error" }
     pure (T.singleton c, semantic)
 
-
-stringEscapes :: [(Char, Parser 'Greedy (Text, Text))]
-stringEscapes = (fromBasic <$> basicEscapes) ++ fancyEscapes
-    where
-    -- Produces the character expected, as well as a parser
-    -- which is run after the character has matched.
-    -- That parser produces the original after the character
-    -- and the whole escape's semantics.
-    fromBasic :: (Char, Char) -> (Char, Parser 'Greedy (Text, Text))
-    fromBasic (c, sem) = (c, pure $ ("", T.singleton sem))
-    basicEscapes :: [(Char, Char)]
-    basicEscapes =
-        [ ('\\', '\\')
-        , ('0', '\0')
-        , ('a', '\a')
-        , ('b', '\b')
-        , ('e', '\27')
-        , ('f', '\f')
-        , ('n', '\n')
-        , ('r', '\r')
-        , ('t', '\t')
-        , ('v', '\v')
-        , ('\'', '\'')
-        , ('\"', '\"')
-        , ('`', '`')
-        ]
-    fancyEscapes =
-        -- TODO \x[0-9a-fA-F]{2}
-        -- TODO \u[0-9a-fA-F]{4}
-        -- TODO \U(10|0[0-9a-fA-F])[0-9a-fA-F]{4}
-        -- WARNING: I am only allowing `\n` as a line separator; who wants to merge libraries with differing encodings for linesep?
-        [ ('\n', do
-            leading <- P.takeWhile (`elem` [' ', '\t'])
-            resume <- P.char (expect ["'\\' to resume string after linebreak"]) '\\'
-            pure (leading `T.snoc` resume , "")
-          )
-        , ('&', pure ("", ""))
-        ]
 
 dup :: a -> (a, a)
 dup x = (x, x)

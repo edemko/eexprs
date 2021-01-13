@@ -1,14 +1,14 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Text.EExpr.SExpr
+module Language.EExpr.Text.Render.SExpr
   ( ppReaderMacros
   ) where
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
-import Text.EExpr.Tokens.Parser.Types (EExpr(..), Atom(..), Combiner(..))
-import Text.EExpr.Tokens.Parser.Types (NonEmpty2(..))
+import Language.EExpr.Types (EExpr(..), Atom(..), Combiner(..))
+import Language.EExpr.Types (NonEmpty2(..))
 
 import qualified Data.Text as T
 

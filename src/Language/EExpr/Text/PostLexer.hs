@@ -3,21 +3,21 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TupleSections #-}
 
-module Text.EExpr.Tokens.Lexer.ContextSensitive
+module Language.EExpr.Text.PostLexer
     ( contextualize
     ) where
 
-import Text.EExpr.Tokens.Types
+import Language.EExpr.Text.Lexer.Types
 
 import Control.Window.List (window2, window3)
-import Text.EExpr.Tokens.Lexer.Recognize (recognizeDepth)
+import Language.EExpr.Text.Lexer (depth)
+import Language.EExpr.Text.Lexer.Results (SomeResult(..), Result(..), Error(..))
 import Text.Lightyear.Stream (advance)
 
 
-contextualize :: [Lexeme (Result 'Free)] -> [Lexeme (Result 'Sens)]
+contextualize :: [Lexeme (Result 'Free)] -> [Lexeme (Result 'Clean)]
 contextualize xs =
        map packFree
     |> detectCramming
@@ -50,7 +50,7 @@ detectCramming = reverse . window2 go . reverse
     go y@L{payload=OK (Atom _)} x@L{payload=OK (Atom _)} = Just [crammed y, x]
     go _ _ = Nothing
     crammed :: Lexeme SomeResult -> Lexeme SomeResult
-    crammed r@L{loc,orig} = r{payload = SO . Error $ CrammedTokens loc orig}
+    crammed r@L{loc,orig} = r{payload = ERR $ CrammedTokens loc orig}
 
 ignoreComment :: Lexeme SomeResult -> Lexeme SomeResult
 ignoreComment x@L{payload = OK Comment} = ignore x
@@ -113,7 +113,7 @@ detectIndentation = go StartOfFile [0] []
     go FoundColon lvs acc = \case
         x@L{payload=IGN _} : xs -> go FoundColon lvs (x:acc) xs
         x@L{payload=OK UnknownNewline} : xs -> go FoundColon lvs (ignore x:acc) xs
-        x@L{loc,orig,payload=OK UnknownSpace} : xs -> case recognizeDepth loc orig of
+        x@L{loc,orig,payload=OK UnknownSpace} : xs -> case depth loc orig of
             Left err -> go Search lvs (x{payload=ERR err}:acc) xs
             Right depth' -> if depth' > head lvs
                 then go Search (depth':lvs) (x{payload=OK (Combiner Open Indent)}:acc) xs
@@ -140,7 +140,7 @@ detectIndentation = go StartOfFile [0] []
         -> [Lexeme SomeResult] -- accumulator
         -> [Lexeme SomeResult] -- the rest of the input stream
         -> [Lexeme SomeResult] -- recurse back into `go`
-    offsides lvs0 x@L{loc,orig} buf nl acc xs = case recognizeDepth loc orig of
+    offsides lvs0 x@L{loc,orig} buf nl acc xs = case depth loc orig of
         Left err -> go Search lvs0 (x{payload=ERR err} : buf ++ ignore nl : acc) xs
         Right depth' -> drain lvs0 []
             where
@@ -231,9 +231,11 @@ recognizeSpaces = mkSeparatorSpaces . ignoreCombinerSpace . ignoreSeparatorSpace
         x -> x
 
 packFree :: Lexeme (Result 'Free) -> Lexeme SomeResult
-packFree x@L{payload} = x{payload=SO payload}
+packFree x@L{payload} = case payload of
+    Ok tok -> x{payload=OK tok}
+    Error err -> x{payload=ERR err}
 
-ensureSensitive :: Lexeme SomeResult -> Lexeme (Result 'Sens)
+ensureSensitive :: Lexeme SomeResult -> Lexeme (Result 'Clean)
 ensureSensitive tok@L{payload} = tok{payload=go payload}
     where
     go (OK (Atom x)) = Ok $ Atom x
@@ -264,7 +266,7 @@ ensureSensitive tok@L{payload} = tok{payload=go payload}
     go (IGN x) = Ignore x
     go (ERR err) = Error err
 
-trailingNewline :: [Lexeme (Result 'Sens)] -> [Lexeme (Result 'Sens)]
+trailingNewline :: [Lexeme (Result 'Clean)] -> [Lexeme (Result 'Clean)]
 trailingNewline  = reverse . go . reverse
     where
     go [] = []
@@ -285,11 +287,3 @@ ignore r@L{payload} = r{payload=go payload}
 infixl 9 |>
 (|>) :: (a -> b) -> (b -> c) -> (a -> c)
 (|>) = flip (.)
-
-{-# COMPLETE OK, IGN, ERR #-}
-pattern OK :: Token phase -> SomeResult
-pattern OK x = SO (Ok x)
-pattern IGN :: Token phase -> SomeResult
-pattern IGN x = SO (Ignore x)
-pattern ERR :: Error -> SomeResult
-pattern ERR err = SO (Error err)

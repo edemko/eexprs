@@ -5,12 +5,18 @@
   \setmonofont{FreeMono}
 
 \usepackage{amsmath}
+\usepackage{amsthm}
 \usepackage{mathtools}
+\usepackage{extarrows}
+% \usepackage{tipa}% for \textturntwo, \textturnthree
+  \newcommand*{\textturntwo}{\raisebox{-0.05ex}{\rotatebox[origin=c]{180}{2}}}
+  \newcommand*{\textturnthree}{\rotatebox[origin=c]{180}{3}}
 
 \title{E-Expressions}
 % \date{}
 \author{Okuno Zankoku}
 
+\newtheorem*{remark}{Remark}
 
 
 \begin{document}
@@ -133,27 +139,60 @@ I hope to be able to take any formal programming calculus from the literature an
 
 \section{E-expr Grammar}
 
-In the following, we use grammatical notation drawn from a number of fields.
-From regular expressions, we have
-  parenthesis for (non-capturing) grouping,
-  pipe $a \mid b$ for alternation,
-  $r^?$ for optional elements,
-  $r^\star$ and $r^+$ for repetition zero/one or more times respectively,
-  and $r^{\{n\}}$ for $n$-times repetition.
-A more advanced form is the difference of regular expressions $r_1 - r_2$ which matches all $r_1$ that \emph{don't} match $r_2$; regular expressions have been proven closed under subtraction, but it hasn't made it into major implementations.
-Literal characters and strings are in \texttt{typewriter} font and surrounded by \texttt{'}single ticks\texttt{'}.
-We use standard C-style character escapes for otherwise hard-to-typeset whitespace characters (space, tab, and newlines), as well as backslash itself; to be safe, we also backslash-escape single- and double-quotes and backtick.
-We use character classes which can reference both literal characters and the names of common classes and those we define ourselves.
-  We typeset the names of classes in \textit{italics}.
-From BNF, we write 
-  non-terminals in \textbf{boldface},
-  but also allow the definition of character classes whose names are in \textit{italics}.
+E-expressions are parsed from UTF-8 encoded Unicode text streams.
+Due to some context-sensitivity, the following schematic is how I will describe the overall parsing process:
+$$\text{Unicode}
+  \xrightarrow{\text{lexer}} \text{Pre-tokens}
+  \xrightarrow{\text{post-lexer}} \text{Tokens}
+  \xrightarrow{\text{parser}} \text{E-Expr}
+$$
+The lexer can be described mostly in terms of regular expressions (with one exception involving a capturing group).
+The post-lexer analyzes constructs involving whitespace-sensitivity and simplifies the token stream.
+The parser, finally, is a context-free grammar over these tokens.
+
+\begin{remark}
+I have decided to allow only Unicode codepoints in the alphabet and decided on UTF-8 as the only available encoding for now.
+Selecting Unicode seems the most future-proof choice, since its goal is to subsume all other character sets.
+Choosing UTF-8 as the only encoding is less reliable, but detection of magic strings in their appropriate encodings is a source of complexity.
+I may allow a file-initial comment stating encoding in the future, but for now I think UTF-8 will be an acceptable encoding for most program texts.
+\end{remark}
+
+\newcommand*{\literal}[1]{\texttt{'{#1}'}}
+\newcommand*{\notcharclass}[1]{\mathopen{\lnot[\mathord:\;} #1 \mathclose{\;\mathord:]}}
+\newcommand*{\charclass}[1]{\mathopen{[\mathord:\;} #1 \mathclose{\;\mathord:]}}
+\newcommand*{\charrange}[2]{\literal{#1}\text{--}\literal{#2}}
+
+To avoid the verbosity of academic regular expressions, we allow some notations that readers may not be familiar with.
+Let's take the opportunity to state our notation explicitly:
+\begin{itemize}
+  \item Literal characters and strings are written in \texttt{typewriter} font and surrounded by \texttt{'}single ticks\texttt{'}.
+        We use standard C-style character escapes for otherwise hard-to-typeset whitespace characters (space, tab, and newlines), as well as backslash itself; to be safe, we also backslash-escape single- and double-quotes and backtick.
+  \item Character classes are written with colon-square-brackets $\charclass{\ldots}$.
+        Negative character classes are preceded by a negation sign $\notcharclass{\ldots}$.
+        The contents of a character class are the union of the literal characters, character ranges, and named character classes appearing inside the brackets.
+        We define some character classes; in doing so we use plus/minus for set union/difference.
+        Character ranges are written as two literals separated by an endash $\literal{a}\text{--}\literal{b}$ and stand for the set of all code points between the two literals (inclusive); this is not to be confused with set minus.
+  \item Alternation is written with a pipe $r_1 \mid r_2$.
+  \item An optional element is written with a superscript question mark $r^?$.
+  \item Repetition zero/one or more times is written with a superscript star/plus respectively $r^\star$/$r^+$.
+  \item Repetition by a fixed amount is written with that amount superscripted in curly braces $r^{\{n\}}$.
+  \item Difference of regular languages is represented with a minus sign $r_1 - r_2$.
+        Although regular languages are closed under subtraction, this notion has not made it into implementations.
+        An input matches $r_1 - r_2$ exactly when it matches $r_1$ but does \emph{not} match $r_2$.
+  \item We use $\omega$ to match any single character, and $\varepsilon$ for the empty string.
+  \item Parentheses for non-capturing grouping.
+  \item $r^{=x}$ captures the portion of input that matched $r$ and stores it in the variable $x$ for later use.
+  \item When a regular expression becomes to long to be easily-understood, we will resort to the convensions of Backus-Naur Form.
+        Non-terminals are typeset in \textbf{boldface}.
+  \item We will need a couple families of regular expression parameterized by a string.
+        These are written as if they were a function $\mathbf{family}(x)$.
+  \item Where a variable appears free in the right-hand side of a rule, it is a unification variable.
+\end{itemize}
+
 
 \subsection{Lexer}
 
-\newcommand*\literal[1]{\texttt{'{#1}'}}
-\newcommand*\notcharclass[1]{\mathopen{\lnot[\mathord:\;} #1 \mathclose{\;\mathord:]}}
-\newcommand*\charclass[1]{\mathopen{[\mathord:\;} #1 \mathclose{\;\mathord:]}}
+
 
 The first step in parsing an e-expression is to identify pre-tokens from a stream of UTF-8 characters.
 The grammars for most pre-tokens mostly describe regular languages, but we have made some use of BNF notation to help keep the regular expressions small and understandable.
@@ -164,88 +203,202 @@ These pre-tokens may need to later be classified into tokens proper
 \newcommand{\gor}{\mathrel{\phantom{\gis}\mathllap{\mid}}}
 
 \begin{align*}
-\intertext{These three bracketing forms are hardcoded as special, as are these five punctuation marks.
-  Note that ellipsis \literal{..} is preferred over a single dot \literal{.}.}
-  \mathbf{encloser} &\gis \charclass{\literal{()[]\{\}}} \\
-  \mathbf{separator} &\gis \literal{,} \mid \literal{.} \mid \literal{..} \mid \literal{;} \mid \literal{:} \\
-\intertext{Inline whitespace consists of newlines and tabs, but also}
-  \mathbf{preSpace} &\gis \charclass{\literal{\textbackslash{ }\textbackslash t}}^+ \\
-\intertext{a line-continuation is also treated as if it were inline whitespace.}
-                    &\gor \literal{\textbackslash\textbackslash\textbackslash n} \\
-\intertext{On the other hand, line-breaks may need to be distinguished from inline whitespace.}
-  \mathbf{preNewline} &\gis \literal{\textbackslash n} \\
-\intertext{Only line-comments are allowed; see the discussion below.}
-  \mathbf{comment} &\gis \literal{\#} \; \notcharclass{\literal{\textbackslash n}}^+ \\
-  symbolChar &= \charclass{letter, digit, mathSymbol, currencySymbol} \\
-             &+ \charclass{\literal{\textasciitilde!@\$\%\textasciicircum\&*-\textunderscore=+|<>/?}} \\
-             &- \charclass{\texttt{\textbackslash{ }\textbackslash t\textbackslash n\textbackslash r\texttt\#\textbackslash\textbackslash}} \\
-             &- \charclass{\texttt{()[]{},.;:\textbackslash`\textbackslash'\textbackslash"}} \\
+\mathbf{preTokens}
+  &\gis \mathbf{preToken}^\star \\
+\mathbf{preToken}
+  &\gis \mathbf{encloser} \mid \mathbf{separator} \\
+  &\gor \mathbf{preSpace} \mid \mathbf{preNewline} \\
+  &\gor \mathbf{comment} \\
+  &\gor \mathbf{symbol} \mid \mathbf{number} \mid \mathbf{string} \mid \mathbf{char} \\
+%
+\intertext{Enclosers and separators are baked into the grammar of e-exprs.}
+\mathbf{encloser}
+  &\gis \charclass{\literal{()[]\{\}}} \\
+\mathbf{separator}
+  &\gis \literal{,} \mid \literal{.} \mid \literal{..} \mid \literal{;} \mid \literal{:} \\
+%
+\intertext{Whitespace is significant in e-exprs in two ways.
+  Most prominently, e-exprs are indentation-sensitive.
+  Some pairs of tokens require whitespace between them, and some tokens change their meaning depending on the presence/absence of whitespace.
+}
+\mathbf{preSpace}
+  &\gis \charclass{\literal{\textbackslash{ }\textbackslash t}}^+ \\
+  &\gor \literal{\textbackslash\textbackslash\textbackslash n} \\
+\mathbf{preNewline}
+  &\gis \literal{\textbackslash n} \\
+%
+\mathbf{comment}
+  &\gis \literal{\#} \; \notcharclass{\literal{\textbackslash n}}^\star \\
+%
+\intertext{Symbols are likely to make up most of the text in an e-expr, as they can be used for variables, operators, keywords, and so on.}
 \intertext{TODO: I haven't decided if I really want to allow colons to start symbols.}
-  \mathbf{symbol} &\gis (\charclass{symbolChar} - \charclass{\literal{+-}}^? \; \charclass{digit}) \; \charclass{symbolChar}^* \\
-                  &\gor \literal{:} \charclass{symbolChar, \literal{:}}^+ \\
-\intertext{FIXME: this doesn't admit non-decimal bases or scientific notation}
-  \mathbf{number} &\gis \charclass{\literal{+-}} \; \charclass{digit}^+ \\
-\intertext{Strings are enclosed in double-quotes, but an expression can be spliced into a string by enclosing the expression in backticks.
-  At this stage in parsing, I am not interested in matching string fragments up and scooping up the spliced expressions in-between to form the entire template: this is just the elxer for goodness' sake!
-  In Any case, i means that strings might start and end with any mix of double-quote and backtick.}
-  \mathbf{stringPart} &\gis \charclass{\literal", \literal`}\;\mathbf{stringContent}^\star\;\charclass{\literal{\textbackslash"\textbackslash`}} \\
-\intertext{Most UTF-8 characters are available for use directly in strings, with some obvious exceptions.
-  Notably, strings are not allowed to cross line-boundaries without special syntax, since that's a common cause of syntax error.}
-  \mathbf{stringContent} &\gis \notcharclass{\literal{\textbackslash"\textbackslash`\textbackslash r\textbackslash n\textbackslash\textbackslash}} \\
-\intertext{The usual C-style escapes are available, as well as an escapse for backtick.
-  We also include a \texttt{\textbackslash e} for ASCII 27 ``escape'', since it finds a little use in terminal interface programming.
-  Also, we include \texttt{\textbackslash\&} which stands for the empty string, just in case two adjacent portions of string would be interpreted as an escape.}
-                         &\gor \literal{\textbackslash\textbackslash} \; \charclass{\literal{\textbackslash\textbackslash0abefnrtv\textbackslash'\textbackslash"\textbackslash`\&}} \\
-\intertext{The \texttt{\textbackslash x}, \texttt{\textbackslash u}, and \texttt{\textbackslash U} escapes allow for encoding arbitrary unicode codepoints into a string.
-  While \texttt{\textbackslash U} is the most general, the others can be used when encoding bytes in a bytestring, or when only the Basic Multilingual Plane is required.
-  The \texttt{\textbackslash U} form can be trickeier to use effectively: since it accepts any number of digits afterwards, a null-escape may need to be inserted to end the escape when it ocuurs before a $hexDigit$, e.g.\ \texttt{"\textbackslash U101234\textbackslash\&5"}.
-  It accepts any number of characters because then it will be future-proofed in the unlikely event of Unicode (or a supersceding standards body) extending its codepoints beyond \texttt{0x10FFFF}.
-  }
-                         &\gor \literal{\textbackslash\textbackslash x} \; \charclass{hexDigit}^{\{2\}} \\
-                         &\gor \literal{\textbackslash\textbackslash u} \; \charclass{hexDigit}^{\{4\}} \\
-                         &\gor \literal{\textbackslash\textbackslash U} \; \charclass{hexDigit}^+ \\
-\intertext{Finally, multi-line strings may explicitly be broken up across lines by enclosing the newline between backslashes.
-  It is recommended to maintain the visual indicators of nesting by indenting the following line appropriately.
-  Note that when this form is used, a newline character is \emph{not} inserted.}
-                         &\gor \literal{\textbackslash\textbackslash} \; \literal{\textbackslash n} \; \charclass{\literal{\textbackslash{ }\textbackslash t}}^\star \literal{\textbackslash\textbackslash} \\
-  hexDigit &= \charclass{\literal{0123456789ABCDEFabcdef}} \\
-\intertext{Heredocs offer an alternative for embedding long strings into e-exprs, at the cost of not having string templating.
+\mathbf{symbol}
+  &\gis \charclass{symbolChar}^+ - (\mathbf{startNumber} \; \omega^\star)\\
+  &\gor \literal{:} \charclass{symbolChar, \literal{:}}^+ \\
+symbolChar
+  &= \charclass{letter, digit, mathSymbol, currencySymbol} \\
+  &+ \charclass{\literal{\textasciitilde!@\$\%\textasciicircum\&*-\textunderscore=+|<>/?}} \\
+  &- \charclass{\literal{\textbackslash{ }\textbackslash t\textbackslash n\textbackslash r\#\textbackslash\textbackslash}} \\
+  &- \charclass{\literal{()[]{},.;:\textbackslash`\textbackslash'\textbackslash"}} \\
+\mathbf{startNumber}
+  &= \charclass{\literal{+-}}^? \; \charclass{digit} \\
+%
+\intertext{Numbers can be represented in base 2, 8, 10, 12, or 16;
+  succinct definition requires the use fo parameterized rules.
+  The base prefix (\textbf{prefix}) and special exponent (\textbf{exp}) codes are as you would expect, so I've delayed defining them until later.
+}
+\intertext{FIXME: underscores as digit group separators}
+\mathbf{number}
+  &\gis \charclass{\literal{+-}}^? \; \mathbf{prefix}(n) \; \mathbf{digit}(n)^+ \; \mathbf{scientific}(n)^? \\
+\mathbf{scientific}(n)
+  &\gis \literal{.} \; \mathbf{digit}(n)^+ \\
+  &\gor \literal{.} \; \mathbf{digit}(n)^+ \; \mathbf{exp}(n) \; \charclass{\literal{+-}}^? \; \mathbf{digit}(n)^+ \\
+  &\gor \literal{.} \; \mathbf{digit}(n)^+ \; \charclass{\literal{pP}} \; \mathbf{anyInt} \\
+\mathbf{anyInt}
+  &\gis \charclass{\literal{+-}}^? \; \mathbf{prefix}(n) \; \mathbf{digit}(n)^+ \\
+%
+\intertext{Characters and strings are also available literals.}
+\mathbf{char}
+  &\gis \literal{\textbackslash'} \; \mathbf{charContent} \; \literal{\textbackslash'} \\
+%
+\mathbf{string}
+  &\gis \mathbf{stringLiteral} \\
+  &\gor \mathbf{templateInitial} \mid \mathbf{templateInner} \mid \mathbf{templateFinal} \\
+\mathbf{stringLiteral}
+  &\gis \literal{\textbackslash"} \; \mathbf{stringContent} \; \literal{\textbackslash"} \\
+  &\gor \mathbf{heredoc} \\
+\intertext{The lexer does not attempt to match up the various parts of a string template.
+  Instead, it merely identifies the potential parts of a string template, classigying each as an initial, inner, or final part of the tamplate.
+  The parser will ensure that these match up as part of bracket-matching.
+}
+\mathbf{templateInitial}
+  &\gis \literal{\textbackslash"} \; \mathbf{stringContent} \; \literal{\textbackslash`} \\
+\mathbf{templateInner} \\
+  &\gis \literal{\textbackslash`} \; \mathbf{stringContent} \; \literal{\textbackslash`} \\
+\mathbf{templateFinal}
+  &\gis \literal{\textbackslash`} \; \mathbf{stringContent} \; \literal{\textbackslash"} \\
+%
+\intertext{Most UTF-8 characters are available for use directly in characters and strings, with some obvious exceptions.
+  Otherwise, a number of escapes are available to both overcome the illegal characters or for the author to direct attention.
+}
+\mathbf{charContent}
+  &\gis \notcharclass{\literal{\textbackslash"\textbackslash`\textbackslash r\textbackslash n\textbackslash\textbackslash}} \\
+  &\gor \literal{\textbackslash\textbackslash x} \; \charclass{hexDigit}^{\{2\}} \\
+  &\gor \literal{\textbackslash\textbackslash u} \; \charclass{hexDigit}^{\{4\}} \\
+  &\gor \literal{\textbackslash\textbackslash U} \; \charclass{hexDigit}^+ \\
+  &\gor \literal{\textbackslash\textbackslash} \; \charclass{\literal{\textbackslash\textbackslash0abefnrtv\textbackslash'\textbackslash"\textbackslash`}} \\
+\mathbf{stringContent}
+  &\gis \mathbf{charContent} \\
+  &\gor \literal{\textbackslash\textbackslash\&} \\
+  &\gor \literal{\textbackslash\textbackslash} \; \literal{\textbackslash n} \;
+        \charclass{\literal{\textbackslash{ }\textbackslash t}}^\star \; \literal{\textbackslash\textbackslash} \\
+%
+\intertext{Heredocs offer an alternative for embedding long strings into e-exprs.
   They can be multi-line and do not require escape sequences anywhere, but they also do not allow escape sequences or templating.
-  }
-  \mathbf{heredoc}
-    &\gis \literal{\textbackslash"\textbackslash"\textbackslash"} \; (\charclass{alphaNum}^*)^{=delim}\; \literal{\textbackslash n} \; \\
-    &\qquad \mathbf{heredocLine}(delim)^* \\
-    &\qquad \mathbf{heredocEnd}(delim) \\
-\intertext{Although the (relatively) large number of supporting rules makes heredocs appear complex, they are essentially just triple-quoted strings, where a delimiter may be given just in case one of the lines must also start with a triple-quote.
-  The $\mathbf{heredocLine}(delim)$ rule simply identify lines that don't end with $delim$ followed by triple quotes.
-  }
-  \mathbf{heredocLine}(delim)
-    &\gis (\mathbf{line} - \mathbf{heredocEnd}(delim) \; \mathbf{line}) \; \literal{\textbackslash n} \\
-  \mathbf{line}
-    &\gis \notcharclass{\literal{\textbackslash n}}^* \\
-  \mathbf{heredocEnd}(delim) &\gis delim \; \literal{\textbackslash"\textbackslash"\textbackslash"} \\
-TODO: char \\
-TODO: rational
+}
+\mathbf{heredoc}
+  &\gis \literal{\textbackslash"\textbackslash"\textbackslash"} \; (\charclass{alphaNum}^*)^{=delim}\; \literal{\textbackslash n} \; \\
+  &\qquad \mathbf{hdLine}(delim)^* \\
+  &\qquad \mathbf{hdEnd}(delim) \\
+\mathbf{hdEnd}(delim) &\gis delim \; \literal{\textbackslash"\textbackslash"\textbackslash"} \\
+\mathbf{hdLine}(delim)
+  &\gis (\mathbf{line} - \mathbf{hdEnd}(delim) \; \mathbf{line}) \; \literal{\textbackslash n} \\
+\mathbf{line}
+  &\gis \notcharclass{\literal{\textbackslash n}}^* \\
+%
+\intertext{The prefix codes and special exponent codes are only defined for a select few bases.
+  All other bases can be treated as never-matching.
+}
+  \mathbf{prefix}(10) &\gis \varepsilon \\
+  \mathbf{prefix}(2) &\gis \literal{0} \; \charclass{bB} \\
+  \mathbf{prefix}(8) &\gis \literal{0} \; \charclass{oO} \\
+  \mathbf{prefix}(12) &\gis \literal{0} \; \charclass{zZ} \\
+  \mathbf{prefix}(16) &\gis \literal{0} \; \charclass{xX} \\
+  \mathbf{exp}(10) &\gis \charclass{eE} \\
+  \mathbf{exp}(2) &\gis \charclass{bB} \\
+  \mathbf{exp}(8) &\gis \charclass{oO} \\
+  \mathbf{exp}(16) &\gis \charclass{hH} \\
+%
+\intertext{For completeness, we have familiar digit classes for different bases.}
+  hexDigit &= \mathbf{digit}(16) \\
+  \mathbf{digit}(2) &= \charclass{\literal{01}} \\
+  \mathbf{digit}(8) &= \charclass{\charrange{0}{7}} \\
+  \mathbf{digit}(10) &= \charclass{digit} \\
+  \mathbf{digit}(12) &= \charclass{\charrange{0}{9}, \literal{\textturntwo\textturnthree}} \\ %unicode ↊↋
+  \mathbf{digit}(16) &= \charclass{\charrange{0}{9}, \charrange{A}{F}, \charrange{a}{f}}
 \end{align*}
 
+\begin{remark}
+I don't especially want to enter into the spaces vs.\ tabs religious war.
+I therefore allow both, even though tabs have implementation-defined behavior.
+% 
+% In particular, my recommendation is to use only spaces so that an e-expr manipulator can present diagnostics on the command line.
+% Consider a report which attempts to ``underline'' an error
+% \begin{verbatim}
+% String literal not closed before end-of-line:
+% | def greet(name):
+% |   "Hello `name!"
+% |                 ^
+% \end{verbatim}
+% The underline could be computed simply from the column number, but only if tabs are avoided.
+% A more sophisticated underliner is possible of course, but I don't want implementations to 
+% Although such configuration may seem a reasonable expectation for the professional programmer, there are other tools
+%   one such tool is the web browser, which has notoriously bad support for tab-handling during copy-paste.
+% Nevertheless, I do allow tabs.
+% What I would really like is for an automated tool to transform 
+\end{remark}
+
+\begin{remark}
+One religions war I will get involved in is LF vs.\ CRLF.
+I've only allowed the LF form of newline, because who wants to deal with OS-specific newline sequences in 2021?
+Perhaps your text editor can be configured, and perhaps your VCS is ``smart'', but why not agree to stop paying the complexity cost when all we get out of it is one company's being pampered?
+That said, as little as single open issue might change my mind.
+\end{remark}
+
+\begin{remark}
 I've chosen to not have block comments.
 Block comments are fragile unless they are able to nest inside each other.
 For historical reasons, most languages do not have nesting block comments, so I've found that text editors do not bother implementing good support for nesting block comments.
 The last thing I want is to ask a potential e-expr user to change their workflow, so I've simply ignored block comments altogether.
 Instead, your text editor likely has good support for commenting out all selected lines at once, which is all a block comment does.
 Besides, using only line comments makes changes more easily spotted when using line-based version control.
+\end{remark}
 
+\begin{remark}
 The set of symbol characters is \emph{not} wisely chosen overall.
 I just took a peek at what Unicode had to offer, picked some reasonable-looking properties.
 Outside of the ASCII portion and some well-known mathematical symbols, I am open to critique, especially since I have done none myself.
 I hope for now that this is a reasonable enough set so as not to cause confusion, but I expect it will be important to reduce the confusion caused by similar-looking glyphs (e.g. at the moment capital A and capital alpha look the same, but will be treated differently in code).
 Nevertheless, you can see that I've tried to include as many symbols as possible that are available on US/UK keyboards (programming seems to have settled on this as a de-facto standard, and I don't have the knowledge to change it; if you have gripes about what characters on your local keyboards you would most like to use/avoid in code, please get in touch!)
 I have explicitly ruled out whitespace and comment-related characters (for obvious reasons), as well as a number of characters used as punctuation in e-exprs.
+\end{remark}
+
+The usual C-style escapes are available, including \texttt{\textbackslash`} for backtick, as well as \texttt{\textbackslash e} for ASCII 27 (escape) since it finds some use in terminal interface programming.
+
+\begin{remark}
+Strings are not normally allowed to cross line-boundaries because a missing close-quote can lead to poor syntax error diagnostics.
+A string can be explicitly broken across lines using a backslash immediately before a newline (TODO without a comment?);
+  the rest of the string picks after the matching backslash on the next line.
+Note that breaking a line across a string does not insert a newline; this must be inserted explicitly.
+\end{remark}
+
+\begin{remark}
+The \texttt{\textbackslash x}, \texttt{\textbackslash u}, and \texttt{\textbackslash U} escapes offer access to the entire range of unicode codepoints.
+While \texttt{\textbackslash x} and \texttt{\textbackslash u} offer access to limited ranges of these codepoints (for use in bytestrings, ASCII escapes, or when only the Basic Multilingual Plane is needed), \texttt{\textbackslash U} allows any code point to be specified---even those outside of the Unicode range.
+This ensures that \texttt{\textbackslash U} is future-proofed in the unlikely event of Unicode (or a supersceding standards body) extending its codepoints beyond \texttt{0x10FFFF}.
+However, it also means that some escape sequences may be parsed as ``too long'', as in \texttt{\textbackslash U101234f}; thus the null escape \texttt{\textbackslash\&} was added so that unruly escapes can be safely contained e.g.\ \texttt{\textbackslash U101234\&f}.
+\end{remark}
+
+\begin{remark}
+I've included base-12/dozenal numbers basically just because I can.
+It's not like it interferes with any other syntax, and once an implementation has procedures for binary, octal, decimal, and hexadecimal, throwing in dozenal shouldn't be any extra stretch.
+Yes, I know I criticized the complexity cost of CRLF, but...
+  \textit{\raisebox{0.2ex}w\raisebox{0.4ex}h\raisebox{0.3ex}i\raisebox{0.1ex}m\raisebox{-0.4ex}s\raisebox{-0.2ex}e\raisebox{0.5ex}y}!
+Well, I might say I'm proving a point about how high-level languages can accommodate notions of number that are significantly divorced from the low-level details of computing hardware, but that's boring!
+\end{remark}
 
 
-I've only allowed the one form of line-break, because who wants to deal with OS-specific line-break sequences in 2021?
-Perhaps your text editor can be configured, and perhaps your VCS is ``smart'', but why not agree to stop paying the complexity cost when all we get out of it is that one company is pampered?
-That said, as little as single open issue might change my mind.
+
 
 
 FIXME: shouldn't I allow $\mathbf{symbol} ::= \literal{\textbackslash\textbackslash}\;\charclass{symbolChar}^+$?

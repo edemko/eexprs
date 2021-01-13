@@ -5,20 +5,20 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Text.EExpr.Tokens.Parser
+module Language.EExpr.Text.Parser
   ( parse
   ) where
 
-import Text.EExpr.Tokens.Parser.Types
-import Text.EExpr.Tokens.Stream
+import Language.EExpr.Text.Lexer.Stream
+import Language.EExpr.Types
 
 import Data.List.NonEmpty (NonEmpty((:|)))
-import Text.EExpr.Tokens.Types (Location(..))
+import Language.EExpr.Text.Lexer.Types (Location(..))
 import Text.Lightyear (Lightyear, Consume(..), MakeError)
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Sequence as Seq
-import qualified Text.EExpr.Tokens.Types as Tok
+import qualified Language.EExpr.Text.Lexer.Types as Tok
 import qualified Text.Lightyear as P
 
 
@@ -226,7 +226,7 @@ atom = fromAtom <$> P.satisfy (expect ["atom"]) isAtom -- FIXME is this good err
 
 ------ Primitives (Single Token Parsers) ------
 
-open :: Parser 'Greedy (LexElem, Tok.Combiner 'Tok.Sens, Parser 'Greedy LexElem)
+open :: Parser 'Greedy (LexElem, Tok.Combiner 'Tok.Clean, Parser 'Greedy LexElem)
 open = fromOpen <$> P.satisfy (expect ["open paren", "open bracket", "open brace", "indent"]) isOpen
   where
   isOpen Lex{tok=Tok.Combiner Tok.Open _} = True

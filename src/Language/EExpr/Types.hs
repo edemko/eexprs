@@ -3,7 +3,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-module Text.EExpr.Tokens.Parser.Types
+module Language.EExpr.Types
   ( EExpr(..)
   , Atom(..)
   , Combiner(..)
@@ -17,16 +17,15 @@ module Text.EExpr.Tokens.Parser.Types
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
-import Text.EExpr.Tokens.Types (Location)
+import Language.EExpr.Text.Lexer.Types (Location)
 import Text.Lightyear (TextPos)
 
-import qualified Text.EExpr.Tokens.Types as Tok
+import qualified Language.EExpr.Text.Lexer.Types as Tok
 
-
-type Token = Tok.Token 'Tok.Sens
 
 -- WARNING: There are plenty of forms that the parser is unable to construct
 -- I'd much prefer a more accurate type, but I think w/o a dependently typed lang, it's not worth the indexing
+-- FIXME parameterize this type by what it is annotated with
 data EExpr :: Type where
   Atom      :: Location
             -> Atom
@@ -74,6 +73,10 @@ location (Combine l _ _) = l
 
 ------ Errors ------
 
+-- FIXME move to its own module
+
+type Token = Tok.Token 'Tok.Clean
+
 data Error
     = Unexpected TextPos (Maybe Token) [String] -- unexpected character/end-of-input, expected set
     -- TODO
@@ -92,6 +95,8 @@ instance Semigroup Error where
 
 
 ------ Helper ------
+
+-- FIXME move to its own module
 
 infixr 5 :||
 data NonEmpty2 a = (a, a) :|| [a]

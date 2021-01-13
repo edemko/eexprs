@@ -4,20 +4,18 @@
 
 module Main where
 
-import Text.EExpr.Tokens.Types
-
 import Control.Monad (forM_,when)
+import Language.EExpr.Text.Lexer.Stream (mkStream,tok)
+import Language.EExpr.Text.Lexer.Types (Lexeme(..))
+import Language.EExpr.Text.PostLexer (contextualize)
+import Language.EExpr.Text.Render.SExpr (ppReaderMacros)
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
-import Text.EExpr.SExpr (ppReaderMacros)
-import Text.EExpr.Tokens.Lexer.ContextSensitive (contextualize)
-import Text.EExpr.Tokens.Stream (mkStream,tok)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
--- import qualified Text.EExpr.Tokens.Html as Html
-import qualified Text.EExpr.Tokens.Lexer.ContextFree as Lexer
-import qualified Text.EExpr.Tokens.Parser as Parser
+import qualified Language.EExpr.Text.Lexer as Lexer
+import qualified Language.EExpr.Text.Parser as Parser
 
 
 main :: IO ()

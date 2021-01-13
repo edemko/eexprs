@@ -18,10 +18,10 @@ However, during lexing, we keep errors and ignored tokens in the lexeme stream t
     for this we use 'Result' instead.
 The 'Token' type is further indexed by the phase(s) of lexing within which it is valid:
     it can be 'Free' for the (mostly) context-free portion only,
-    'Sens' for the context-sensitive portion, or
+    'Clean' for the context-sensitive portion, or
     polymorphic for either phase.
 Thus, the overal progress of lexing is
-    @Text -> [Lexeme (Result 'Free)] -> [Lexeme (Result 'Sens)] -> [Lexeme (Token 'Sens)]@
+    @Text -> [Lexeme (Result 'Free)] -> [Lexeme (Result 'Clean)] -> [Lexeme (Token 'Clean)]@
 
 Lexing happens in two stages: broad and narrow.
 The broad phase extracts out where token boundaries are definitely going to be,
@@ -30,21 +30,16 @@ Narrow lexing analyzes each body to ensure it is a single recognizable token,
 and also analyzes it in context to see if it is relevant for parsing,
 or if it should take on different semantics based on nearby whitespace.
 -}
-module Text.EExpr.Tokens.Types
-    (
+module Language.EExpr.Text.Lexer.Types
+    ( Lexeme(..)
     -- * Token Parts
-      Token(..)
+    , Phase(..)
+    , Token(..)
     , Atom(..)
     , StrTemplJoin(..)
     , Side(..)
     , Combiner(..)
     , Separator(..)
-    -- * Results
-    , Phase(..)
-    , Result(..)
-    , Lexeme(..)
-    , Error(..)
-    , SomeResult(..)
     -- * Location
     , Location(..)
     , startLocation
@@ -58,12 +53,21 @@ import GHC.Show (showSpace)
 import Text.Lightyear.Position (TextPos(..))
 
 
+-- | Packages the original source characters and their location along with the (parameterized) semantics.
+-- During lexing, we only parameterize with 'Token', 'Result', or 'SomeResult'.
+data Lexeme a = L
+    { loc :: TextPos
+    , orig :: Text
+    , payload :: a
+    }
+    deriving(Functor,Show)
+
 ------------ Token ------------
 
 -- | Index 'Token's by the phase(s) of lexing in which they are admissible.
 data Phase
     = Free -- ^ after context-free parsing
-    | Sens -- ^ after context-sensitive parsing
+    | Clean -- ^ after context-sensitive parsing
 
 -- | The semantics of (data carried by) an indivisible, non-overlapping unit of source code.
 -- C.f. 'Lexeme'.
@@ -72,8 +76,8 @@ data Token :: Phase -> Type where
     String :: StrTemplJoin -> Text -> StrTemplJoin -> Token phase
     Combiner :: Side -> Combiner phase -> Token phase
     Separator :: Separator phase -> Token phase
-    ChainDot :: Token 'Sens
-    SyntheticDot :: Token 'Sens
+    ChainDot :: Token 'Clean
+    SyntheticDot :: Token 'Clean
     -- | a colon in the source code that indicates that an indented block follows
     StartIndent :: Token 'Free -- FIXME not actually allowable except in the midst of context-sensitive parsing
     Comment :: Token 'Free
@@ -104,60 +108,19 @@ data Combiner :: Phase -> Type where
     Paren :: Combiner phase
     Brack :: Combiner phase
     Brace :: Combiner phase
-    Indent :: Combiner 'Sens
+    Indent :: Combiner 'Clean
 
 data Side = Open | Close
     deriving(Eq, Show, Read)
 
 data Separator :: Phase -> Type where
     Comma :: Separator phase
-    Dot :: Separator 'Sens
+    Dot :: Separator 'Clean
     Ellipsis :: Separator phase
     Semicolon :: Separator phase
-    Colon :: Separator 'Sens
-    Space :: Separator 'Sens
-    Newline :: Separator 'Sens
-
-
------------- Results ------------
-
-
--- | Existentially quantifies over the 'Phase' index of 'Result'.
--- We need this so that we can work on a heterogenously phase-indexed 'Token' stream during context-sensitive parsing.
-data SomeResult = forall phase. SO (Result phase)
-
--- | Packages the original source characters and their location along with the (parameterized) semantics.
--- During lexing, we only parameterize with 'Token', 'Result', or 'SomeResult'.
-data Lexeme a = L
-    { loc :: TextPos
-    , orig :: Text
-    , payload :: a
-    }
-    deriving(Functor,Show)
-
-data Result :: Phase -> Type where
-    Ok :: Token phase -> Result phase
-    Ignore :: Token phase -> Result 'Sens
-    Error :: Error -> Result phase
-
-data Error
-    = BadChar TextPos Char
-    | Unexpected TextPos (Maybe Char) [String] -- unexpected character/end-of-input, expected set
-    | CrammedTokens TextPos Text -- tokens after first
-    | MixedIndent TextPos Char -- unexpected whitespace char
-    | IllegalDot -- dot with whitespace after, but not before
-    | IllegalIndent -- if file starts with indent, or indent is smaller than previous level
-    | Panic String -- for when error conditions shouldn't get thrown
-    | Bundle [Error]
-    deriving (Show)
-
-instance Semigroup Error where
-    (Panic _) <> b = b
-    a <> (Panic _) = a
-    (Bundle as) <> (Bundle bs) = Bundle (as <> bs)
-    (Bundle as) <> b = Bundle (as ++ [b])
-    a <> (Bundle bs) = Bundle (a : bs)
-    a <> b = Bundle [a, b]
+    Colon :: Separator 'Clean
+    Space :: Separator 'Clean
+    Newline :: Separator 'Clean
 
 
 ------------ Location ------------
@@ -194,14 +157,8 @@ startLocation Loc{file,from} = Loc {file, from, to = from}
 endLocation :: Location -> Location
 endLocation Loc{file,to} = Loc {file, from = to, to}
 
------------- Show Instances ------------
 
-instance Show (Result phase) where
-    showsPrec p tok = showParen (p >= 11) $
-        case tok of
-            Ok x -> showString "Ok " . showsPrec 11 x
-            Ignore x -> showString "Ignore " . showsPrec 11 x
-            Error err -> showString "Error " . showsPrec 11 err
+------------ Show Instances ------------
 
 instance Show (Token phase) where
     showsPrec p tok = showParen (p >= 11) $

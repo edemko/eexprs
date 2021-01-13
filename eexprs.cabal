@@ -22,16 +22,14 @@ source-repository head
 
 library
   exposed-modules:
-    , Text.EExpr.SExpr
-    , Text.EExpr.Tokens.Lexer.ContextFree
-    , Text.EExpr.Tokens.Lexer.ContextSensitive
-    , Text.EExpr.Tokens.Lexer.Error
-    , Text.EExpr.Tokens.Lexer.Recognize
-    , Text.EExpr.Tokens.Parser
-    , Text.EExpr.Tokens.Parser.Types
-    , Text.EExpr.Tokens.Stream
-    , Text.EExpr.Tokens.Types
-    -- , Text.EExpr.Tokens.Html
+    , Language.EExpr.Text.Lexer
+    , Language.EExpr.Text.Lexer.Results
+    , Language.EExpr.Text.Lexer.Stream
+    , Language.EExpr.Text.Lexer.Types
+    , Language.EExpr.Text.Parser
+    , Language.EExpr.Text.PostLexer
+    , Language.EExpr.Text.Render.SExpr
+    , Language.EExpr.Types
   other-modules:
     , Paths_eexprs
     , Text.Lightyear

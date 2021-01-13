@@ -5,17 +5,19 @@
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS -fno-warn-orphans #-}
-module Text.EExpr.Tokens.Stream
+module Language.EExpr.Text.Lexer.Stream
   ( LexStream
   , LexElem(..)
   , mkStream
   ) where
 
 import Prelude hiding (length)
-import Text.EExpr.Tokens.Types
 
-import Data.Text (Text)
 import Data.Sequence (Seq, (|>), ViewL(..), ViewR(..))
+import Data.Text (Text)
+import Language.EExpr.Text.Lexer.Results (Error)
+import Language.EExpr.Text.Lexer.Results (Result(..))
+import Language.EExpr.Text.Lexer.Types (Lexeme(..), Phase(..), Token, Location(..))
 import Text.Lightyear.Position (TextPos)
 import Text.Lightyear.Stream (Stream(..))
 
@@ -25,12 +27,12 @@ import qualified Data.Sequence as Seq
 data LexElem = Lex
   { loc :: Location
   , orig :: Text
-  , tok :: Token 'Sens
+  , tok :: Token 'Clean
   }
 
 type LexStream = Seq LexElem
 
-mkStream :: Maybe FilePath -> [Lexeme (Result 'Sens)] -> Either ([Error], LexStream) LexStream
+mkStream :: Maybe FilePath -> [Lexeme (Result 'Clean)] -> Either ([Error], LexStream) LexStream
 mkStream file xs0 = go [] Seq.empty xs0
   where
   go errs acc [] = case errs of
