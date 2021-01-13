@@ -20,6 +20,7 @@ import Text.Lightyear.Stream (advance)
 contextualize :: [Lexeme (Result 'Free)] -> [Lexeme (Result 'Sens)]
 contextualize xs =
        map packFree
+    |> detectCramming
     -- when thinking about indentation, I don't want to think about trailing whitespace/comments
     -- and any blank lines (modulo whitespace/comments)
     -- ignore these early so we only have one thing to worry about later (ignoring `IGN`, which shouldn't be hard)
@@ -36,6 +37,20 @@ contextualize xs =
     |> map ensureSensitive
     |> trailingNewline
     $ xs
+
+detectCramming :: [Lexeme SomeResult] -> [Lexeme SomeResult]
+detectCramming = reverse . window2 go . reverse
+    where
+    go :: Lexeme SomeResult -> Lexeme SomeResult -> Maybe [Lexeme SomeResult]
+    -- crammed punctuation
+    go y@L{payload=OK (Separator Dot)} x@L{payload=OK (Separator Dot)} = Just [crammed y, x]
+    go y@L{payload=OK (Separator Ellipsis)} x@L{payload=OK (Separator Dot)} = Just [crammed y, x]
+    go y@L{payload=OK (Separator Ellipsis)} x@L{payload=OK (Separator Ellipsis)} = Just [crammed y, x]
+    go y@L{payload=OK (Separator Dot)} x@L{payload=OK (Separator Ellipsis)} = Just [crammed y, x]
+    go y@L{payload=OK (Atom _)} x@L{payload=OK (Atom _)} = Just [crammed y, x]
+    go _ _ = Nothing
+    crammed :: Lexeme SomeResult -> Lexeme SomeResult
+    crammed r@L{loc,orig} = r{payload = SO . Error $ CrammedTokens loc orig}
 
 ignoreComment :: Lexeme SomeResult -> Lexeme SomeResult
 ignoreComment x@L{payload = OK Comment} = ignore x

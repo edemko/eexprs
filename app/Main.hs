@@ -7,10 +7,11 @@ module Main where
 import Text.EExpr.Tokens.Types
 
 import Control.Monad (forM_,when)
+import System.Environment (getArgs)
 import System.Exit (exitFailure)
+import Text.EExpr.SExpr (ppReaderMacros)
 import Text.EExpr.Tokens.Lexer.ContextSensitive (contextualize)
 import Text.EExpr.Tokens.Stream (mkStream,tok)
-import Text.EExpr.SExpr (ppReaderMacros)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -21,7 +22,9 @@ import qualified Text.EExpr.Tokens.Parser as Parser
 
 main :: IO ()
 main = do
-  let infile = "testfile.in"
+  infile <- getArgs >>= pure . \case
+    (infile:_) -> infile
+    [] -> "testfile.in"
 
   testfile <- T.readFile infile
   let broad = Lexer.parse testfile

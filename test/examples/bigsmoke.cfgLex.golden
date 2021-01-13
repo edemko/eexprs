@@ -22,7 +22,7 @@
 [OK ] String Plain "\\\"" Plain
 [OK ] UnknownNewline
 [OK ] UnknownNewline
-[OK ] String Plain "multiline\n string" Plain
+[OK ] String Plain "multiline string" Plain
 [OK ] UnknownNewline
 [OK ] String Plain "one line" Templ
 [OK ] UnknownSpace
@@ -200,12 +200,14 @@
 [OK ] UnknownNewline
 [ERR] (TextPos {line = 63, col = 1},Unexpected (TextPos {line = 63, col = 16}) (Just '\n') ["end of string","start of splice"])
 [OK ] UnknownNewline
-[ERR] (TextPos {line = 64, col = 1},CrammedTokens (TextPos {line = 64, col = 4}) "abc")
+[OK ] Atom (IntAtom 123)
+[OK ] Atom (SymAtom "abc")
 [OK ] UnknownNewline
 [OK ] UnknownSpace
 [OK ] Atom (SymAtom "badIndent")
 [OK ] UnknownNewline
-[ERR] (TextPos {line = 66, col = 1},CrammedTokens (TextPos {line = 66, col = 3}) "..")
+[OK ] Separator Ellipsis
+[OK ] Separator Ellipsis
 [OK ] UnknownNewline
 [OK ] UnknownNewline
 [OK ] Combiner Open Paren

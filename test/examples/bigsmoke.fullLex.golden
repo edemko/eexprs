@@ -26,7 +26,7 @@
 [OK ] Separator Newline
 [ign] UnknownNewline
 [ign] UnknownSpace
-[OK ] String Plain "multiline\n string" Plain
+[OK ] String Plain "multiline string" Plain
 [OK ] Separator Newline
 [ign] UnknownSpace
 [OK ] String Plain "one line" Templ
@@ -226,13 +226,15 @@
 [ERR] (TextPos {line = 63, col = 1},Unexpected (TextPos {line = 63, col = 16}) (Just '\n') ["end of string","start of splice"])
 [OK ] Separator Newline
 [ign] UnknownSpace
-[ERR] (TextPos {line = 64, col = 1},CrammedTokens (TextPos {line = 64, col = 4}) "abc")
+[OK ] Atom (IntAtom 123)
+[ERR] (TextPos {line = 64, col = 4},CrammedTokens (TextPos {line = 64, col = 4}) "abc")
 [ign] UnknownNewline
 [ERR] (TextPos {line = 65, col = 1},MixedIndent (TextPos {line = 65, col = 3}) '\t')
 [OK ] Atom (SymAtom "badIndent")
 [OK ] Separator Newline
 [ign] UnknownSpace
-[ERR] (TextPos {line = 66, col = 1},CrammedTokens (TextPos {line = 66, col = 3}) "..")
+[OK ] Separator Ellipsis
+[ERR] (TextPos {line = 66, col = 3},CrammedTokens (TextPos {line = 66, col = 3}) "..")
 [OK ] Separator Newline
 [ign] UnknownNewline
 [ign] UnknownSpace

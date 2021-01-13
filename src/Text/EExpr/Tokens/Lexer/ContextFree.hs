@@ -13,16 +13,33 @@ module Text.EExpr.Tokens.Lexer.ContextFree
 import Prelude hiding (lines)
 import Text.EExpr.Tokens.Types
 
+import Control.Monad (void)
 import Data.Functor ((<&>))
 import Data.Text (Text)
 import Text.EExpr.Tokens.Lexer.Error (expect, panic)
-import Text.EExpr.Tokens.Lexer.Recognize (isSymbolChar, recognizeAtom, recognizeSeparator)
 import Text.Lightyear (Lightyear, Consume(..), Branch(..))
 
+import qualified Data.Char as C
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 import qualified Text.Lightyear as P
 
+
+------------ Character Classes ------------
+
+-- for more options, peek around starting at https://www.compart.com/en/unicode/category
+isSymbolChar :: Char -> Bool
+isSymbolChar c = good && defensive
+    where
+    defensive = c `notElem` ("\\# \t\n\r()[]{},.;:`\'\"" :: [Char])
+    good = C.isLetter c || C.isDigit c || nonModifyingSymbol || c `elem` ("~!@$%^&*-_=+|<>/?" :: [Char])
+    nonModifyingSymbol = case C.generalCategory c of
+        C.MathSymbol -> True
+        C.CurrencySymbol -> True
+        _ -> False
+
+
+------------ Driver ------------
 
 parse :: Text -> [Lexeme (Result 'Free)]
 parse inp = case P.runLightyear wholeFile inp () of
@@ -42,8 +59,9 @@ wholeFile = do
 anyToken :: Parser 'Greedy (Lexeme (Result 'Free))
 anyToken = P.choice $ NE.fromList
     [ fmap Ok <$> whitespace
-    , word
-    , P.fromAtomic colonWord -- WARNING this must come before `separator` to extract words that start with a colon
+    , number
+    , symbol
+    , P.fromAtomic colonSymbol -- WARNING this must come before `separator` to extract words that start with a colon
     , fmap Ok <$> comment
     , heredoc -- WARNING this must come before `string`, b/c they both start with `"`
     , string
@@ -79,8 +97,6 @@ whitespace = do
     splitline = P.string (panic "split whitespace") "\\\n"
     newline = (UnknownNewline,) <$> P.string (panic "newline") "\n"
 
--- TODO backslash-linebreak
-
 
 -- NOTE: I'm thinking that block comments are not so useful
 -- Text editors don't deal well with nesting block comments, which is what I'd like if I wanted block comments
@@ -100,37 +116,24 @@ comment = do
 
 ------------ Syntax ------------
 
-word :: Parser 'Greedy (Lexeme (Result 'Free))
-word = do
-    pos0 <- P.getPosition
-    orig <- P.takeWhile1 (panic "word") isSymbolChar
-    pure L
-        { loc = pos0
-        , orig
-        , payload = recognizeAtom pos0 orig
-        }
-
-colonWord :: Parser 'Atomic (Lexeme (Result 'Free))
-colonWord = P.try $ do
-    pos0 <- P.getPosition
-    colon <- P.char (panic "colon-word") ':'
-    rest <- P.takeWhile1 (panic "colon-word") (\c -> isSymbolChar c || c == ':')
-    let orig = colon `T.cons` rest
-    pure L
-        { loc = pos0
-        , orig
-        , payload = recognizeAtom pos0 orig
-        }
-
 separator :: Parser 'Greedy (Lexeme (Result 'Free))
 separator = do
-    pos0 <- P.getPosition
-    orig <- P.takeWhile1 (panic "separator consumed") (`elem` separatorChars)
-    pure $ L
-        { loc = pos0
-        , orig
-        , payload = recognizeSeparator pos0 orig
-        }
+    loc <- P.getPosition
+    (orig, payload) <- P.choice $ NE.fromList
+        [ (str, Ok sem) <$ (P.string (expect [T.unpack str]) str)
+        | (sem, str) <- separators
+        ]
+    pure L{loc, orig, payload}
+    where
+    separators :: [(Token 'Free, Text)]
+    separators =
+        -- WARNING: each token must come after all tokens it prefixes
+        [ (Separator Comma, ",")
+        , (Separator Ellipsis, "..")
+        , (UnknownDot, ".")
+        , (Separator Semicolon, ";")
+        , (UnknownColon, ":")
+        ]
 
 bracket :: Parser 'Greedy (Lexeme (Token 'Free))
 bracket = do
@@ -144,10 +147,6 @@ bracket = do
         , orig = T.singleton c
         , payload = tok
         }
-
-
-separatorChars :: [Char]
-separatorChars = ",.;:"
 
 combiners :: [(Combiner 'Free, Char, Char)]
 combiners = map (\(sem, [o,c]) -> (sem, o, c)) db
@@ -163,6 +162,52 @@ combiners = map (\(sem, [o,c]) -> (sem, o, c)) db
         -- and `comprehension ⟬ , ⟭` would define one which has elements separated by commas
         -- I'm tempted to have even comprehension ⟬ , ; ⟭` which would have semicolon-separated lists of comma-separated elements
         ]
+
+symbol :: Parser 'Greedy (Lexeme (Result 'Free))
+symbol = do
+    pos0 <- P.getPosition
+    orig <- P.takeWhile1 (expect ["symbol character"]) isSymbolChar
+    pure L
+        { loc = pos0
+        , orig
+        , payload = Ok . Atom . SymAtom $ orig
+        }
+
+-- FIXME I think I might want to be less permissive with colons in symbols
+-- colon is already used as a separator and to introduce indentation
+-- perhaps I only want `::`?
+colonSymbol :: Parser 'Atomic (Lexeme (Result 'Free))
+colonSymbol = P.try $ do
+    pos0 <- P.getPosition
+    colon <- P.char (panic "colon-word") ':'
+    rest <- P.takeWhile1 (panic "colon-word") (\c -> isSymbolChar c || c == ':')
+    let orig = colon `T.cons` rest
+    pure L
+        { loc = pos0
+        , orig
+        , payload = Ok . Atom . SymAtom $ orig
+        }
+
+number :: Parser 'Greedy (Lexeme (Result 'Free))
+number = do
+    -- confirm we're looking at a number beforre parsing anything else
+    void $ P.lookAhead $ P.try $ do
+        _ <- P.option_ $ P.satisfy (panic "isNum sign") (`elem` ['+', '-'])
+        P.satisfy (panic "isNum digit") C.isDigit
+    pos0 <- P.getPosition
+    sign <- P.option Nothing (Just <$> P.char (panic "+") '+') <|> (Just <$> P.char (panic "-") '-')
+    -- TODO I've only implemented decimal integers
+    -- TODO allow for underscores as digit group separators
+    whole <- P.takeWhile1 (panic "parseNum digit") C.isDigit
+    pure L
+        { loc = pos0
+        , orig = maybe "" T.singleton sign <> whole
+        , payload = Ok . Atom . IntAtom $ fromSign sign * fromWhole whole
+        }
+    where
+    fromSign (Just '-') = (-1)
+    fromSign _ = 1
+    fromWhole = read . T.unpack
 
 
 ------------ Strings ------------
@@ -270,6 +315,7 @@ stringEscapes = (fromBasic <$> basicEscapes) ++ fancyEscapes
         , ('v', '\v')
         , ('\'', '\'')
         , ('\"', '\"')
+        , ('`', '`')
         ]
     fancyEscapes =
         -- TODO \x[0-9a-fA-F]{2}
@@ -279,7 +325,7 @@ stringEscapes = (fromBasic <$> basicEscapes) ++ fancyEscapes
         [ ('\n', do
             leading <- P.takeWhile (`elem` [' ', '\t'])
             resume <- P.char (expect ["'\\' to resume string after linebreak"]) '\\'
-            pure (leading `T.snoc` resume , "\n")
+            pure (leading `T.snoc` resume , "")
           )
         , ('&', pure ("", ""))
         ]

@@ -1,0 +1,265 @@
+% !TeX program=xelatex
+\documentclass[11pt]{article} % use larger type; default would be 10pt
+
+\usepackage{fontspec}
+  \setmonofont{FreeMono}
+
+\usepackage{amsmath}
+\usepackage{mathtools}
+
+\title{E-Expressions}
+% \date{}
+\author{Okuno Zankoku}
+
+
+
+\begin{document}
+\maketitle
+
+I'm \emph{so done} writing parsers for my language experiments.
+I always want a whole host of ergonomic features, decent speed, and good error reporting, but it always takes \emph{so long} when what I want to be doing is playing with semantics.
+So, I resolved to write one last parser which can be re-used across all my experiments.
+This parser would deal with all of the character manipulation, leaving the question of concrete syntax to one of simple pattern-matching against an abstract data type.
+Thus, I implemented ``ergonomic expressions'' (or maybe ``elaborate''? ``extended''?) or ``e-exprs''\footnote{I'll let you decide how to pronounce that \texttt{:)}, but I like ``\emph{eks}-per''} for short.
+
+{
+  Why not just s-expressions?
+  Don't get me wrong, my father taught me Scheme last century; it was my first programming language, and to this day I always install Racket on new computers because I never know when I might want to play.
+  Nevertheless---controversial take---I think Lisps have too many parenthesis,%
+    \footnote{Also, Lisps use parenthesis in a strange way: they indicate function application but never grouping, whereas mathematical practice, and especially when working with the lambda calculus, is to use parentheses mostly for grouping.
+    Of course, many languages, and even standard mathematics, use them for both grouping and function call, but Haskell and ML don't.
+    }
+    and that is a sign of a too low-level interface.
+  A user-facing syntax is a user interface, and as such, it should have basic amenities.
+  Lisp intensionally lacks ergonomic features because its users largely believe that s-expressions are so beneficial to macro-writing that it outweighs the cost of the harsh ergonomics.
+  More recent languages show that any language that supports abstract data types can manipulate its own arbitrarily complex syntax as easily as a Lisp: the benefit is wholly imaginary, and therefore cannot be worth even a small cost.
+}
+
+Overall though, e-exprs are not so different from s-exprs---there are just more ways to combine them into larger expressions.
+Let's quickly go over the distinctive features of e-exprs.
+
+\section{A Whirlwind Tour}
+
+Perhaps the largest conceptual distinction is that combination is not always function\footnote{or special form, or macro} application.
+Parenthesis are conceptualized as grouping, though a specific language may interpret them differently.
+To that end, there are two other simple means of grouping: square brackets and curly braces.
+Unlike some proposed s-expr extensions, parens, brackets, and braces are kept distinct.
+
+Ironically, s-exprs use a lot of line noise to build lists.
+I therefore included the ability to group expressions by comma-separating them.
+\begin{center}
+\begin{verbatim}
+'((f x) (g y) z)
+\end{verbatim}
+\begin{verbatim}
+[f x, g y, z]
+\end{verbatim}
+\end{center}
+Adding a leading or trailing comma doesn't change anything.
+You can even have a comma-separated list with zero items \texttt{(,)} or one item \texttt{(a,)}/\texttt{(,a)}.
+Semicolons work the same way, and add a second layer of grouping.
+Colons are similar, but separate exactly two subexpressions from each other.
+An ellipsis (spelled with two dots: \texttt{..}) may separate two expressions, but wither side may be empty.
+
+Another way to combine expressions is to ``chain'' them together with dots, just as you would in almost any programming language for accessing a field of a record.
+\begin{center}
+\begin{verbatim}
+(point-x (player-position (world-player world)))
+\end{verbatim}
+\begin{verbatim}
+world.player.position.x
+\end{verbatim}
+\end{center}
+Unlike other languages, you can chain any two e-exprs together with dots.
+Additionally, the dot is optional if the next expression in the chain is surrounded by a bracketing form (parens, square brackets, curly braces, or an indented block, which we will soon see).
+This means that syntaxes that look like field access, array indexing, or function application are represented by the same, unified syntax.
+\begin{center}
+\begin{verbatim}
+matrix[2, 3]
+point3d{x, y}.scale(4)
+\end{verbatim}
+\end{center}
+Bear in mind that the lack of whitespace around the dot is critical: adding whitespace changes the meaning, as we will see later.
+
+The most visually-apparent change is the addition of indentation-sensitivity.
+Importantly, an indented block is always preceded by an end-of-line colon.
+One of the most iconic Lisp notions, \texttt{cond} looks terrible, but applying indentation-sensitivity, chaining, and colon-separation can clean it up significantly.
+\begin{center}
+\begin{verbatim}
+(cond
+  ((p? a) (foo a))
+  ((p? b) (foo b))
+  (else foo c))
+\end{verbatim}
+\begin{verbatim}
+cond:
+  p? a: foo a
+  p? b: foo b
+  else: foo c
+\end{verbatim}
+\end{center}
+An indented block can also appear on its own rather than as part of a chain.
+Note the space before the colon that ensures the block isn't chained with the \texttt{z} argument.
+\begin{center}
+\begin{verbatim}
+def big_function x y z :
+  xy = combine x y
+  z' = transpose z
+  z' * xy
+\end{verbatim}
+\end{center}
+
+
+Remember that there isn't much of a denotational semantics for e-exprs; they are pretty much exactly what you write.
+In the case of the last example, we simply have a sequence of expressions, the last of which is a block containing three subexpressions, each of which is just a list of symbols.
+Although it appears we are using binary operators, e-exprs do not have to support them.
+A layer on top of e-exprs can be responsible for detecting and rewriting any infix---or indeed mixfix---operators, and indeed my e-exprs library supplies just such a system.
+
+E-exprs also support a handful of other smaller features.
+String templates \texttt{"Hello, `titlecase name`!"} are a feature I can no longer do without.
+Unicode symbols \texttt{λ x: x + 1} allow for more math-like notation if desired.
+Heredocs allow for large strings to be used as documentation, quick-and-dirty data blocs, or to embed other languages that a macro system can pick up and translate.
+Synthetic infix functions \texttt{this .(not a real method) arg1 (arg 2)} allow for function call syntax to be re-ordered to express a more naturalistic reading.
+
+E-exprs \emph{don't} support any language-specific concepts like cons-dot, tick-quotation, quasi-quote/unquote/unquote-splicing, or reader macros.
+I point out the Lisp ideas specifically, since Lisp is often accused of having ``no syntax'', but e-exprs also don't have any concepts from more conventional languages.
+Even \texttt{[1, 2, 3]} is not a list---as far as e-exprs are concerned, it is a comma-separated sequence of expressions enclosed in square brackets.
+If you want that to be a list in your language then it can be, or it could be something completely different; in fact, as part of a chain, it might make sense if it were a multi-dimensional array access.
+
+The point is that e-exprs don't solve the problem of concrete syntax.
+Instead, e-exprs deal with the messy character stream to produce a straightforward tree data structure containing widespread notations.
+Bridging the gap from an e-expr to an abstract syntax is much easier because such a tree is amenable to simple functional pattern matching.
+I hope to be able to take any formal programming calculus from the literature and have a e-expr based concrete syntax built inside of fifteen minutes---one which I will enjoy writing in so that I can really experiment with the semantic ideas.
+
+\section{E-expr Grammar}
+
+In the following, we use grammatical notation drawn from a number of fields.
+From regular expressions, we have
+  parenthesis for (non-capturing) grouping,
+  pipe $a \mid b$ for alternation,
+  $r^?$ for optional elements,
+  $r^\star$ and $r^+$ for repetition zero/one or more times respectively,
+  and $r^{\{n\}}$ for $n$-times repetition.
+A more advanced form is the difference of regular expressions $r_1 - r_2$ which matches all $r_1$ that \emph{don't} match $r_2$; regular expressions have been proven closed under subtraction, but it hasn't made it into major implementations.
+Literal characters and strings are in \texttt{typewriter} font and surrounded by \texttt{'}single ticks\texttt{'}.
+We use standard C-style character escapes for otherwise hard-to-typeset whitespace characters (space, tab, and newlines), as well as backslash itself; to be safe, we also backslash-escape single- and double-quotes and backtick.
+We use character classes which can reference both literal characters and the names of common classes and those we define ourselves.
+  We typeset the names of classes in \textit{italics}.
+From BNF, we write 
+  non-terminals in \textbf{boldface},
+  but also allow the definition of character classes whose names are in \textit{italics}.
+
+\subsection{Lexer}
+
+\newcommand*\literal[1]{\texttt{'{#1}'}}
+\newcommand*\notcharclass[1]{\mathopen{\lnot[\mathord:\;} #1 \mathclose{\;\mathord:]}}
+\newcommand*\charclass[1]{\mathopen{[\mathord:\;} #1 \mathclose{\;\mathord:]}}
+
+The first step in parsing an e-expression is to identify pre-tokens from a stream of UTF-8 characters.
+The grammars for most pre-tokens mostly describe regular languages, but we have made some use of BNF notation to help keep the regular expressions small and understandable.
+TODO: but... heredocs!
+These pre-tokens may need to later be classified into tokens proper
+
+\newcommand{\gis}{\mathrel{::=}}
+\newcommand{\gor}{\mathrel{\phantom{\gis}\mathllap{\mid}}}
+
+\begin{align*}
+\intertext{These three bracketing forms are hardcoded as special, as are these five punctuation marks.
+  Note that ellipsis \literal{..} is preferred over a single dot \literal{.}.}
+  \mathbf{encloser} &\gis \charclass{\literal{()[]\{\}}} \\
+  \mathbf{separator} &\gis \literal{,} \mid \literal{.} \mid \literal{..} \mid \literal{;} \mid \literal{:} \\
+\intertext{Inline whitespace consists of newlines and tabs, but also}
+  \mathbf{preSpace} &\gis \charclass{\literal{\textbackslash{ }\textbackslash t}}^+ \\
+\intertext{a line-continuation is also treated as if it were inline whitespace.}
+                    &\gor \literal{\textbackslash\textbackslash\textbackslash n} \\
+\intertext{On the other hand, line-breaks may need to be distinguished from inline whitespace.}
+  \mathbf{preNewline} &\gis \literal{\textbackslash n} \\
+\intertext{Only line-comments are allowed; see the discussion below.}
+  \mathbf{comment} &\gis \literal{\#} \; \notcharclass{\literal{\textbackslash n}}^+ \\
+  symbolChar &= \charclass{letter, digit, mathSymbol, currencySymbol} \\
+             &+ \charclass{\literal{\textasciitilde!@\$\%\textasciicircum\&*-\textunderscore=+|<>/?}} \\
+             &- \charclass{\texttt{\textbackslash{ }\textbackslash t\textbackslash n\textbackslash r\texttt\#\textbackslash\textbackslash}} \\
+             &- \charclass{\texttt{()[]{},.;:\textbackslash`\textbackslash'\textbackslash"}} \\
+\intertext{TODO: I haven't decided if I really want to allow colons to start symbols.}
+  \mathbf{symbol} &\gis (\charclass{symbolChar} - \charclass{\literal{+-}}^? \; \charclass{digit}) \; \charclass{symbolChar}^* \\
+                  &\gor \literal{:} \charclass{symbolChar, \literal{:}}^+ \\
+\intertext{FIXME: this doesn't admit non-decimal bases or scientific notation}
+  \mathbf{number} &\gis \charclass{\literal{+-}} \; \charclass{digit}^+ \\
+\intertext{Strings are enclosed in double-quotes, but an expression can be spliced into a string by enclosing the expression in backticks.
+  At this stage in parsing, I am not interested in matching string fragments up and scooping up the spliced expressions in-between to form the entire template: this is just the elxer for goodness' sake!
+  In Any case, i means that strings might start and end with any mix of double-quote and backtick.}
+  \mathbf{stringPart} &\gis \charclass{\literal", \literal`}\;\mathbf{stringContent}^\star\;\charclass{\literal{\textbackslash"\textbackslash`}} \\
+\intertext{Most UTF-8 characters are available for use directly in strings, with some obvious exceptions.
+  Notably, strings are not allowed to cross line-boundaries without special syntax, since that's a common cause of syntax error.}
+  \mathbf{stringContent} &\gis \notcharclass{\literal{\textbackslash"\textbackslash`\textbackslash r\textbackslash n\textbackslash\textbackslash}} \\
+\intertext{The usual C-style escapes are available, as well as an escapse for backtick.
+  We also include a \texttt{\textbackslash e} for ASCII 27 ``escape'', since it finds a little use in terminal interface programming.
+  Also, we include \texttt{\textbackslash\&} which stands for the empty string, just in case two adjacent portions of string would be interpreted as an escape.}
+                         &\gor \literal{\textbackslash\textbackslash} \; \charclass{\literal{\textbackslash\textbackslash0abefnrtv\textbackslash'\textbackslash"\textbackslash`\&}} \\
+\intertext{The \texttt{\textbackslash x}, \texttt{\textbackslash u}, and \texttt{\textbackslash U} escapes allow for encoding arbitrary unicode codepoints into a string.
+  While \texttt{\textbackslash U} is the most general, the others can be used when encoding bytes in a bytestring, or when only the Basic Multilingual Plane is required.
+  The \texttt{\textbackslash U} form can be trickeier to use effectively: since it accepts any number of digits afterwards, a null-escape may need to be inserted to end the escape when it ocuurs before a $hexDigit$, e.g.\ \texttt{"\textbackslash U101234\textbackslash\&5"}.
+  It accepts any number of characters because then it will be future-proofed in the unlikely event of Unicode (or a supersceding standards body) extending its codepoints beyond \texttt{0x10FFFF}.
+  }
+                         &\gor \literal{\textbackslash\textbackslash x} \; \charclass{hexDigit}^{\{2\}} \\
+                         &\gor \literal{\textbackslash\textbackslash u} \; \charclass{hexDigit}^{\{4\}} \\
+                         &\gor \literal{\textbackslash\textbackslash U} \; \charclass{hexDigit}^+ \\
+\intertext{Finally, multi-line strings may explicitly be broken up across lines by enclosing the newline between backslashes.
+  It is recommended to maintain the visual indicators of nesting by indenting the following line appropriately.
+  Note that when this form is used, a newline character is \emph{not} inserted.}
+                         &\gor \literal{\textbackslash\textbackslash} \; \literal{\textbackslash n} \; \charclass{\literal{\textbackslash{ }\textbackslash t}}^\star \literal{\textbackslash\textbackslash} \\
+  hexDigit &= \charclass{\literal{0123456789ABCDEFabcdef}} \\
+\intertext{Heredocs offer an alternative for embedding long strings into e-exprs, at the cost of not having string templating.
+  They can be multi-line and do not require escape sequences anywhere, but they also do not allow escape sequences or templating.
+  }
+  \mathbf{heredoc}
+    &\gis \literal{\textbackslash"\textbackslash"\textbackslash"} \; (\charclass{alphaNum}^*)^{=delim}\; \literal{\textbackslash n} \; \\
+    &\qquad \mathbf{heredocLine}(delim)^* \\
+    &\qquad \mathbf{heredocEnd}(delim) \\
+\intertext{Although the (relatively) large number of supporting rules makes heredocs appear complex, they are essentially just triple-quoted strings, where a delimiter may be given just in case one of the lines must also start with a triple-quote.
+  The $\mathbf{heredocLine}(delim)$ rule simply identify lines that don't end with $delim$ followed by triple quotes.
+  }
+  \mathbf{heredocLine}(delim)
+    &\gis (\mathbf{line} - \mathbf{heredocEnd}(delim) \; \mathbf{line}) \; \literal{\textbackslash n} \\
+  \mathbf{line}
+    &\gis \notcharclass{\literal{\textbackslash n}}^* \\
+  \mathbf{heredocEnd}(delim) &\gis delim \; \literal{\textbackslash"\textbackslash"\textbackslash"} \\
+TODO: char \\
+TODO: rational
+\end{align*}
+
+I've chosen to not have block comments.
+Block comments are fragile unless they are able to nest inside each other.
+For historical reasons, most languages do not have nesting block comments, so I've found that text editors do not bother implementing good support for nesting block comments.
+The last thing I want is to ask a potential e-expr user to change their workflow, so I've simply ignored block comments altogether.
+Instead, your text editor likely has good support for commenting out all selected lines at once, which is all a block comment does.
+Besides, using only line comments makes changes more easily spotted when using line-based version control.
+
+The set of symbol characters is \emph{not} wisely chosen overall.
+I just took a peek at what Unicode had to offer, picked some reasonable-looking properties.
+Outside of the ASCII portion and some well-known mathematical symbols, I am open to critique, especially since I have done none myself.
+I hope for now that this is a reasonable enough set so as not to cause confusion, but I expect it will be important to reduce the confusion caused by similar-looking glyphs (e.g. at the moment capital A and capital alpha look the same, but will be treated differently in code).
+Nevertheless, you can see that I've tried to include as many symbols as possible that are available on US/UK keyboards (programming seems to have settled on this as a de-facto standard, and I don't have the knowledge to change it; if you have gripes about what characters on your local keyboards you would most like to use/avoid in code, please get in touch!)
+I have explicitly ruled out whitespace and comment-related characters (for obvious reasons), as well as a number of characters used as punctuation in e-exprs.
+
+
+I've only allowed the one form of line-break, because who wants to deal with OS-specific line-break sequences in 2021?
+Perhaps your text editor can be configured, and perhaps your VCS is ``smart'', but why not agree to stop paying the complexity cost when all we get out of it is that one company is pampered?
+That said, as little as single open issue might change my mind.
+
+
+FIXME: shouldn't I allow $\mathbf{symbol} ::= \literal{\textbackslash\textbackslash}\;\charclass{symbolChar}^+$?
+
+\section{Token Stream Cleanup}
+
+After the lexer identifies tokens in the input Unicode stream, we are left with a stream of pre-tokens which must now be validated and normalized.
+
+TODO
+
+\subsection{Parser}
+
+\section{E-exprs as a System}
+
+TODO: location tracking, error recovery, the pattern-matching library, the various output formats, the mixfix algorithm
+
+\end{document}
