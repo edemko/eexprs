@@ -22,6 +22,8 @@ source-repository head
 
 library
   exposed-modules:
+    , Language.EExpr.Parse
+    , Language.EExpr.Parse.Internal
     , Language.EExpr.Text.Lexer
     , Language.EExpr.Text.Lexer.Results
     , Language.EExpr.Text.Lexer.Stream

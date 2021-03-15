@@ -12,6 +12,7 @@ module Language.EExpr.Types
   -- , Phase(..)
   , Error(..)
   , NonEmpty2(..)
+  , Location(..)
   ) where
 
 import Data.Kind (Type)

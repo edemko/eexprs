@@ -287,7 +287,7 @@ heredoc = do
     openHeredoc :: Parser 'Greedy (Text, Text)
     openHeredoc = do
         quotes <- P.string (panic "start of heredoc") "\"\"\""
-        fence <- grabToLine -- FIXME should take only alphanum (and be non-empty?)
+        fence <- P.takeWhile1 (expect ["heredoc delimiter"]) (\c -> C.isAlphaNum c || c `elem` ("-_" :: String))
         nl <- T.singleton <$> P.char (expect ["newline"]) '\n'
         pure (quotes <> fence <> nl, fence)
     firstLine :: Text -> Parser 'Greedy Text

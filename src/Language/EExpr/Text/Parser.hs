@@ -13,7 +13,6 @@ import Language.EExpr.Text.Lexer.Stream
 import Language.EExpr.Types
 
 import Data.List.NonEmpty (NonEmpty((:|)))
-import Language.EExpr.Text.Lexer.Types (Location(..))
 import Text.Lightyear (Lightyear, Consume(..), MakeError)
 
 import qualified Data.List.NonEmpty as NE

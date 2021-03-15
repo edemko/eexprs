@@ -1,0 +1,41 @@
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ERR] (TextPos {line = 3, col = 1},IllegalIndent)
+[OK ] Atom (SymAtom "bad")
+[OK ] Separator Space
+[OK ] Atom (SymAtom "start")
+[OK ] Separator Newline
+[ign] UnknownNewline
+[ign] UnknownNewline
+[ign] UnknownSpace
+[OK ] Atom (SymAtom "top")
+[OK ] Separator Space
+[OK ] Atom (SymAtom "level")
+[ign] UnknownNewline
+[ign] UnknownSpace
+[OK ] Atom (SymAtom "no")
+[OK ] Separator Space
+[OK ] Atom (SymAtom "change")
+[OK ] Separator Newline
+[ign] UnknownSpace
+[OK ] Atom (SymAtom "more")
+[OK ] Separator Space
+[OK ] Atom (SymAtom "top")
+[ign] StartIndent
+[ign] UnknownNewline
+[OK ] Combiner Open Indent
+[OK ] Atom (SymAtom "nested")
+[ign] StartIndent
+[ign] UnknownNewline
+[OK ] Combiner Open Indent
+[OK ] Atom (SymAtom "double")
+[ign] StartIndent
+[ign] UnknownNewline
+[OK ] Combiner Open Indent
+[OK ] Atom (SymAtom "triple")
+[ign] StartIndent
+[ign] UnknownNewline
+[ERR] (TextPos {line = 12, col = 1},IllegalIndent)
+[OK ] Atom (SymAtom "nested")
+[OK ] Separator Space
+[OK ] Atom (SymAtom "once")
