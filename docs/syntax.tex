@@ -65,7 +65,7 @@ Adding a leading or trailing comma doesn't change anything.
 You can even have a comma-separated list with zero items \texttt{(,)} or one item \texttt{(a,)}/\texttt{(,a)}.
 Semicolons work the same way, and add a second layer of grouping.
 Colons are similar, but separate exactly two subexpressions from each other.
-An ellipsis (spelled with two dots: \texttt{..}) may separate two expressions, but wither side may be empty.
+An ellipsis (spelled with two dots: \texttt{..}) may separate two expressions, but either side may be empty.
 
 Another way to combine expressions is to ``chain'' them together with dots, just as you would in almost any programming language for accessing a field of a record.
 \begin{center}
@@ -76,7 +76,6 @@ Another way to combine expressions is to ``chain'' them together with dots, just
 world.player.position.x
 \end{verbatim}
 \end{center}
-Unlike other languages, you can chain any two e-exprs together with dots.
 Additionally, the dot is optional if the next expression in the chain is surrounded by a bracketing form (parens, square brackets, curly braces, or an indented block, which we will soon see).
 This means that syntaxes that look like field access, array indexing, or function application are represented by the same, unified syntax.
 \begin{center}
@@ -95,7 +94,7 @@ One of the most iconic Lisp notions, \texttt{cond} looks terrible, but applying 
 (cond
   ((p? a) (foo a))
   ((p? b) (foo b))
-  (else foo c))
+  (#t (foo c)))
 \end{verbatim}
 \begin{verbatim}
 cond:
@@ -124,7 +123,7 @@ A layer on top of e-exprs can be responsible for detecting and rewriting any inf
 E-exprs also support a handful of other smaller features.
 String templates \texttt{"Hello, `titlecase name`!"} are a feature I can no longer do without.
 Unicode symbols \texttt{λ x: x + 1} allow for more math-like notation if desired.
-Heredocs allow for large strings to be used as documentation, quick-and-dirty data blocs, or to embed other languages that a macro system can pick up and translate.
+Heredocs allow for large strings to be used as documentation, quick-and-dirty data blocks, or to embed other languages that can be passed to an interpreter or translated by a macro system.
 Synthetic infix functions \texttt{this .(not a real method) arg1 (arg 2)} allow for function call syntax to be re-ordered to express a more naturalistic reading.
 
 E-exprs \emph{don't} support any language-specific concepts like cons-dot, tick-quotation, quasi-quote/unquote/unquote-splicing, or reader macros.
@@ -135,7 +134,7 @@ If you want that to be a list in your language then it can be, or it could be so
 The point is that e-exprs don't solve the problem of concrete syntax.
 Instead, e-exprs deal with the messy character stream to produce a straightforward tree data structure containing widespread notations.
 Bridging the gap from an e-expr to an abstract syntax is much easier because such a tree is amenable to simple functional pattern matching.
-I hope to be able to take any formal programming calculus from the literature and have a e-expr based concrete syntax built inside of fifteen minutes---one which I will enjoy writing in so that I can really experiment with the semantic ideas.
+I hope to be able to take any formal programming calculus from the literature and have an e-expr based concrete syntax built inside of fifteen minutes---one which I will enjoy writing in so that I can really experiment with the semantic ideas.
 
 \section{E-expr Grammar}
 
@@ -177,12 +176,12 @@ Let's take the opportunity to state our notation explicitly:
   \item Repetition zero/one or more times is written with a superscript star/plus respectively $r^\star$/$r^+$.
   \item Repetition by a fixed amount is written with that amount superscripted in curly braces $r^{\{n\}}$.
   \item Difference of regular languages is represented with a minus sign $r_1 - r_2$.
-        Although regular languages are closed under subtraction, this notion has not made it into implementations.
+        Although regular languages are closed under subtraction, this notion has not made it into common implementations.
         An input matches $r_1 - r_2$ exactly when it matches $r_1$ but does \emph{not} match $r_2$.
   \item We use $\omega$ to match any single character, and $\varepsilon$ for the empty string.
   \item Parentheses for non-capturing grouping.
   \item $r^{=x}$ captures the portion of input that matched $r$ and stores it in the variable $x$ for later use.
-  \item When a regular expression becomes to long to be easily-understood, we will resort to the convensions of Backus-Naur Form.
+  \item When a regular expression becomes too long to be easily understood, we will resort to the convensions of Backus-Naur Form.
         Non-terminals are typeset in \textbf{boldface}.
   \item We will need a couple families of regular expression parameterized by a string.
         These are written as if they were a function $\mathbf{family}(x)$.
