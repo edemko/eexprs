@@ -1,28 +1,64 @@
+#include "json.h"
+
 #include <assert.h>
 #include <inttypes.h>
 
-#include "json.h"
+#include "shim/bigint.h"
 
 
+bool needsJsonEscape(uchar c) {
+  return c < 0x20  || c == 0x7F // TODO encode other control codepoints
+      || c == '\"' || c == '\\'
+       ;
+}
+void fjsonEscapeChar(FILE* fp, uchar c) {
+  if (c < 0 || c > 0x10FFFF) { return; }
+  if (c == '\"') {
+    fprintf(fp, "\\\"");
+  }
+  else if (c == '\\') {
+    fprintf(fp, "\\\\");
+  }
+  else if (c == '\n') {
+    fprintf(fp, "\\n");
+  }
+  else if (c < 0x20 || c == 0x7F) { // TODO encode other control codepoints
+    fprintf(fp, "\\u00%02X", (uint8_t)c);
+  }
+  else {
+    utf8Char enc = encodeUchar(c);
+    fwrite(enc.codeunits, 1/*byte per element*/, enc.nbytes/*many elements*/, fp);
+  }
+}
+
+void fdumpChar(FILE* fp, uchar c) {
+  fprintf(fp, "\"");
+  fjsonEscapeChar(fp, c);
+  fprintf(fp, "\"");
+}
 void fdumpStr(FILE* fp, str text) {
   fprintf(fp, "\"");
   while (true) {
     uchar c;
     size_t adv = peekUchar(&c, text);
-    if (c == UCHAR_NULL) { break; }
+    if (c == UCHAR_NULL) {
+      break;
+    }
     else if (c < 0 || c > 0x10FFFF) {
       text.len--;
       text.bytes++;
       continue;
     }
-    else if ((c < 20) | (c == '\"') | (c == '\\')) {
-      fprintf(fp, "\\u00%02X", (uint8_t)c);
+    else if (needsJsonEscape(c)) {
+      fjsonEscapeChar(fp, c);
+      text.len -= adv;
+      text.bytes += adv;
     }
     else {
       fwrite(text.bytes, 1/*byte per element*/, adv/*many elements*/, fp);
+      text.len -= adv;
+      text.bytes += adv;
     }
-    text.len -= adv;
-    text.bytes += adv;
   }
   fprintf(fp, "\"");
 }
@@ -37,6 +73,36 @@ void fdumpTokens(FILE* fp, tokenStream* strm) {
            , tok.loc.end.col + 1
            );
     switch (tok.type) {
+      case TOK_NUMBER: {
+        {
+          str tmp = bigint_toDecimal(tok.as.number.mantissa);
+          fprintf(fp, ",\"type\":\"number\",\"%s\":", tok.as.number.fractionalDigits ? "value" : "mantissa");
+          fdumpStr(fp, tmp);
+          free(tmp.bytes);
+        }
+        if (tok.as.number.radix != 10) {
+          fprintf(fp, ",\"radix\":%d", tok.as.number.radix);
+        }
+        if (tok.as.number.fractionalDigits != 0 || tok.as.number.exponent.len != 0) {
+          fprintf(fp, ",\"exponent\":{");
+          bool needsComma = false;
+          if (tok.as.number.fractionalDigits != 0) {
+            fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", tok.as.number.fractionalDigits);
+            needsComma = true;
+          }
+          if (tok.as.number.exponent.len != 0) {
+            str tmp = bigint_toDecimal(tok.as.number.exponent);
+            fprintf(fp, "%s\"explicit\":", needsComma ? "," : "");
+            fdumpStr(fp, tmp);
+            free(tmp.bytes);
+          }
+          fprintf(fp, "}");
+        }
+      }; break;
+      case TOK_CODEPOINT: {
+        fprintf(fp, ",\"type\":\"codepoint\",\"value\":");
+        fdumpChar(fp, tok.as.codepoint.chr);
+      }; break;
       case TOK_STRING: {
         fprintf(fp, ",\"type\":\"string\",\"text\":");
         fdumpStr(fp, tok.as.string.text);
@@ -50,6 +116,9 @@ void fdumpTokens(FILE* fp, tokenStream* strm) {
           }; break;
           case STRSPLICE_CLOSE: {
             fprintf(fp, ",\"splice\":\"close\"");
+          }; break;
+          case STRSPLICE_CORRUPT: {
+            fprintf(fp, ",\"splice\":\"corrupt\"");
           }; break;
         }
       }; break;
@@ -102,9 +171,79 @@ void fdumpTokens(FILE* fp, tokenStream* strm) {
       case TOK_UNKNOWN_DOT: {
         fprintf(fp, ",\"type\":\"unknown-dot\"");
       }; break;
-      default: {
-        fprintf(stderr, "unhandled token type in fdumpTokens\n");
-        exit(255);
+      case TOK_NONE: { assert(false); }; break;
+    }
+    fprintf(fp, "}\n");
+  }
+}
+
+void fdumpLexErrs(FILE* fp, lexErrStream* strm) {
+  for (; strm != NULL; strm = strm->next) {
+    lexError err = strm->here;
+    if (err.type == LEXERR_NOERROR) { continue; }
+    fprintf(fp, "{\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
+           , err.loc.start.line + 1
+           , err.loc.start.col + 1
+           , err.loc.end.line + 1
+           , err.loc.end.col + 1
+           );
+    switch (err.type) {
+      case LEXERR_NOERROR: { assert(false); }; break;
+      case LEXERR_BAD_BYTES: {
+        fprintf(fp, ",\"type\":\"bad-bytes\"");
+      }; break;
+      case LEXERR_BAD_CHAR: {
+        fprintf(fp, ",\"type\":\"bad-char\",\"input\":");
+        fdumpChar(fp, err.as.badChar);
+      }; break;
+      case LEXERR_MIXED_SPACE: {
+        fprintf(fp, ",\"type\":\"mixed-space\"");
+      }; break;
+      case LEXERR_MIXED_NEWLINES: {
+        fprintf(fp, ",\"type\":\"mixed-newlines\"");
+      }; break;
+      case LEXERR_BAD_CODEPOINT: {
+        fprintf(fp, ",\"type\":\"bad-codepoint\",\"input\":");
+        fdumpChar(fp, err.as.badCodepoint);
+      }; break;
+      case LEXERR_MISSING_FRACTIONAL_PART: {
+        fprintf(fp, ",\"type\":\"missing-fractional-part\"");
+      }; break;
+      case LEXERR_BAD_DIGIT_SEPARATOR: {
+        fprintf(fp, ",\"type\":\"bad-digit-separator\"");
+      }; break;
+      case LEXERROR_MISSING_EXPONENT: {
+        fprintf(fp, ",\"type\":\"missing-exponent\"");
+      }; break;
+      case LEXERROR_BAD_EXPONENT_SIGN: {
+        fprintf(fp, ",\"type\":\"bad-exponent-sign\"");
+      }; break;
+      case LEXERR_BAD_ESCAPE_CHAR: {
+        fprintf(fp, ",\"type\":\"bad-escape-char\",\"input\":");
+        fdumpChar(fp, err.as.badEscapeChar);
+      }; break;
+      case LEXERR_BAD_ESCAPE_CODE: {
+        fprintf(fp, ",\"type\":\"bad-escape-code\",\"input\":\"");
+        for (size_t i = 0; i < 6; ++i) {
+          fjsonEscapeChar(fp, err.as.badEscapeCode[i]);
+        }
+        fprintf(fp, "\"");
+      }; break;
+      case LEXERR_UNICODE_OVERFLOW: {
+        fprintf(fp, ",\"type\":\"unicode-overflow\",\"value\":%"PRIi32, err.as.unicodeOverflow);
+      }; break;
+      case LEXERR_UNCLOSED_CODEPOINT: {
+        fprintf(fp, ",\"type\":\"unclosed-codepoint\"");
+      }; break;
+      case LEXERR_BAD_STRING_CHAR: {
+        fprintf(fp, ",\"type\":\"bad-string-char\",\"input\":");
+        fdumpChar(fp, err.as.badStringChar);
+      }; break;
+      case LEXERR_MISSING_LINE_PICKUP: {
+        fprintf(fp, ",\"type\":\"missing-line-pickup\"");
+      }; break;
+      case LEXERR_UNCLOSED_STRING: {
+        fprintf(fp, ",\"type\":\"unclosed-string\"");
       }; break;
     }
     fprintf(fp, "}\n");

@@ -3,13 +3,14 @@
 
 #include <stdbool.h>
 
+#include "lexer/types.h"
 #include "strstuff.h"
 
 
 //////////////////////////////////// Numbers ////////////////////////
 
-typedef struct baseParams {
-  size_t radix;
+typedef struct radixParams {
+  uint8_t radix;
   uchar* leaderLetters;
   // list of lists of digits; each list is exactly radix characters long
   // the entire list-of-lists must be terminated with a final UCHAR_NULL
@@ -19,13 +20,25 @@ typedef struct baseParams {
   // base-sepcific exponent notation retains the base from the significand/mantissa
   // also exponent notation can be accessed with `qwerty^asdf` with qwerty in any base and asdf also in any base (default 10 for both)
   uchar* exponentLetters;
-} baseParams;
+} radixParams;
 
-extern const baseParams bases[];
-extern const baseParams* defaultBase;
+extern const radixParams radices[]; // terminated with a `.radix == 0` entriy
+extern const radixParams* defaultRadix;
 
 // TODO bases (leader letters, exponent letters)
-bool isDigit(const baseParams* base, uchar c);
+bool isDigit(const radixParams* base, uchar c);
+bool isSign(uchar c);
+
+extern const uchar digitSep;
+extern const uchar digitPoint;
+
+extern const uchar genericExpLetter;
+
+// return which radixParams is named by the passed character
+// return NULL if no radixParams is so named
+const radixParams* decodeRadix(uchar c);
+
+uint8_t decodeDigit(const radixParams* radix, uchar c);
 
 
 //////////////////////////////////// Symbols ////////////////////////
@@ -35,9 +48,33 @@ bool isSymbolChar(uchar c);
 bool isSymbolStart(uchar cs[2]);
 
 
+//////////////////////////////////// Strings ////////////////////////
+
+bool isCodepointDelim(uchar c);
+bool isStringDelim(uchar c);
+
+strSpliceType spliceType(uchar open, uchar close);
+
+bool isStringChar(uchar c);
+
+extern uchar escapeLeader;
+
+struct stdEscape {
+  uchar source;
+  uchar decode;
+};
+// ends with a `struct stdEscape { UCHAR_NULL, <don't care> }`.
+extern struct stdEscape commonEscapes[];
+extern uchar nullEscape;
+
+extern uchar twoHexEscapeLeader;
+extern uchar fourHexEscapeLeader;
+extern uchar sixHexEscapeLeader;
+
 //////////////////////////////////// Whitespace ////////////////////////
 
 bool isSpaceChar(uchar c);
+bool isNewlineChar(uchar c);
 
 typedef enum newlineType {
   NEWLINE_NONE,

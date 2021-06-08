@@ -20,7 +20,9 @@ uchar _digits10[] = {'0','1','2','3','4','5','6','7','8','9',UCHAR_NULL};
 uchar _exp10[] = {'e','E',UCHAR_NULL};
 // base 12
 uchar _leader12[] = {'z','Z',UCHAR_NULL}; // as in doZenal
-uchar _digits12[] = {'0','1','2','3','4','5','6','7','8','9',0x218A/*↊*/,0x218B/*↋*/,UCHAR_NULL};
+uchar _digits12[] = { '0','1','2','3','4','5','6','7','8','9',0x218A/*↊*/,0x218B/*↋*/
+                    , '0','1','2','3','4','5','6','7','8','9','X','E' // after the usage of the Dozenal Society of America when they use ASCII
+                    , UCHAR_NULL};
 uchar _exp12[] = {UCHAR_NULL}; // I don't know of any widespread agreement
 // base 16
 uchar _leader16[] = {'x','X',UCHAR_NULL};
@@ -29,10 +31,10 @@ uchar _digits16[] = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e
                     , UCHAR_NULL
                     };
 uchar _exp16[] = {'h','H',UCHAR_NULL};
-// TODO consider base 62, base64url
+// base 62, base64(url) are not included, since they aren't easily understood by humans. instead, interpret a string (preferrably at compiletime)
 
 // all the bases, from most-to-least commonly-used
-const baseParams bases[] =
+const radixParams radices[] =
   { { .radix = 10
     , .leaderLetters = _leader10
     , .digits = _digits10
@@ -58,12 +60,38 @@ const baseParams bases[] =
     , .digits = _digits12
     , .exponentLetters = _exp12
     }
+  , { .radix = 0 }
   };
 
-const baseParams* defaultBase = &bases[0];
+const radixParams* defaultRadix = &radices[0];
 
-bool isDigit(const baseParams* base, uchar c) {
-  return ucharElem(c, base->digits);
+bool isDigit(const radixParams* radix, uchar c) {
+  return ucharElem(c, radix->digits);
+}
+
+bool isSign(uchar c) {
+  return c == '+' || c == '-';
+}
+
+const uchar digitSep = '_';
+const uchar digitPoint = '.';
+
+const uchar genericExpLetter = '^';
+
+const radixParams* decodeRadix(uchar c) {
+  for (size_t i = 0; radices[i].radix != 0; ++i) {
+    if (ucharElem(c, radices[i].leaderLetters)) {
+      return &radices[i];
+    }
+  }
+  return NULL;
+}
+
+uint8_t decodeDigit(const radixParams* radix, uchar c) {
+  assert(isDigit(radix, c));
+  size_t amt = ucharFind(c, radix->digits);
+  while (amt > radix->radix) { amt -= radix->radix; }
+  return amt;
 }
 
 
@@ -81,7 +109,11 @@ isSymbolChar c = good && defensive
         _ -> False
 */
 bool isSymbolChar(uchar c) {
-  static const uchar miscChars[] = {'_', '+', '-', UCHAR_NULL};
+  static const uchar miscChars[] =
+    { '_' // TODO more!
+    , '+', '-' // these are special because they can also start a number
+    , '\'' // I do allow primes, but not at the start of a symbol
+    , UCHAR_NULL};
   return ('a' <= c && c <= 'z')
       || ('A' <= c && c <= 'Z')
       || ('0' <= c && c <= '9')
@@ -90,32 +122,94 @@ bool isSymbolChar(uchar c) {
       ;
 }
 bool isSymbolStart(uchar cs[2]) {
-  uchar c;
-  // if the first char isn't a plus/minus, then we need only look at the first char
-  if (cs[0] != '+' && cs[0] != '-') {
-    c = cs[0];
+  // if the first char is a plus/minus, then the second char must not start a digit
+  if (isSign(cs[0])) {
+    return !isDigit(defaultRadix, cs[1]);
   }
-  // a standalone +/- is a valid symbol
-  else if (cs[1] == UCHAR_NULL) {
-    return true;
-  }
-  // a +/- can start a symbol as long as the enxt char also could
+  // otherwise, the first char needs in a proper subset of the symbol characters
   else {
-   c = cs[1];
+    uchar c = cs[0];
+    return isSymbolChar(c)
+        && !isDigit(defaultRadix, c)
+        && c != '\'';
+        ;
   }
-  // symbol-starting chars (after mucking with +/-) are just symbol chars that can't start numbers
-  return isSymbolChar(c)
-      && !isDigit(defaultBase, c)
-      ;
 }
+
+
+//////////////////////////////////// Strings ////////////////////////
+
+bool isCodepointDelim(uchar c) {
+  return c == '\'';
+}
+bool isStringDelim(uchar c) {
+  return (c == '\"') | (c == '`');
+}
+
+strSpliceType spliceType(uchar open, uchar close) {
+  if (open == '\"') {
+    if (close == '\"') { return STRSPLICE_PLAIN; }
+    else if (close == '`') { return STRSPLICE_OPEN; }
+  }
+  else if (open == '`') {
+    if (close == '\"') { return STRSPLICE_CLOSE; }
+    else if (close == '`') { return STRSPLICE_MIDDLE; }
+  }
+  return STRSPLICE_CORRUPT;
+}
+
+bool isStringChar(uchar c) {
+  return (0x20 <= c)
+       & (c < 0x10FFFF)
+       & (c != escapeLeader)
+      && !isCodepointDelim(c)
+      && !isStringDelim(c)
+       ;
+      // TODO I should probably rule out all non-printing characters
+}
+
+uchar escapeLeader = '\\';
+
+struct stdEscape commonEscapes[] =
+  { {'\\', '\\'}
+  , {'\'', '\''}
+  , {'\"', '\"'}
+  , {'`' , '`'}
+  , {'n' , '\n'}
+  , {'r' , '\r'}
+  , {'t' , '\t'}
+  , {'0' , '\0'}
+  , {'e' , '\x1B'}
+  , {'a' , '\a'}
+  , {'b' , '\b'}
+  , {'f' , '\f'}
+  , {'v' , '\v'}
+  , {UCHAR_NULL, UCHAR_NULL}
+  };
+// don't allow to escape any character (i.e. `\z` === `z`), since escape should mean "something special is going on here", not "something might need to happen here, I dunno"
+uchar nullEscape = '&';
+
+uchar twoHexEscapeLeader = 'x';
+uchar fourHexEscapeLeader = 'u';
+uchar sixHexEscapeLeader = 'U';
+
+
+
 
 
 //////////////////////////////////// Whitespace ////////////////////////
 
 bool isSpaceChar(uchar c) {
-  return ' ' == c
-      || '\t' == c
-      ;
+  return (' ' == c)
+       | ('\t' == c)
+       ;
+}
+
+bool isNewlineChar(uchar c) {
+  return ('\n' == c)
+       | ('\r' == c)
+       | ('\x1E' == c) // FIXME I think accepting \x1E is unnecessary, adds complication, and probly slows the lexer a little
+       ;
 }
 
 newlineType decodeNewline(uchar c[2]) {

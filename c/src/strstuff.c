@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -104,9 +105,9 @@ size_t peekUchars(uchar* out, size_t n, str in) {
   size_t adv = 0;
   for (size_t i = 0; i < n; ++i) {
     size_t adv1 = peekUchar(&out[i], in);
+    in.bytes += adv1;
+    in.len -= adv1;
     adv += adv1;
-    in.bytes += adv;
-    in.len -= adv;
   }
   return adv;
 }
@@ -118,4 +119,42 @@ bool ucharElem(uchar c, const uchar* set) {
     if (set[i] == c) { return true; }
   }
   return false;
+}
+
+size_t ucharFind(uchar c, const uchar* set) {
+  for (size_t i = 0; set[i] != UCHAR_NULL; ++i) {
+    if (set[i] == c) { return i; }
+  }
+  assert(false);
+}
+
+
+utf8Char encodeUchar(uchar c) {
+  utf8Char out = {.nbytes = 0, .codeunits = {0, 0, 0, 0}};
+  if (c < 0) {
+    return out;
+  }
+  else if (c < 0x000080) {
+    out.nbytes = 1;
+    out.codeunits[0] = c;
+  }
+  else if (c < 0x000800) {
+    out.nbytes = 2;
+    out.codeunits[0] = 0xC0 | (c>>6 & 0x1F);
+    out.codeunits[1] = 0x80 | (c    & 0x3F);
+  }
+  else if (c < 0x010000) {
+    out.nbytes = 3;
+    out.codeunits[0] = 0xE0 | (c>>12 & 0x0F);
+    out.codeunits[1] = 0x80 | (c>>6  & 0x3F);
+    out.codeunits[2] = 0x80 | (c     & 0x3F);
+  }
+  else if (c < 0x110000) {
+    out.nbytes = 4;
+    out.codeunits[0] = 0xF0 | (c>>18 & 0x07);
+    out.codeunits[1] = 0x80 | (c>>12 & 0x3F);
+    out.codeunits[2] = 0x80 | (c>>6  & 0x3F);
+    out.codeunits[3] = 0x80 | (c     & 0x3F);
+  }
+  return out;
 }

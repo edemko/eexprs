@@ -1,81 +1,14 @@
 /*
 The most important types in this module are `token` and `lexer`.
 The `lexError` type is also good to know about.
+Hmmm, these types have actually moved to lexer/types.h
 */
 #ifndef LEXER_H
 #define LEXER_H
 
-#include "location.h"
+#include "lexer/types.h"
 #include "parameters.h"
-#include "strstuff.h"
 
-
-//////////////////////////////////// Tokens ////////////////////////////////////
-
-typedef enum tokenType {
-  TOK_STRING,
-  TOK_SYMBOL,
-  TOK_WRAPPER,
-  TOK_COLON,
-  TOK_ELLIPSIS,
-  TOK_CHAIN,
-  TOK_FAKEFIX,
-  TOK_SEMICOLON,
-  TOK_COMMA,
-  // tokens that will be dropped before parsing
-  TOK_COMMENT,
-  // tokens that must later be resolved in context
-  TOK_UNKNOWN_SPACE,
-  TOK_UNKNOWN_NEWLINE,
-  TOK_UNKNOWN_COLON,
-  TOK_UNKNOWN_DOT,
-  // a sentinel token that doesn't make it into the token stream at all
-  TOK_NONE
-} tokenType;
-
-typedef enum strSpliceType {
-  STRSPLICE_PLAIN,
-  STRSPLICE_OPEN,
-  STRSPLICE_MIDDLE,
-  STRSPLICE_CLOSE,
-} strSpliceType;
-
-typedef enum lexErrorType {
-  LEXERR_BAD_BYTES,
-  LEXERR_BAD_CHAR,
-  LEXERR_MIXED_SPACE,
-  LEXERR_MIXED_NEWLINES
-} lexErrorType;
-typedef struct lexError {
-  fileloc loc;
-  lexErrorType type;
-  union errorData {
-    struct lexerr_badChar {
-      uchar chr;
-    } badChar;
-  } as;
-} lexError;
-
-typedef struct token {
-  fileloc loc;
-  tokenType type;
-  union tokenData {
-    struct token_space {
-      uchar chr;
-    } space;
-    struct token_string {
-      str text; // owned
-      strSpliceType splice;
-    } string;
-    struct token_symbol {
-      str text; // owned
-    } symbol;
-    struct token_wrapper {
-      uchar chr;
-      bool isOpen;
-    } wrapper;
-  } as;
-} token;
 
 
 //////////////////////////////////// Lexer State ////////////////////////////////////
@@ -127,6 +60,10 @@ void lexer_incLine(lexer* st, size_t bytes);
 
 void lexer_addTok(lexer* st, const token* t);
 void lexer_addErr(lexer* st, const lexError* err);
+
+// remove the last token (useful for re-using standard `take*` procedures as part of others)
+void lexer_delTok(lexer* st);
+
 
 
 #endif

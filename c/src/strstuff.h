@@ -48,5 +48,15 @@ Check if `c` is in the array `set`.
 The `set` must end in `NULL_UCHAR`.
 */
 bool ucharElem(uchar c, const uchar* set);
+// find index of c in set, undefined if `!ucharElem(c, set)`
+size_t ucharFind(uchar c, const uchar* set);
+
+typedef struct utf8Char {
+  uint8_t nbytes;
+  uint8_t codeunits[4]; // filled from the front, bytes beyond nbytes are undefined
+} utf8Char;
+// error conditinos have `.nbytes == 0`
+utf8Char encodeUchar(uchar c);
+
 
 #endif

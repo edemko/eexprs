@@ -7,6 +7,6 @@
 
 
 void fdumpTokens(FILE* fp, tokenStream* strm);
-void fdumpLexerrs(FILE* fp, lexErrStream* strm);
+void fdumpLexErrs(FILE* fp, lexErrStream* strm);
 
 #endif

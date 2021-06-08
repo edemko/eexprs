@@ -9,6 +9,6 @@ int main(int argc, char** argv) {
   lexer st = lexer_newFromFile(filename);
   lexer_raw(&st);
   fdumpTokens(stdout, st.outStream);
-  // dump errors to stderr
+  fdumpLexErrs(stderr, st.errStream);
   return 0;
 }

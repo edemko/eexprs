@@ -6,4 +6,4 @@ cd "$here"
 
 mkdir -p bin
 
-gcc -std=c11 -pedantic -I src -Wall -Wimplicit-fallthrough -Werror src/*.c -o bin/eexpr
+gcc -std=c11 -pedantic -I src -Wall -Wimplicit-fallthrough -Werror src/**/*.c src/*.c -o bin/eexpr
