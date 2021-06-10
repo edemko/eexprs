@@ -157,6 +157,7 @@ strSpliceType spliceType(uchar open, uchar close) {
   }
   return STRSPLICE_CORRUPT;
 }
+uchar plainStringDelim = '\"';
 
 bool isStringChar(uchar c) {
   return (0x20 <= c)

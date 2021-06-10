@@ -42,6 +42,45 @@ str str_clone(const str orig) {
   return out;
 }
 
+bool isPrefixOf(str s, str prefix) {
+  if (s.len < prefix.len) { return false; }
+  for (size_t i = 0; i < prefix.len; ++i) {
+    if (s.bytes[i] != prefix.bytes[i]) { return false; }
+  }
+  return true;
+}
+
+
+strBuilder strBuilder_new(size_t cap0) {
+  assert(cap0 > 0);
+  strBuilder out = {.len = 0, .cap = cap0};
+  out.bytes = malloc(out.cap * sizeof(uint8_t));
+  checkOom(out.bytes);
+  return out;
+}
+
+void strBuilder_appendByte(strBuilder* self, uint8_t c) {
+  if (self->len == self->cap) {
+    self->bytes = realloc(self->bytes, 2 * self->cap * sizeof(uint8_t));
+    checkOom(self->bytes);
+  }
+  self->bytes[self->len++] = c;
+}
+
+void strBuilder_append(strBuilder* self, str other) {
+  if (self->len + other.len > self->cap) {
+    while (self->len + other.len > self->cap) { self->cap *= 2; }
+    self->bytes = realloc(self->bytes, self->cap * sizeof(uint8_t));
+    checkOom(self->bytes);
+  }
+  for (size_t i = 0; i < other.len; ++i) {
+    self->bytes[self->len+i] = other.bytes[i];
+  }
+  self->len += other.len;
+}
+
+
+
 size_t peekUchar(uchar* out, str in) {
   if (in.len == 0) {
     *out = UCHAR_NULL;

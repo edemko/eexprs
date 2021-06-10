@@ -23,6 +23,24 @@ Mallocs a cpoy of the input `str`.
 */
 str str_clone(const str orig);
 
+bool isPrefixOf(str s, str prefix);
+
+
+//////////////////////////////////// String Builder ////////////////////////////////////
+
+typedef struct strBuilder {
+  size_t len;
+  size_t cap;
+  uint8_t* bytes; // owned
+} strBuilder;
+
+strBuilder strBuilder_new(size_t cap0);
+
+void strBuilder_appendByte(strBuilder* self, uint8_t c);
+
+void strBuilder_append(strBuilder* self, str other);
+
+
 //////////////////////////////////// Unicode Manipulation ////////////////////////////////////
 
 /*

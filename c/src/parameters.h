@@ -54,6 +54,7 @@ bool isCodepointDelim(uchar c);
 bool isStringDelim(uchar c);
 
 strSpliceType spliceType(uchar open, uchar close);
+extern uchar plainStringDelim;
 
 bool isStringChar(uchar c);
 

@@ -5,20 +5,42 @@
 #include "lexer.h"
 #include "parameters.h"
 
+void lexer_init(lexer* it) {
+  str emptyStr = {.len = 0, .bytes = NULL};
+  {
+    it->rest = emptyStr;
+    it->loc.line = 0;
+    it->loc.col = 0;
+  }
+  {
+    it->outStream = NULL;
+    it->outStream_end = NULL;
+    it->warnStream = NULL;
+    it->warnStream_end = NULL;
+    it->errStream = NULL;
+    it->errStream_end = NULL;
+    it->fatal = NULL;
+  }
+  {
+    it->discoveredNewline = NEWLINE_NONE;
+    it->indent.chr = UCHAR_NULL;
+    it->indent.knownMixed = false;
+  }
+  it->allInput = emptyStr;
+  {
+    it->lineIndex.len = 1;
+    it->lineIndex.cap = 256;
+    it->lineIndex.offsets = malloc(sizeof(size_t) * 256);
+    checkOom(it->lineIndex.offsets);
+    it->lineIndex.offsets[0] = 0;
+  }
+}
 
 lexer lexer_newFromFile(const char* filename) {
   lexer out;
-  out.rest = readFile(filename);
-  out.loc.line = 0;
-  out.loc.col = 0;
-  out.startOfInput = out.rest.bytes;
-  {
-    out.lineIndex.len = 1;
-    out.lineIndex.cap = 256;
-    out.lineIndex.offsets = malloc(sizeof(size_t) * 256);
-    checkOom(out.lineIndex.offsets);
-    out.lineIndex.offsets[0] = 0;
-  }
+  lexer_init(&out);
+  out.allInput = readFile(filename);
+  out.rest = out.allInput;
   return out;
 }
 
@@ -116,14 +138,13 @@ One is inspired by Haskell (which has no fixed-length hex escape sequences),
   and really only reserved as a null escape just in case it is needed for any future extensions.
 The other is used for breaking strings across lines.
   `\\&`
-  `\\[:linebreak:][:whitespace::comment::linebreak:]*\\`
+  `\\[:linebreak:][:whitespace:]*\\`
 
 Comments/whitespace are not allowed before the first linebreak to keep lookahead constant-space.
 */
 // As `takeCharEscape`, but returns true iff characters were consumed.
 bool takeNewline(lexer* st);
 bool takeWhitespace(lexer* st);
-bool takeComment(lexer* st);
 bool takeNullEscape(lexer* st) {
   uchar c;
   size_t adv;
@@ -131,12 +152,7 @@ bool takeNullEscape(lexer* st) {
   if (isNewlineChar(c)) {
     assert(takeNewline(st));
     lexer_delTok(st);
-    for (bool more; more; ) { // continue taking newlines, whitespaces, and comments
-      more = false;
-      if (takeWhitespace(st)) { lexer_delTok(st); more = true; }
-      if (takeComment(st))    { lexer_delTok(st); more = true; }
-      if (takeNewline(st))    { lexer_delTok(st); more = true; }
-    }
+    if (takeWhitespace(st)) { lexer_delTok(st); }
     adv = peekUchar(&c, st->rest);
     if (c == escapeLeader) {
       lexer_advance(st, adv, 1);
@@ -198,6 +214,48 @@ bool takeWhitespace(lexer* st) {
   return true;
 }
 
+/* Lines can be joined with a backslash+newline.
+  `\\[:whitespace:]*[:newline:]`
+*/
+bool takeLineContinue(lexer* st) {
+  token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
+  {
+    uchar lookahead;
+    size_t adv = peekUchar(&lookahead, st->rest);
+    if (lookahead != escapeLeader) { return false; }
+    lexer_advance(st, adv, 1);
+  }
+  tok.as.space.chr = escapeLeader;
+  { // detect trailing whitespace
+    lexError err = {.loc = {.start = st->loc}, .type = LEXERR_TRAILING_SPACE};
+    bool trailingSpace = false;
+    while (true) {
+      uchar c;
+      size_t adv = peekUchar(&c, st->rest);
+      if (isSpaceChar(c)) {
+        lexer_advance(st, adv, 1);
+        trailingSpace = true;
+      }
+      else { break; }
+    }
+    if (trailingSpace) {
+      err.loc.end = st->loc;
+      lexer_addErr(st, &err);
+    }
+  }
+  if (takeNewline(st)) {
+    lexer_delTok(st);
+    tok.loc.end = st->loc;
+    lexer_addTok(st, &tok);
+  }
+  else {
+    lexError err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = LEXERR_BAD_CHAR};
+    err.as.badChar = escapeLeader;
+    lexer_addErr(st, &err);
+  }
+  return true;
+}
+
 /*
 Newlines are one of the newline sequences (i.e. alternation of literals).
 See `parameters.c` for valid newline sequences.
@@ -236,7 +294,12 @@ bool takeNewline(lexer* st) {
 bool takeEof(lexer* st) {
   uchar c;
   peekUchar(&c, st->rest);
-  return c == UCHAR_NULL;
+  if (c != UCHAR_NULL) {
+    return false;
+  }
+  token tok = {.loc = {.start = st->loc, .end = st->loc}, .type=TOK_EOF};
+  lexer_addTok(st, &tok);
+  return true;
 }
 
 /*
@@ -263,14 +326,11 @@ bool takeComment(lexer* st) {
     uchar lookahead;
     peekUchar(&lookahead, st->rest);
     if (lookahead < 0 && lookahead != UCHAR_NULL) {
-      lexError* err = malloc(sizeof(lexError));
-      checkOom(err);
-      err->type = LEXERR_BAD_BYTES;
-      err->loc.start = st->loc;
+      lexError err = {.loc = {.start = st->loc}, .type = LEXERR_BAD_BYTES};
       lexer_advance(st, 1, 1);
-      err->loc.end = st->loc;
+      err.loc.end = st->loc;
       // b/c at this point I don't know what to beleive about where the end-of-line is supposed to be
-      st->fatal = err;
+      lexer_fatalErr(st, &err);
     }
   }
   return true;
@@ -412,7 +472,10 @@ bool takeNumber(lexer* st) {
         }
       }
       else {
-        lexError err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = LEXERR_MISSING_FRACTIONAL_PART};
+        tok.type = TOK_NUMBER_ERROR;
+        tok.loc.end = st->loc;
+        lexer_addTok(st, &tok);
+        lexError err = {.loc = tok.loc, .type = LEXERR_MISSING_FRACTIONAL_PART};
         lexer_addErr(st, &err);
         return true;
       }
@@ -454,7 +517,7 @@ bool takeNumber(lexer* st) {
           }
           else {
             expNeg = false;
-            lexError err = {.loc = {.start = st->loc}, .type = LEXERROR_BAD_EXPONENT_SIGN};
+            lexError err = {.loc = {.start = st->loc}, .type = LEXERR_BAD_EXPONENT_SIGN};
             lexer_advance(st, adv, 1);
             err.loc.end = st->loc;
             lexer_addErr(st, &err);
@@ -503,7 +566,10 @@ bool takeNumber(lexer* st) {
           else { break; }
         }
         if (expDigits == 0) {
-          lexError err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = LEXERROR_MISSING_EXPONENT};
+          tok.type = TOK_NUMBER_ERROR;
+          tok.loc.end = st->loc;
+          lexer_addTok(st, &tok);
+          lexError err = {.loc = tok.loc, .type = LEXERR_MISSING_EXPONENT};
           lexer_addErr(st, &err);
           return true;
         }
@@ -620,6 +686,14 @@ bool takeCodepoint(lexer* st) {
   return true;
 }
 
+/*
+Strings are make of a number of (reasonable, as in the codepoitn parser) characters and escape sequences.
+The valid escape sequences are those of character strings, plus null escape sequences (see `takeNullEscape`).
+  `[:strDelimChar:]([:stringChar:]|\\[:charEscape:]|[:nullEscape:])*[:strDelimChar:]`
+An entire string template is between two double-quotes, but the template may have eexprs interpolated into it between backticks.
+This parser really only creates a token for each string part.
+These parts can end with a backtick (to begin an interpolation), start with a backtick (to resume the string after interpolation), or both.
+*/
 bool takeString(lexer* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
   uchar open; {
@@ -721,6 +795,239 @@ bool takeString(lexer* st) {
 }
 
 /*
+Heredocs offer a way to embed multi-line strings without escaping.
+They are delimited by triple-quotes plus an optional symbol.
+The heredoc only ends when the start of the next line begins with the symbol followed by triple quotes.
+Heredocs can also be defined with indentation, which is done with a pair of backslashes:
+  the first is a flag that signals we need to look for indentation,
+  the second is placed where the indentation ends.
+The total indentation will be either:
+  a) the number of spaces at the start of the next line plus one (because the backslash takes a column), or
+  b) the number of tabs at the start of the next line plus one.
+If the indentation is listed in tabs, the terminating backslash must be followed by a tab in order to retain alignment.
+  `"""([:symbolChar:]*)[:whitespace:][:newline:]([^:newline:]*[:newline:])*?\1"""`
+  `"""([:symbolChar:]*)[:whitespace:]\\[:whitespace:][:newline:]( *)\\([^:newline:]*[:newline:]\2 )*?\1"""`
+  `"""([:symbolChar:]*)[:whitespace:]\\[:whitespace:][:newline:](\t*)\\\t([^:newline:]*[:newline:]\2\t)*?\1"""`
+The last newline of a heredoc is not included in the string.
+If you want a trailing newline in the string, explicitly include a blank line.
+*/
+bool takeHeredoc(lexer* st) {
+  token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  {
+    uchar lookahead[3];
+    size_t adv = peekUchars(lookahead, 3, st->rest);
+    if ( lookahead[0] != plainStringDelim
+      || lookahead[1] != plainStringDelim
+      || lookahead[2] != plainStringDelim
+       ) { return false; }
+    lexer_advance(st, adv, 3);
+    tok.as.string.splice = STRSPLICE_PLAIN;
+  }
+  str ender;
+  size_t enderNChars = 0;
+  { // accumulate delimiter name
+    str delimName = {.len = 0, .bytes = st->rest.bytes};
+    while (true) {
+      uchar c;
+      size_t adv = peekUchar(&c, st->rest);
+      if (isSymbolChar(c)) {
+        delimName.len += adv;
+        lexer_advance(st, adv, 1);
+        enderNChars += 1;
+      }
+      else { break; }
+    }
+    // FIXME the following assumes plainStringDelim is one byte
+    ender.len = delimName.len + 3;
+    enderNChars += 3;
+    ender.bytes = malloc(ender.len * sizeof(uint8_t));
+    checkOom(ender.bytes);
+    memcpy(ender.bytes, delimName.bytes, delimName.len);
+    ender.bytes[ender.len-3]
+      = ender.bytes[ender.len-2]
+      = ender.bytes[ender.len-1]
+      = plainStringDelim;
+  }
+  bool indented = false;
+  { // detect indentation flag (skipping whitespace around first backslash)
+    lexError err = {.loc = {.start = st->loc}, .type = LEXERR_TRAILING_SPACE};
+    bool trailingSpace = false;
+    while (true) {
+      uchar c; size_t adv = peekUchar(&c, st->rest);
+      if (isSpaceChar(c)) {
+        lexer_advance(st, adv, 1);
+        trailingSpace = true;
+      }
+      else { break; }
+    }
+    uchar lookahead; size_t adv = peekUchar(&lookahead, st->rest);
+    if (lookahead == escapeLeader) {
+      indented = true;
+      lexer_advance(st, adv, 1);
+      trailingSpace = false;
+      err.loc.start = st->loc;
+      while (true) {
+        uchar c; size_t adv = peekUchar(&c, st->rest);
+        if (isSpaceChar(c)) {
+          lexer_advance(st, adv, 1);
+          trailingSpace = true;
+        }
+        else { break; }
+      }
+    }
+    if (trailingSpace) {
+      err.loc.end = st->loc;
+      lexer_addErr(st, &err);
+    }
+  }
+  { // consume a newline, or else it's a fatal error
+    if (takeNewline(st)) {
+      lexer_delTok(st);
+    }
+    else {
+      lexError err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = LEXERR_HEREDOC_BAD_OPEN};
+      lexer_fatalErr(st, &err);
+    }
+  }
+  uchar indentChar;
+  size_t indentNChars = 0;
+  { // accumulate indentation
+    if (indented) {
+      // determine indentation character
+      filelocPoint indentPosStart = st->loc;
+      uchar c; size_t adv = peekUchar(&c, st->rest);
+      if (isSpaceChar(c)) {
+        lexer_advance(st, adv, 1);
+        indentChar = c;
+        indentNChars += 1;
+      }
+      else {
+        goto badIndentDef;
+      }
+      // count indentation depth
+      while (true) {
+        uchar c; size_t adv = peekUchar(&c, st->rest);
+        if (c == indentChar) {
+          lexer_advance(st, adv, 1);
+          indentNChars += 1;
+        }
+        else if (c == escapeLeader) {
+          lexer_advance(st, adv, 1);
+          indentNChars += 1;
+          if (c == '\t') { // FIXME magic string
+            // tab-based indentation needs an alignment tab after the closing backslash
+            uchar c; size_t adv = peekUchar(&c, st->rest);
+            if (c == '\t') {
+              lexer_advance(st, adv, 1);
+            }
+            else {
+              goto badIndentDef;
+            }
+          }
+          break;
+        }
+        else badIndentDef: {
+          tok.type = TOK_STRING_ERROR;
+          tok.loc.end = st->loc;
+          lexer_addTok(st, &tok);
+          lexError err = {.loc = tok.loc, .type = LEXERR_HEREDOC_BAD_INDENT_DEFINITION};
+          lexer_fatalErr(st, &err);
+          return true;
+        }
+      }
+      // make sure we aren't already mixing indentation
+      if (st->indent.chr == UCHAR_NULL) {
+        st->indent.chr = indentChar;
+        st->indent.established.start = indentPosStart;
+        st->indent.established.end = st->loc;
+      }
+      else if (indentChar != st->indent.chr && !st->indent.knownMixed) {
+        lexError err = {.loc = {.start = indentPosStart, .end = st->loc}, .type = LEXERR_MIXED_INDENTATION};
+        err.as.mixedIndentation.chr = st->indent.chr;
+        err.as.mixedIndentation.loc = st->indent.established;
+        st->indent.knownMixed = true;
+        lexer_addErr(st, &err);
+      }
+    }
+    else {
+      indentChar = UCHAR_NULL;
+    }
+  }
+  // accumulate lines until end marker
+  strBuilder textBuf = strBuilder_new(256);
+  while (true) {
+    { // consume line
+      str tmp = {.len = 0, .bytes = st->rest.bytes};
+      while (true) {
+        uchar c; size_t adv = peekUchar(&c, st->rest);
+        if ( c == UCHAR_NULL
+          || isNewlineChar(c)
+           ) { break; }
+        else {
+          lexer_advance(st, adv, 1);
+          tmp.len += adv;
+        }
+      }
+      strBuilder_append(&textBuf, tmp);
+    }
+    str nlText = {.len = 0, .bytes = st->rest.bytes};
+    { // consume newline
+      if (takeNewline(st)) {
+        lexer_delTok(st);
+        nlText.len = st->rest.bytes - nlText.bytes;
+      }
+      else {
+        free(ender.bytes);
+        tok.type = TOK_STRING_ERROR;
+        tok.loc.end = st->loc;
+        lexer_addTok(st, &tok);
+        lexError err = {.loc = tok.loc, .type = LEXERR_UNCLOSED_HEREDOC};
+        lexer_fatalErr(st, &err);
+        return true;
+      }
+    }
+    { // consume indentation
+      lexError err = {.loc = {.start = st->loc}, .type = LEXERR_HEREDOC_BAD_INDENTATION};
+      for (size_t i = 0; i < indentNChars; ++i) {
+        uchar c; size_t adv = peekUchar(&c, st->rest);
+        if (c == indentChar) {
+          lexer_advance(st, adv, 1);
+        }
+        else if (isNewlineChar(c)) {
+          if (i != 0) {
+            err.type = LEXERR_TRAILING_SPACE;
+            err.loc.end = st->loc;
+            lexer_addErr(st, &err);
+          }
+          break;
+        }
+        else {
+          err.loc.end = st->loc;
+          lexer_addErr(st, &err);
+          break;
+        }
+      }
+    }
+    { // detect end-of-heredoc
+      if (isPrefixOf(st->rest, ender)) {
+        lexer_advance(st, ender.len, enderNChars);
+        break;
+      }
+      else {
+        strBuilder_append(&textBuf, nlText);
+      }
+    }
+  }
+  free(ender.bytes);
+  tok.loc.end = st->loc;
+  tok.as.string.text.len = textBuf.len;
+  tok.as.string.text.bytes = textBuf.bytes;
+  assert(tok.as.string.text.bytes != NULL);
+  lexer_addTok(st, &tok);
+  return true;
+}
+
+/*
 Wrappers are parens, brackets, and braces.
   `[()\[\]{}]`
 */
@@ -794,10 +1101,12 @@ void lexer_raw(lexer* st) {
     if (takeComment(st)) { continue; }
     if (takeSymbol(st)) { continue; }
     if (takeNumber(st)) { continue; }
+    if (takeHeredoc(st)) { continue; }
     if (takeString(st)) { continue; }
     if (takeCodepoint(st)) { continue; }
-    if (takeWrapper(st)) { continue; }
     if (takeSplitter(st)) { continue; }
+    if (takeWrapper(st)) { continue; }
+    if (takeLineContinue(st)) { continue; }
     if (takeEof(st)) { break; }
     if (takeUnexpected(st)) { continue; }
     assert(false);
@@ -820,7 +1129,7 @@ void lexer_incLine(lexer* st, size_t bytes) {
       checkOom(newBuf);
       st->lineIndex.offsets = newBuf;
     }
-    st->lineIndex.offsets[st->lineIndex.len++] = st->rest.bytes - st->startOfInput;
+    st->lineIndex.offsets[st->lineIndex.len++] = st->rest.bytes - st->allInput.bytes;
   }
 }
 
@@ -828,17 +1137,11 @@ void lexer_addTok(lexer* st, const token* t) {
   tokenStream* new = malloc(sizeof(tokenStream));
   checkOom(new);
   new->here = *t;
+  new->here.transparent = false;
+  new->prev = st->outStream_end;
+  if (st->outStream == NULL) { st->outStream = new; } else { st->outStream_end->next = new; }
+  st->outStream_end = new;
   new->next = NULL;
-  if (st->outStream != NULL) {
-    new->prev = st->outStream_end;
-    st->outStream_end->next = new;
-    st->outStream_end = new;
-  }
-  else {
-    new->prev = NULL;
-    st->outStream = new;
-    st->outStream_end = new;
-  }
 }
 
 void lexer_delTok(lexer* st) {
@@ -853,15 +1156,23 @@ void lexer_addErr(lexer* st, const lexError* err) {
   lexErrStream* new = malloc(sizeof(lexErrStream));
   checkOom(new);
   new->here = *err;
+  new->prev = st->errStream_end;
+  if (st->errStream == NULL) { st->errStream = new; } else { st->errStream_end->next = new; }
+  st->errStream_end = new;
   new->next = NULL;
-  if (st->errStream != NULL) {
-    new->prev = st->errStream_end;
-    st->errStream_end->next = new;
-    st->errStream_end = new;
-  }
-  else {
-    new->prev = NULL;
-    st->errStream = new;
-    st->errStream_end = new;
-  }
+}
+
+void lexer_fatalErr(lexer* st, const lexError* err) {
+  st->fatal = malloc(sizeof(lexError));
+  checkOom(st->fatal);
+  *st->fatal = *err;
+}
+
+void lexer_errToWarn(lexer* st, lexErrStream* err) {
+  if (err->prev == NULL) { st->errStream = err->next; } else { err->prev->next = err->next; }
+  if (err->next == NULL) { st->errStream_end = err->prev; } else { err->next->prev = err->prev; }
+  err->prev = st->warnStream_end;
+  if (st->warnStream == NULL) { st->warnStream = err; } else { st->warnStream_end->next = err; }
+  st->warnStream_end = err;
+  err->next = NULL;
 }
