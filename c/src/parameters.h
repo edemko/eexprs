@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 
-#include "lexer/types.h"
-#include "strstuff.h"
+#include "types.h"
+#include "shim/strstuff.h"
 
 
 //////////////////////////////////// Numbers ////////////////////////

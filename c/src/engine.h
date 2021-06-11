@@ -1,36 +1,23 @@
-/*
-The most important types in this module are `token` and `lexer`.
-The `lexError` type is also good to know about.
-Hmmm, these types have actually moved to lexer/types.h
-*/
-#ifndef LEXER_H
-#define LEXER_H
+#ifndef ENGINE_H
+#define ENGINE_H
 
-#include "lexer/types.h"
+#include "types.h"
 #include "parameters.h"
-
 
 
 //////////////////////////////////// Lexer State ////////////////////////////////////
 
 typedef struct tokenStream tokenStream;
-struct tokenStream {
-  token here; // non-null
-  tokenStream* next; // owned, null for end of stream
-  tokenStream* prev; // aliased, null for start of stream
-};
 typedef struct lexErrStream lexErrStream;
-struct lexErrStream {
-  lexError here; // non-null
-  lexErrStream* next; // owned, null for end of stream
-  lexErrStream* prev; // aliased, null for start of stream
-};
+typedef struct eexprStream eexprStream;
 
-typedef struct lexer {
+typedef struct parser {
   str rest; // alias into .allInput
   filelocPoint loc; // use zero-indexed line/col and only translate to 1-indexd for human consumption
-  tokenStream* outStream; // owned, null for empty stream
-  tokenStream* outStream_end; // aliased by `.outStream`, null for empty stream
+  tokenStream* tokStream; // owned, null for empty stream
+  tokenStream* tokStream_end; // aliased by `.tokStream`, null for empty stream
+  eexprStream* eexprStream; // owned, null for empty stream
+  eexprStream* eexprStream_end; // aliased by `.eexprStream`, null for empty stream
   lexErrStream* warnStream; // owned, null for empty stream
   lexErrStream* warnStream_end; // aliased by `.errStream`, null for empty stream
   lexErrStream* errStream; // owned, null for empty stream
@@ -48,8 +35,8 @@ typedef struct lexer {
     size_t len;
     size_t* offsets;
   } lineIndex;
-} lexer;
-
+} parser;
+typedef parser lexer;
 
 //////////////////////////////////// Functions ////////////////////////////////////
 
@@ -58,22 +45,27 @@ Initialize a lexer state from a file.
 On error, returned `lexer.rest.bytes` is `NULL`.
 Ownership of `filename` is borrowed.
 */
-lexer lexer_newFromFile(const char* filename);
+parser parser_newFromFile(const char* filename);
 
-void lexer_raw(lexer* st);
-void lexer_cook(lexer* st);
+// free all internal data structures of the passed parser
+void parser_del(parser* st);
 
-void lexer_advance(lexer* st, size_t bytes, size_t cols);
-void lexer_incLine(lexer* st, size_t bytes);
+void lexer_raw(parser* st);
+void lexer_cook(parser* st);
+void parser_parse(parser* st);
 
-void lexer_addTok(lexer* st, const token* t);
-void lexer_addErr(lexer* st, const lexError* err);
-void lexer_fatalErr(lexer* st, const lexError* err);
+
+// static inline void parser_addTok(parser* st, const token* t) { lexer_addTok(st, t); }
+// static inline void parser_addErr(parser* st, const lexError* err) { lexer_addErr(st, err); }
+// static inline void parser_fatalErr(parser* st, const lexError* err) { lexer_fatalErr(st, err); }
+
+void lexer_insertBefore(parser* st, const token* t, tokenStream* point);
 
 // remove the last token (useful for re-using standard `take*` procedures as part of others)
-void lexer_delTok(lexer* st);
+void lexer_delTok(parser* st);
 
 // move an error into the warnings list
-void lexer_errToWarn(lexer* st, lexErrStream* err);
+void lexer_errToWarn(parser* st, lexErrStream* err);
+// static inline void parser_errToWarn(parser* st, lexErrStream* err) { lexer_errToWarn(st, err); }
 
 #endif

@@ -1,5 +1,5 @@
-#ifndef STRSTUFF_H
-#define STRSTUFF_H
+#ifndef SHIM_STRSTUFF_H
+#define SHIM_STRSTUFF_H
 
 #include <stdint.h>
 #include <stddef.h>

@@ -1,48 +1,9 @@
 #include <assert.h>
 #include <string.h>
 
-#include "common.h"
-#include "lexer.h"
+#include "lexer/util.h"
 #include "parameters.h"
-
-void lexer_init(lexer* it) {
-  str emptyStr = {.len = 0, .bytes = NULL};
-  {
-    it->rest = emptyStr;
-    it->loc.line = 0;
-    it->loc.col = 0;
-  }
-  {
-    it->outStream = NULL;
-    it->outStream_end = NULL;
-    it->warnStream = NULL;
-    it->warnStream_end = NULL;
-    it->errStream = NULL;
-    it->errStream_end = NULL;
-    it->fatal = NULL;
-  }
-  {
-    it->discoveredNewline = NEWLINE_NONE;
-    it->indent.chr = UCHAR_NULL;
-    it->indent.knownMixed = false;
-  }
-  it->allInput = emptyStr;
-  {
-    it->lineIndex.len = 1;
-    it->lineIndex.cap = 256;
-    it->lineIndex.offsets = malloc(sizeof(size_t) * 256);
-    checkOom(it->lineIndex.offsets);
-    it->lineIndex.offsets[0] = 0;
-  }
-}
-
-lexer lexer_newFromFile(const char* filename) {
-  lexer out;
-  lexer_init(&out);
-  out.allInput = readFile(filename);
-  out.rest = out.allInput;
-  return out;
-}
+#include "shim/common.h"
 
 
 //////////////////////////////////// Helper Consumers ////////////////////////////////////
@@ -187,22 +148,23 @@ bool takeWhitespace(lexer* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
   uchar c0; peekUchar(&c0, st->rest);
   bool mixed = false;
-  bool charsWereConsumed = false;
+  size_t advChars = 0;
   while (true) {
     uchar c;
     size_t adv = peekUchar(&c, st->rest);
     if (isSpaceChar(c)) {
       lexer_advance(st, adv, 1);
       mixed |= c != c0;
-      charsWereConsumed = true;
+      advChars += 1;
     }
     else {
       break;
     }
   }
-  assert(charsWereConsumed);
+  assert(advChars != 0);
   tok.loc.end = st->loc;
-  tok.as.space.chr = mixed ? UCHAR_SENTINEL : c0;
+  tok.as.unknownSpace.chr = mixed ? UCHAR_SENTINEL : c0;
+  tok.as.unknownSpace.size = advChars;
   lexer_addTok(st, &tok);
   if (mixed) {
     lexError err =
@@ -225,7 +187,8 @@ bool takeLineContinue(lexer* st) {
     if (lookahead != escapeLeader) { return false; }
     lexer_advance(st, adv, 1);
   }
-  tok.as.space.chr = escapeLeader;
+  tok.as.unknownSpace.chr = escapeLeader;
+  tok.as.unknownSpace.size = 0;
   { // detect trailing whitespace
     lexError err = {.loc = {.start = st->loc}, .type = LEXERR_TRAILING_SPACE};
     bool trailingSpace = false;
@@ -1111,68 +1074,4 @@ void lexer_raw(lexer* st) {
     if (takeUnexpected(st)) { continue; }
     assert(false);
   }
-}
-
-void lexer_advance(lexer* st, size_t bytes, size_t cols) {
-  st->rest.len -= bytes;
-  st->rest.bytes += bytes;
-  st->loc.col += cols;
-}
-void lexer_incLine(lexer* st, size_t bytes) {
-  st->rest.len -= bytes;
-  st->rest.bytes += bytes;
-  st->loc.col = 0;
-  st->loc.line += 1;
-  {
-    if (st->lineIndex.len == st->lineIndex.cap) {
-      size_t* newBuf = realloc(st->lineIndex.offsets, 2 * st->lineIndex.cap);
-      checkOom(newBuf);
-      st->lineIndex.offsets = newBuf;
-    }
-    st->lineIndex.offsets[st->lineIndex.len++] = st->rest.bytes - st->allInput.bytes;
-  }
-}
-
-void lexer_addTok(lexer* st, const token* t) {
-  tokenStream* new = malloc(sizeof(tokenStream));
-  checkOom(new);
-  new->here = *t;
-  new->here.transparent = false;
-  new->prev = st->outStream_end;
-  if (st->outStream == NULL) { st->outStream = new; } else { st->outStream_end->next = new; }
-  st->outStream_end = new;
-  new->next = NULL;
-}
-
-void lexer_delTok(lexer* st) {
-  tokenStream* last = st->outStream_end;
-  assert(last != NULL);
-  st->outStream_end = last->prev;
-  st->outStream_end->next = NULL;
-  free(last);
-}
-
-void lexer_addErr(lexer* st, const lexError* err) {
-  lexErrStream* new = malloc(sizeof(lexErrStream));
-  checkOom(new);
-  new->here = *err;
-  new->prev = st->errStream_end;
-  if (st->errStream == NULL) { st->errStream = new; } else { st->errStream_end->next = new; }
-  st->errStream_end = new;
-  new->next = NULL;
-}
-
-void lexer_fatalErr(lexer* st, const lexError* err) {
-  st->fatal = malloc(sizeof(lexError));
-  checkOom(st->fatal);
-  *st->fatal = *err;
-}
-
-void lexer_errToWarn(lexer* st, lexErrStream* err) {
-  if (err->prev == NULL) { st->errStream = err->next; } else { err->prev->next = err->next; }
-  if (err->next == NULL) { st->errStream_end = err->prev; } else { err->next->prev = err->prev; }
-  err->prev = st->warnStream_end;
-  if (st->warnStream == NULL) { st->warnStream = err; } else { st->warnStream_end->next = err; }
-  st->warnStream_end = err;
-  err->next = NULL;
 }

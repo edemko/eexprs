@@ -1,8 +1,11 @@
-#include "json.h"
+#include "main/json.h"
 
 #include <assert.h>
 #include <inttypes.h>
+#include <stdlib.h>
 
+#include "lexer/util.h"
+#include "parser/util.h"
 #include "shim/bigint.h"
 
 
@@ -149,8 +152,8 @@ void fdumpToken(FILE* fp, const token* tok) {
     case TOK_CHAIN: {
       fprintf(fp, ",\"type\":\"chain\"");
     }; break;
-    case TOK_FAKEFIX: {
-      fprintf(fp, ",\"type\":\"fakefix\"");
+    case TOK_SYNTHFIX: {
+      fprintf(fp, ",\"type\":\"synthfix\"");
     }; break;
     case TOK_SEMICOLON: {
       fprintf(fp, ",\"type\":\"semicolon\"");
@@ -158,14 +161,26 @@ void fdumpToken(FILE* fp, const token* tok) {
     case TOK_COMMA: {
       fprintf(fp, ",\"type\":\"comma\"");
     }; break;
+    case TOK_NEWLINE: {
+      fprintf(fp, ",\"type\":\"newline\"");
+    }; break;
+    case TOK_SPACE: {
+      fprintf(fp, ",\"type\":\"space\"");
+    }; break;
     case TOK_EOF: {
       fprintf(fp, ",\"type\":\"end-of-file\"");
     }; break;
     case TOK_COMMENT: {
       fprintf(fp, ",\"type\":\"comment\"");
     }; break;
+    case TOK_OPEN_INDENT: {
+      fprintf(fp, ",\"type\":\"open-indent\",\"depth\":%zu", tok->as.indent.depth);
+    }; break;
     case TOK_UNKNOWN_SPACE: {
-      fprintf(fp, ",\"type\":\"unknown-space\",\"codepoint\":%"PRIi32, tok->as.space.chr);
+      fprintf(fp, ",\"type\":\"unknown-space\",\"codepoint\":%"PRIi32",\"size\":%zu"
+                , tok->as.unknownSpace.chr
+                , tok->as.unknownSpace.size
+                );
     }; break;
     case TOK_UNKNOWN_NEWLINE: {
       fprintf(fp, ",\"type\":\"unknown-newline\"");
@@ -183,6 +198,44 @@ void fdumpToken(FILE* fp, const token* tok) {
       fprintf(fp, ",\"type\":\"error-string\"");
     }; break;
     case TOK_NONE: { assert(false); }; break;
+  }
+  fprintf(fp, "}");
+}
+
+void fdumpEexpr(FILE* fp, const eexpr* expr) {
+  fprintf(fp, "{\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
+         , expr->loc.start.line + 1
+         , expr->loc.start.col + 1
+         , expr->loc.end.line + 1
+         , expr->loc.end.col + 1
+         );
+  switch (expr->type) {
+    case EEXPR_NUMBER: {
+      {
+        str tmp = bigint_toDecimal(expr->as.number.mantissa);
+        fprintf(fp, ",\"type\":\"number\",\"%s\":", expr->as.number.fractionalDigits ? "value" : "mantissa");
+        fdumpStr(fp, tmp);
+        free(tmp.bytes);
+      }
+      if (expr->as.number.radix != 10) {
+        fprintf(fp, ",\"radix\":%d", expr->as.number.radix);
+      }
+      if (expr->as.number.fractionalDigits != 0 || expr->as.number.exponent.len != 0) {
+        fprintf(fp, ",\"exponent\":{");
+        bool needsComma = false;
+        if (expr->as.number.fractionalDigits != 0) {
+          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", expr->as.number.fractionalDigits);
+          needsComma = true;
+        }
+        if (expr->as.number.exponent.len != 0) {
+          str tmp = bigint_toDecimal(expr->as.number.exponent);
+          fprintf(fp, "%s\"explicit\":", needsComma ? "," : "");
+          fdumpStr(fp, tmp);
+          free(tmp.bytes);
+        }
+        fprintf(fp, "}");
+      }
+    }; break;
   }
   fprintf(fp, "}");
 }
@@ -280,6 +333,18 @@ void fdumpLexErr(FILE* fp, const lexError* err) {
     case LEXERR_NO_TRAILING_NEWLINE: {
       fprintf(fp, ",\"type\":\"no-trailing-newline\"");
     }; break;
+    case LEXERR_SHALLOW_INDENT: {
+      fprintf(fp, ",\"type\":\"shallow-indent\"");
+    }; break;
+    case LEXERR_OFFSIDES: {
+      fprintf(fp, ",\"type\":\"offsides\"");
+    }; break;
+    case LEXERR_BAD_DOT: {
+      fprintf(fp, ",\"type\":\"bad-dot\"");
+    }; break;
+    case LEXERR_CRAMMED_TOKENS: {
+      fprintf(fp, ",\"type\":\"crammed-tokens\"");
+    }; break;
   }
   fprintf(fp, "}");
 }
@@ -300,6 +365,20 @@ void fdumpTokenStream(FILE* fp, const char* indent, const tokenStream* root) {
   }
 }
 
+void fdumpEexprStream(FILE* fp, const char* indent, const eexprStream* eexprs) {
+  if (eexprs == NULL || eexprs->len == 0) {
+    fprintf(fp, " []");
+  }
+  else {
+    char* separator = "[ ";
+    for (size_t i = 0; i < eexprs->len; ++i) {
+      fprintf(fp, "\n%s%s", indent, separator);
+      fdumpEexpr(fp, &eexprs->buf[i]);
+      separator = ", ";
+    }
+    fprintf(fp, "\n%s]", indent);
+  }
+}
 
 void fdumpLexErrStream(FILE* fp, const char* indent, const lexErrStream* root) {
   if (root == NULL) {

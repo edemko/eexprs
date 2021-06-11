@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "common.h"
+#include "shim/common.h"
 
 
 bigint bigint_new() {

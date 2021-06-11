@@ -1,11 +1,11 @@
 # Eexprs in C
 
 The Haskell implementation has gotten away from me a bit I think.
-Also, it's not as (easily) portable between languages as a C version woudl be.
+Also, it's not as (easily) portable between languages as a C version would be.
 A C version would help me constrain a) memory usage and b) type-level cleverness.
 
 Also, as I go I'll be documenting every grammar rule in comments, since the C version parser be as "readable" as the Haskell combinator version.
-I hope these vomments can make it directly into some documentation.
+I hope these comments can make it directly into some documentation.
 
 ## Building
 
@@ -16,7 +16,16 @@ I hope these vomments can make it directly into some documentation.
 The source is compliant C99, but the build script assumes gcc.
 It's not hard to edit the script as-needed.
 
-## Structure
+## Contributing
+
+If you run across something you think should parse but doesn't, open an issue and include the misbehaving input.
+I really don't care if it's a minimal example, I'll take as many test cases as I can get my hands on.
+
+If you've got some code to contribute, submit a pull request.
+Be aware that this project is BSD-3 licensed, so do not open a pull request unless you consent to have your code also under this same license.
+
+The source tree contains `README.md` files that explain the structure of each directory.
+
 
 I'm working on the lexer right now.
 The most important file here is `lexer.c`, which contains everything to detect and consume each token type and produce from errors/warnings.

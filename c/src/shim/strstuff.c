@@ -1,10 +1,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include "common.h"
-#include "string.h"
-#include "strstuff.h"
+#include "shim/common.h"
+#include "shim/strstuff.h"
 
 
 str readFile(const char* filename) {

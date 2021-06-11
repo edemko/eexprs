@@ -1,5 +1,5 @@
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef SHIM_COMMON_H
+#define SHIM_COMMON_H
 
 #include <stddef.h>
 #include <stdio.h>
