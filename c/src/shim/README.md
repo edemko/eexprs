@@ -16,3 +16,8 @@ I need a limited ability to manipulate Unicode.
 Namely, I store all strings as UTF-8 (since that is the only encoding eexprs accept), so I need a way to pop the variable-width characters off the front of a string, as well as encode a unicode character `uchar` to a plain bytestring.
 I've also added a handful of other unicode-aware functions as I needed them.
 Beyond that however, UTF-8 can be usually be "blindly" worked with using plain C string functions.
+
+I find myself using doubly-linked lists a lot (or needing a sequence data structure, and a doubly-linked list will do).
+This is implemented in a type-safe, polymorphic way in `dllist.{h,c}`.
+See `dllist.h` for usage.
+Similarly, I found I needed growing arrays several times, and for this there is `dynarr.*`.

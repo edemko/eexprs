@@ -69,9 +69,12 @@ bool isDigit(const radixParams* radix, uchar c) {
   return ucharElem(c, radix->digits);
 }
 
+const uchar positiveSign = '+';
+const uchar negativeSign = '-';
 bool isSign(uchar c) {
-  return c == '+' || c == '-';
+  return c == positiveSign || c == negativeSign;
 }
+
 
 const uchar digitSep = '_';
 const uchar digitPoint = '.';
@@ -200,10 +203,10 @@ uchar sixHexEscapeLeader = 'U';
 
 //////////////////////////////////// Whitespace ////////////////////////
 
+const uchar spaceChar = ' ';
+const uchar tabChar = '\t';
 bool isSpaceChar(uchar c) {
-  return (' ' == c)
-       | ('\t' == c)
-       ;
+  return (spaceChar == c) | (tabChar == c);
 }
 
 bool isNewlineChar(uchar c) {
@@ -276,25 +279,22 @@ struct untilEol untilEol(str in) {
 
 //////////////////////////////////// Punctuation ////////////////////////
 
-bool isWrapChar(uchar c) {
-  return (c == '(')
-       | (c == ')')
-       | (c == '[')
-       | (c == ']')
-       | (c == '{')
-       | (c == '}')
-       ;
-}
-uchar openWrapper(uchar c) {
-  switch (c) {
-    case '(': return '(';
-    case ')': return '(';
-    case '[': return '[';
-    case ']': return '[';
-    case '{': return '{';
-    case '}': return '{';
-    default: assert(false);
+wrapType isWrapChar(uchar c) {
+  switch(c) {
+    case '(': return WRAP_PAREN;
+    case ')': return WRAP_PAREN;
+    case '[': return WRAP_BRACK;
+    case ']': return WRAP_BRACK;
+    case '{': return WRAP_BRACE;
+    case '}': return WRAP_BRACE;
+    default: return WRAP_NULL;
   }
+}
+bool isOpenWrap(uchar c) {
+  return (c == '(')
+       | (c == '[')
+       | (c == '{')
+       ;
 }
 
 splitter decodeSplitter(uchar c[2]) {

@@ -25,8 +25,10 @@ typedef struct radixParams {
 extern const radixParams radices[]; // terminated with a `.radix == 0` entriy
 extern const radixParams* defaultRadix;
 
-// TODO bases (leader letters, exponent letters)
 bool isDigit(const radixParams* base, uchar c);
+
+extern const uchar positiveSign;
+extern const uchar negativeSign;
 bool isSign(uchar c);
 
 extern const uchar digitSep;
@@ -74,6 +76,8 @@ extern uchar sixHexEscapeLeader;
 
 //////////////////////////////////// Whitespace ////////////////////////
 
+extern const uchar spaceChar;
+extern const uchar tabChar;
 bool isSpaceChar(uchar c);
 bool isNewlineChar(uchar c);
 
@@ -106,8 +110,8 @@ struct untilEol untilEol(str in);
 
 //////////////////////////////////// Punctuation ////////////////////////
 
-bool isWrapChar(uchar c);
-uchar openWrapper(uchar c);
+wrapType isWrapChar(uchar c);
+bool isOpenWrap(uchar c);
 
 typedef enum splitterType {
   SPLITTER_NONE,

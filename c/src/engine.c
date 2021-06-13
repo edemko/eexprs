@@ -13,24 +13,17 @@ void parser_init(parser* it) {
     it->loc.col = 0;
   }
   {
-    it->tokStream = NULL;
-    it->tokStream_end = NULL;
-    it->warnStream = NULL;
-    it->warnStream_end = NULL;
-    it->errStream = NULL;
-    it->errStream_end = NULL;
-    it->fatal = NULL;
-  }
-  {
-    it->eexprStream = malloc(sizeof(eexprStream) + 128 * sizeof(eexpr));
-    checkOom(it->eexprStream);
-    it->eexprStream->cap = 128;
-    it->eexprStream->len = 0;
+    dynarr_init(eexprPtr)(&it->eexprStream, 64);
+    it->tokStream = dllist_empty(token)();
+    it->warnStream = dllist_empty(eexprError)();
+    it->errStream = dllist_empty(eexprError)();
+    it->fatal.type = EEXPRERR_NOERROR;
   }
   {
     it->discoveredNewline = NEWLINE_NONE;
     it->indent.chr = UCHAR_NULL;
     it->indent.knownMixed = false;
+    dynarr_init(openWrap)(&it->wrapStack, 30);
   }
   it->allInput = emptyStr;
   {
@@ -51,54 +44,35 @@ parser parser_newFromFile(const char* filename) {
 }
 
 
-void parser_del(lexer* st) {
-  if (st->lineIndex.offsets != NULL) {
-    free(st->lineIndex.offsets);
-    st->lineIndex.offsets = NULL;
-    st->lineIndex.cap = 0;
-    st->lineIndex.len = 0;
+void parser_del(lexer* it) {
+  if (it->lineIndex.offsets != NULL) {
+    free(it->lineIndex.offsets);
+    it->lineIndex.offsets = NULL;
+    it->lineIndex.cap = 0;
+    it->lineIndex.len = 0;
   }
-  if (st->allInput.bytes != NULL) {
-    free(st->allInput.bytes);
-    st->allInput.bytes = NULL;
-    st->allInput.len = 0;
+  if (it->allInput.bytes != NULL) {
+    free(it->allInput.bytes);
+    it->allInput.bytes = NULL;
+    it->allInput.len = 0;
     // .rest should aliased .allInput
-    st->rest.bytes = NULL;
-    st->rest.len = 0;
+    it->rest.bytes = NULL;
+    it->rest.len = 0;
   }
-  if (st->fatal != NULL) {
-    free(st->fatal);
-    st->fatal = NULL;
-  }
-  if (st->errStream != NULL) {
-    lexErrStream_del(st->errStream);
-    st->errStream = NULL;
-    st->errStream_end = NULL;
-  }
-  if (st->warnStream != NULL) {
-    lexErrStream_del(st->warnStream);
-    st->warnStream = NULL;
-    st->warnStream_end = NULL;
-  }
-  if (st->eexprStream != NULL) {
-    eexprStream_del(st->eexprStream);
-    free(st->eexprStream);
-    st->eexprStream = NULL;
-  }
-  if (st->tokStream != NULL) {
-    tokenStream_del(st->tokStream);
-    st->tokStream = NULL;
-    st->tokStream_end = NULL;
-  }
-}
+  dynarr_deinit(openWrap)(&it->wrapStack);
+  // WARNING I'm assuming there's no owned pointer data in eexprError
+  it->fatal.type = EEXPRERR_NOERROR;
+  dllist_del(eexprError)(&it->errStream);
+  dllist_del(eexprError)(&it->warnStream);
 
-void eexpr_deinit(eexpr* expr) {
-  if (expr == NULL) { return; }
-  switch (expr->type) {
-    case EEXPR_NUMBER: {
-      free(expr->as.number.mantissa.buf);
-      free(expr->as.number.exponent.buf);
-    }; break;
-    // TODO free more owned pointers
+  for (dllistNode(token)* node = it->tokStream.start; node != NULL; node = node->next) {
+    token_deinit(&node->here);
   }
+  dllist_del(token)(&it->tokStream);
+
+  for (size_t i = 0; i < it->eexprStream.len; ++i) {
+    eexpr_deinit(it->eexprStream.data[i]);
+    free(it->eexprStream.data[i]);
+  }
+  dynarr_deinit(eexprPtr)(&it->eexprStream);
 }

@@ -6,27 +6,15 @@
 #include "types.h"
 
 
-//////////////////////////////////// Parser State ////////////////////////////////////
-
-struct eexprStream {
-  size_t cap;
-  size_t len;
-  eexpr buf[];
-};
-
-void eexprStream_del(eexprStream* strm);
-
-
 //////////////////////////////////// Functions ////////////////////////////////////
 
+// both parser_peek and parser_pop destroy transparent tokens from the start of the token stream, along with their token data.
+
+// returns a borrowed pointer to the first non-transparent token
 token* parser_peek(parser* st);
-// assumes that someone else has taken ownership of the token's data
+// Removes the first non-transparent token from the stream.
+// It does not free any token data, so you must assume ownership of the popped token's data before popping.
 void parser_pop(parser* st);
-
-void parser_addEexpr(parser* st, const eexpr* expr);
-
-static inline void parser_addErr(parser* st, const lexError* err) { lexer_addErr(st, err); }
-static inline void parser_fatalErr(parser* st, const lexError* err) { lexer_fatalErr(st, err); }
 
 
 #endif

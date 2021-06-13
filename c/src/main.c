@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "lexer/util.h"
-#include "main/json.h"
+#include "app/json.h"
 
 void die(const char* msg) {
   fprintf(stderr, "%s\n", msg);
@@ -19,7 +19,7 @@ typedef struct options {
   char* inFilename;
   struct {
     char* original;
-    // char* lineIndex; // TODO?
+    char* lineIndex;
     char* rawTokens;
     char* tokens;
     char* eexprs;
@@ -34,25 +34,25 @@ typedef struct options {
 } options;
 
 void relevelErrors(lexer* st, options opts) {
-  for (lexErrStream* strm = st->errStream; strm != NULL; ) {
+  for (dllistNode(eexprError)* strm = st->errStream.start; strm != NULL; /*increment in body*/) {
     level l;
     switch (strm->here.type) {
-      case LEXERR_MIXED_SPACE: { l = opts.levels.mixedSpace; } break;
-      case LEXERR_MIXED_NEWLINES: { l = opts.levels.mixedNewlines; } break;
-      case LEXERR_BAD_DIGIT_SEPARATOR: { l = opts.levels.badDigitSeparator; } break;
-      case LEXERR_TRAILING_SPACE: { l = opts.levels.trailingSpace; } break;
-      case LEXERR_NO_TRAILING_NEWLINE: { l = opts.levels.noTrailingNewline; } break;
+      case EEXPRERR_MIXED_SPACE: { l = opts.levels.mixedSpace; } break;
+      case EEXPRERR_MIXED_NEWLINES: { l = opts.levels.mixedNewlines; } break;
+      case EEXPRERR_BAD_DIGIT_SEPARATOR: { l = opts.levels.badDigitSeparator; } break;
+      case EEXPRERR_TRAILING_SPACE: { l = opts.levels.trailingSpace; } break;
+      case EEXPRERR_NO_TRAILING_NEWLINE: { l = opts.levels.noTrailingNewline; } break;
       default: { l = ERROR; } break;
     }
     switch (l) {
       case ERROR: {}; break;
       case WARN: {
-        lexErrStream* next = strm->next;
-        lexer_errToWarn(st, strm);
+        dllistNode(eexprError)* next = strm->next;
+        dllist_moveAfter(eexprError)(&st->warnStream, NULL, &st->errStream, strm);
         strm = next; continue;
       }; break;
       case IGNORE: {
-        lexErrStream* next = strm->next;
+        dllistNode(eexprError)* next = strm->next;
         if (strm->prev != NULL) { strm->prev->next = strm->next; }
         free(strm);
         strm = next; continue;
@@ -71,11 +71,11 @@ void dumpLexer(char* filename, const lexer* st, const options* opts) {
   fprintf(fp, "\n, \"lineOffsets\": ");
   fdumpLineIndex(fp, &st->lineIndex);
   fprintf(fp, "\n, \"tokens\":");
-  fdumpTokenStream(fp, "  ", st->tokStream);
+  fdumpTokenStream(fp, "  ", st->tokStream.start);
   fprintf(fp, "\n, \"warnings\":");
-  fdumpLexErrStream(fp, "  ", st->warnStream);
+  fdumpErrorStream(fp, "  ", st->warnStream.start);
   fprintf(fp, "\n, \"errors\":");
-  fdumpLexErrStream(fp, "  ", st->errStream);
+  fdumpErrorStream(fp, "  ", st->errStream.start);
   fprintf(fp, "\n}\n");
   fclose(fp);
 }
@@ -87,11 +87,11 @@ void dumpParser(char* filename, const lexer* st, const options* opts) {
   fprintf(fp, "\n, \"lineOffsets\": ");
   fdumpLineIndex(fp, &st->lineIndex);
   fprintf(fp, "\n, \"eexprs\":");
-  fdumpEexprStream(fp, "  ", st->eexprStream);
+  fdumpEexprStream(fp, "  ", &st->eexprStream);
   fprintf(fp, "\n, \"warnings\":");
-  fdumpLexErrStream(fp, "  ", st->warnStream);
+  fdumpErrorStream(fp, "  ", st->warnStream.start);
   fprintf(fp, "\n, \"errors\":");
-  fdumpLexErrStream(fp, "  ", st->errStream);
+  fdumpErrorStream(fp, "  ", st->errStream.start);
   fprintf(fp, "\n}\n");
   fclose(fp);
 }
@@ -101,6 +101,7 @@ options parseOpts(int argc, char** argv) {
     { .inFilename = NULL
     , .dump =
       { .original = NULL
+      , .lineIndex = NULL
       , .rawTokens = NULL
       , .tokens = NULL
       , .eexprs = NULL
@@ -157,6 +158,7 @@ options parseOpts(int argc, char** argv) {
         char** filename_p = NULL;
         if (false) { assert(false); }
         else if (!strcmp(argv[i], "original")) { filename_p = &opts.dump.original; }
+        else if (!strcmp(argv[i], "dumpLineIndex")) { filename_p = &opts.dump.lineIndex; }
         else if (!strcmp(argv[i], "dumpRawTokens")) { filename_p = &opts.dump.rawTokens; }
         else if (!strcmp(argv[i], "dumpTokens")) { filename_p = &opts.dump.tokens; }
         else if (!strcmp(argv[i], "dumpEexprs")) { filename_p = &opts.dump.eexprs; }
@@ -213,53 +215,67 @@ int main(int argc, char** argv) {
     fwrite(st.allInput.bytes, 1/*byte per element*/, st.allInput.len/*elements*/, fp);
     fclose(fp);
   }
+  if (opts.dump.lineIndex != NULL) {
+    FILE* fp = fopen(opts.dump.lineIndex, "w");
+    fprintf(fp, "{ \"filename\":");
+    fdumpCStr(stdout, opts.inFilename);
+    fprintf(fp, "\n, \"lineIndex\":");
+    fdumpLineIndex(fp, &st.lineIndex);
+    fprintf(fp, "\n}");
+    fclose(fp);
+  }
 
   bool parsed = false;
   lexer_raw(&st);
-  if (st.fatal != NULL) {
-    lexer_addErr(&st, st.fatal);
-    free(st.fatal);
-    st.fatal = NULL;
-  }
   relevelErrors(&st, opts);
+  if (st.fatal.type != EEXPRERR_NOERROR) {
+    dllist_insertAfter(eexprError)(&st.errStream, NULL, &st.fatal);
+    st.fatal.type = EEXPRERR_NOERROR;
+  }
   dumpLexer(opts.dump.rawTokens, &st, &opts);
-  if (st.errStream != NULL) { goto finish; }
+  if (st.errStream.start != NULL) { goto finish; }
 
   lexer_cook(&st);
   relevelErrors(&st, opts);
   dumpLexer(opts.dump.tokens, &st, &opts);
-  if (st.errStream != NULL) { goto finish; }
+  if (st.errStream.start != NULL) { goto finish; }
 
+  assert(st.tokStream.start != NULL);
   parser_parse(&st);
   relevelErrors(&st, opts);
+  if (st.fatal.type != EEXPRERR_NOERROR) {
+    dllist_insertAfter(eexprError)(&st.errStream, NULL, &st.fatal);
+    st.fatal.type = EEXPRERR_NOERROR;
+  }
   dumpParser(opts.dump.eexprs, &st, &opts);
   parsed = true;
-  if (st.errStream != NULL) { goto finish; }
+  if (st.errStream.start != NULL) { goto finish; }
 
   // report warnings and errors, exiting if there are any errors
   finish:
-  if (parsed && st.errStream == NULL) {
+  if (parsed && st.errStream.start == NULL) {
     fprintf(stdout, "{ \"filename\": ");
     fdumpCStr(stdout, opts.inFilename);
     fprintf(stdout, "\n, \"eexprs\":");
-    fdumpEexprStream(stdout, "  ", st.eexprStream);
-    fprintf(stdout, "\n, \"warnings\":");
-    fdumpLexErrStream(stdout, "  ", st.warnStream);
+    fdumpEexprStream(stdout, "  ", &st.eexprStream);
+    if (st.warnStream.start != NULL) {
+      fprintf(stdout, "\n, \"warnings\":");
+      fdumpErrorStream(stdout, "  ", st.warnStream.start);
+    }
     fprintf(stdout, "\n}\n");
-
   }
-  if (st.errStream != NULL || st.warnStream != NULL) {
+  if (st.errStream.start != NULL || st.warnStream.start != NULL) {
     fprintf(stderr, "{ \"filename\": ");
     fdumpCStr(stderr, opts.inFilename);
     fprintf(stderr, "\n, \"warnings\":");
-    fdumpLexErrStream(stderr, "  ", st.warnStream);
-    if (st.errStream != NULL) {
+    fdumpErrorStream(stderr, "  ", st.warnStream.start);
+    if (st.errStream.start != NULL) {
       fprintf(stderr, "\n, \"errors\":");
-      fdumpLexErrStream(stderr, "  ", st.errStream);
+      fdumpErrorStream(stderr, "  ", st.errStream.start);
     }
     fprintf(stderr, "\n}\n");
   }
-  int exitCode = st.errStream == NULL ? 0 : 1;
+  int exitCode = st.errStream.start == NULL ? 0 : 1;
   parser_del(&st);
   return exitCode;
 }

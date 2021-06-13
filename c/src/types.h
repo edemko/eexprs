@@ -18,7 +18,16 @@ typedef struct fileloc {
 } fileloc;
 
 
+//////////////////////////////////// Forward Declarations ////////////////////////
+
+typedef struct eexpr eexpr;
+
+
 //////////////////////////////////// Payloads ////////////////////////
+
+typedef struct eexprSymbol {
+  str text; // owned
+} eexprSymbol;
 
 typedef struct eexprNumber {
   bigint mantissa; // owned
@@ -27,24 +36,71 @@ typedef struct eexprNumber {
   bigint exponent; // owned
 } eexprNumber;
 
+typedef uchar eexprCodepoint;
+
+typedef struct strTemplPart {
+  eexpr* expr;
+  str textAfter;
+} strTemplPart;
+#define TYPE strTemplPart
+#include "shim/dynarr.h"
+typedef struct eexprStrTempl {
+  str text1;
+  dynarr(strTemplPart) parts;
+} eexprStrTempl;
+
+// these are just so dynarr can be given a type identifier
+typedef eexpr* eexprPtr;
+#define TYPE eexprPtr
+#include "shim/dynarr.h"
+// typedef (eexpr*[2]) eexprPair;
+
 
 //////////////////////////////////// Eexprs ////////////////////////
 
-typedef struct eexpr {
+struct eexpr {
   fileloc loc;
   enum eexprType {
-    EEXPR_NUMBER
-    // TODO
+    EEXPR_SYMBOL,
+    EEXPR_NUMBER,
+    EEXPR_CODEPOINT,
+    EEXPR_STRING,
+    EEXPR_PAREN,
+    EEXPR_BRACK,
+    EEXPR_BRACE,
+    EEXPR_BLOCK,
+    EEXPR_PREDOT,
+    EEXPR_CHAIN,
+    EEXPR_SPACE,
+    EEXPR_ELLIPSIS,
+    EEXPR_COLON,
+    EEXPR_COMMA,
+    EEXPR_SEMICOLON
   } type;
   union eexprData {
+    eexprSymbol symbol;
     eexprNumber number;
+    eexprCodepoint codepoint;
+    eexprStrTempl string;
+    eexpr* wrap; // paren, bracket, brace, predot
+    dynarr(eexprPtr) list; // chain, space, comma, semicolon, block
+    eexpr* pair[2]; // non-nullable pointers
+    eexpr* ellipsis[2]; // nullable pointers
   } as;
-} eexpr;
+};
 
-void eexpr_deinit();
+void eexpr_deinit(eexpr* expr);
 
 
 //////////////////////////////////// Tokens ////////////////////////
+
+typedef enum wrapType {
+  WRAP_NULL,
+  WRAP_PAREN,
+  WRAP_BRACK,
+  WRAP_BRACE,
+  WRAP_BLOCK
+} wrapType;
 
 typedef enum strSpliceType {
   STRSPLICE_PLAIN,
@@ -61,11 +117,11 @@ typedef struct token {
     TOK_CODEPOINT,
     TOK_STRING,
     TOK_SYMBOL,
-    TOK_WRAPPER,
+    TOK_WRAP,
     TOK_COLON,
     TOK_ELLIPSIS,
     TOK_CHAIN,
-    TOK_SYNTHFIX,
+    TOK_PREDOT,
     TOK_SEMICOLON,
     TOK_COMMA,
     TOK_NEWLINE,
@@ -91,20 +147,16 @@ typedef struct token {
       size_t size;
     } unknownSpace;
     eexprNumber number;
-    struct token_codepoint {
-      uchar chr;
-    } codepoint;
+    eexprCodepoint codepoint;
     struct token_string {
       str text; // owned
       strSpliceType splice;
     } string;
-    struct token_symbol {
-      str text; // owned
-    } symbol;
-    struct token_wrapper {
-      uchar chr;
+    eexprSymbol symbol;
+    struct token_wrap {
+      wrapType type;
       bool isOpen;
-    } wrapper;
+    } wrap;
     struct token_indent {
       size_t depth;
     } indent; // for both open-indent and indentation
@@ -115,41 +167,48 @@ typedef struct token {
   bool transparent;
 } token;
 
+void token_deinit(token* tok);
+
 
 //////////////////////////////////// Errors ////////////////////////
 
-typedef struct lexError {
+typedef struct eexprError {
   fileloc loc;
-  enum lexErrorType {
-    LEXERR_NOERROR, // only for use as a sentinel
-    LEXERR_BAD_BYTES,
-    LEXERR_BAD_CHAR,
-    LEXERR_MIXED_SPACE,
-    LEXERR_MIXED_NEWLINES,
-    LEXERR_MISSING_FRACTIONAL_PART,
-    LEXERR_BAD_DIGIT_SEPARATOR,
-    LEXERR_MISSING_EXPONENT,
-    LEXERR_BAD_EXPONENT_SIGN,
-    LEXERR_BAD_CODEPOINT, // empty or badly-escaped codepoint
-    LEXERR_BAD_ESCAPE_CHAR,
-    LEXERR_BAD_ESCAPE_CODE,
-    LEXERR_UNICODE_OVERFLOW,
-    LEXERR_UNCLOSED_CODEPOINT,
-    LEXERR_BAD_STRING_CHAR,
-    LEXERR_MISSING_LINE_PICKUP,
-    LEXERR_UNCLOSED_STRING,
-    LEXERR_HEREDOC_BAD_OPEN,
-    LEXERR_HEREDOC_BAD_INDENT_DEFINITION,
-    LEXERR_HEREDOC_BAD_INDENTATION,
-    LEXERR_UNCLOSED_HEREDOC,
-    LEXERR_MIXED_INDENTATION,
+  enum eexprErrorType {
+    EEXPRERR_NOERROR, // only for use as a sentinel
+    EEXPRERR_BAD_BYTES,
+    EEXPRERR_BAD_CHAR,
+    EEXPRERR_MIXED_SPACE,
+    EEXPRERR_MIXED_NEWLINES,
+    EEXPRERR_BAD_DIGIT_SEPARATOR,
+    EEXPRERR_MISSING_EXPONENT,
+    EEXPRERR_BAD_EXPONENT_SIGN,
+    EEXPRERR_BAD_CODEPOINT, // empty or badly-escaped codepoint
+    EEXPRERR_BAD_ESCAPE_CHAR,
+    EEXPRERR_BAD_ESCAPE_CODE,
+    EEXPRERR_UNICODE_OVERFLOW,
+    EEXPRERR_UNCLOSED_CODEPOINT,
+    EEXPRERR_BAD_STRING_CHAR,
+    EEXPRERR_MISSING_LINE_PICKUP,
+    EEXPRERR_UNCLOSED_STRING,
+    EEXPRERR_HEREDOC_BAD_OPEN,
+    EEXPRERR_HEREDOC_BAD_INDENT_DEFINITION,
+    EEXPRERR_HEREDOC_BAD_INDENTATION,
+    EEXPRERR_UNCLOSED_HEREDOC,
+    EEXPRERR_MIXED_INDENTATION,
     // context-sensitive errors
-    LEXERR_TRAILING_SPACE,
-    LEXERR_NO_TRAILING_NEWLINE,
-    LEXERR_SHALLOW_INDENT,
-    LEXERR_OFFSIDES,
-    LEXERR_BAD_DOT,
-    LEXERR_CRAMMED_TOKENS
+    EEXPRERR_TRAILING_SPACE,
+    EEXPRERR_NO_TRAILING_NEWLINE,
+    EEXPRERR_SHALLOW_INDENT,
+    EEXPRERR_OFFSIDES,
+    EEXPRERR_BAD_DOT,
+    EEXPRERR_CRAMMED_TOKENS,
+    // parser errors
+    EEXPRERR_UNBALANCED_WRAP,
+    EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT,
+    EEXPRERR_MISSING_TEMPLATE_EXPR,
+    EEXPRERR_MISSING_CLOSE_TEMPLATE,
+    EEXPRERR_EXPECT_CHAIN_AFTER_SPACE
   } type;
   union errorData {
     uchar badChar;
@@ -158,12 +217,16 @@ typedef struct lexError {
     uchar badEscapeCode[6]; // if <6 uchars, then pad at start with UCHAR_NULL
     uchar unicodeOverflow;
     uchar badStringChar;
-    struct lexError_mixedIndentation {
+    struct eexprError_mixedIndentation {
       uchar chr;
       fileloc loc;
     } mixedIndentation;
+    struct eexprError_unbalancedWrap {
+      wrapType type; // what close wrap was left open, or WRAP_NULL for start-of-file
+      fileloc loc; // location where the unmatched open wrap is
+    } unbalancedWrap;
   } as;
-} lexError;
+} eexprError;
 
 
 #endif

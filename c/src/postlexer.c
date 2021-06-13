@@ -5,7 +5,7 @@
 #include "shim/common.h"
 
 
-tokenStream* getPrev(tokenStream* tok) {
+dllistNode(token)* getPrev(dllistNode(token)* tok) {
   if (tok == NULL) { return NULL; }
   do {
     tok = tok->prev;
@@ -13,7 +13,7 @@ tokenStream* getPrev(tokenStream* tok) {
   return tok;
 }
 
-tokenStream* getNext(tokenStream* tok) {
+dllistNode(token)* getNext(dllistNode(token)* tok) {
   if (tok == NULL) { return NULL; }
   do {
     tok = tok->next;
@@ -25,15 +25,15 @@ tokenStream* getNext(tokenStream* tok) {
   `^(newline | start-of-file) end-of-file --> error`
 */
 void ensureTrailingNewline(lexer* st) {
-  tokenStream* ultimate = st->tokStream_end;
+  dllistNode(token)* ultimate = st->tokStream.end;
   assert(ultimate != NULL);
   assert(ultimate->here.type == TOK_EOF);
-  tokenStream* penultimate = getPrev(ultimate);
+  dllistNode(token)* penultimate = getPrev(ultimate);
   if ( penultimate != NULL
     && penultimate->here.type != TOK_UNKNOWN_NEWLINE
      ) {
-    lexError err = {.loc = ultimate->here.loc, .type = LEXERR_NO_TRAILING_NEWLINE};
-    lexer_addErr(st, &err);
+    eexprError err = {.loc = ultimate->here.loc, .type = EEXPRERR_NO_TRAILING_NEWLINE};
+    dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
   }
 }
 
@@ -43,23 +43,24 @@ void ensureTrailingNewline(lexer* st) {
   `line-continue space -> space`
 */
 void ignoreTrailingStuff(lexer* st) {
-  for (tokenStream* strm = st->tokStream; strm != NULL; strm = strm->next) {
+  for (dllistNode(token)* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
     if (strm->here.transparent) { continue; }
     // ignore (and create errors for) whitespace at the end of lines
     if (strm->here.type == TOK_UNKNOWN_SPACE) {
+      assert(strm->next != NULL);
       if ( strm->next->here.type == TOK_UNKNOWN_NEWLINE
         || strm->next->here.type == TOK_EOF
          ) {
         strm->here.transparent = true;
-        lexError err = {.loc = strm->here.loc, .type = LEXERR_TRAILING_SPACE};
-        lexer_addErr(st, &err);
+        eexprError err = {.loc = strm->here.loc, .type = EEXPRERR_TRAILING_SPACE};
+        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
       }
       else if (strm->here.as.unknownSpace.chr == escapeLeader) {
-        tokenStream* prev = getPrev(strm);
+        dllistNode(token)* prev = getPrev(strm);
         if (prev->here.type == TOK_UNKNOWN_SPACE) {
           prev->here.transparent = true;
         }
-        tokenStream* next = getNext(strm);
+        dllistNode(token)* next = getNext(strm);
         if (next->here.type == TOK_UNKNOWN_SPACE) {
           strm->here.transparent = true;
         }
@@ -79,10 +80,10 @@ void ignoreTrailingStuff(lexer* st) {
   `newline end-of-line --> end-of-line`
 */
 void ignoreBlankLines(lexer* st) {
-  for (tokenStream* strm = st->tokStream; strm != NULL; strm = strm->next) {
+  for (dllistNode(token)* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
     if (strm->here.transparent) { continue; }
     if (strm->here.type == TOK_UNKNOWN_NEWLINE) {
-      tokenStream* next = getNext(strm);
+      dllistNode(token)* next = getNext(strm);
       if ( next->here.type == TOK_UNKNOWN_NEWLINE
         || next->here.type == TOK_EOF
          ) {
@@ -97,20 +98,20 @@ void ignoreBlankLines(lexer* st) {
 
 /*
   `^(space | start-of-line)_1 unknown-dot ^(space | end-of-line)_2 --> \1 chain \2`
-  `space_1 unknown-dot ^(space | end-of-line)_2 --> \1 synthfix \2`
+  `space_1 unknown-dot ^(space | end-of-line)_2 --> \1 predot \2`
   `unknown-dot --> error`
 */
 void disambiguateDots(lexer* st) {
-  for (tokenStream* strm = st->tokStream; strm != NULL; strm = strm->next) {
+  for (dllistNode(token)* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
     if (strm->here.transparent) { continue; }
     if (strm->here.type == TOK_UNKNOWN_DOT) {
-      tokenStream* prev = getPrev(strm);
+      dllistNode(token)* prev = getPrev(strm);
       bool spaceBefore = prev            == NULL
                       || prev->here.type == TOK_NEWLINE
                       || prev->here.type == TOK_SPACE
                        ;
       bool trueSpaceBefore = prev != NULL && prev->here.type == TOK_SPACE;
-      tokenStream* next = getNext(strm);
+      dllistNode(token)* next = getNext(strm);
       bool spaceAfter = next->here.type == TOK_EOF
                      || next->here.type == TOK_NEWLINE
                      || next->here.type == TOK_SPACE
@@ -119,11 +120,11 @@ void disambiguateDots(lexer* st) {
         strm->here.type = TOK_CHAIN;
       }
       else if (trueSpaceBefore && !spaceAfter) {
-        strm->here.type = TOK_SYNTHFIX;
+        strm->here.type = TOK_PREDOT;
       }
       else {
-        lexError err = {.loc = strm->here.loc, .type = LEXERR_BAD_DOT};
-        lexer_addErr(st, &err);
+        eexprError err = {.loc = strm->here.loc, .type = EEXPRERR_BAD_DOT};
+        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
       }
     }
   }
@@ -134,12 +135,12 @@ void disambiguateDots(lexer* st) {
   `unknown-colon ^end-of-line --> colon
 */
 void disambiguateColons(lexer* st) {
-  for (tokenStream* strm = st->tokStream; strm != NULL; strm = strm->next) {
+  for (dllistNode(token)* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
     if (strm->here.transparent) { continue; }
     if (strm->here.type == TOK_UNKNOWN_COLON) {
-      tokenStream* next = getNext(strm);
+      dllistNode(token)* next = getNext(strm);
       if (next->here.type == TOK_UNKNOWN_NEWLINE) {
-        tokenStream* ws = getNext(next);
+        dllistNode(token)* ws = getNext(next);
         strm->here.type = TOK_OPEN_INDENT;
         strm->here.as.indent.depth
           = ws->here.type == TOK_UNKNOWN_SPACE ? ws->here.as.unknownSpace.size : 0;
@@ -156,10 +157,10 @@ void disambiguateColons(lexer* st) {
         strm->here.type = TOK_COLON;
       }
     }
-    else if (strm->here.type == TOK_WRAPPER && strm->here.as.wrapper.isOpen) {
-      tokenStream* newline = getNext(strm);
+    else if (strm->here.type == TOK_WRAP && strm->here.as.wrap.isOpen) {
+      dllistNode(token)* newline = getNext(strm);
       if (newline->here.type == TOK_UNKNOWN_NEWLINE) {
-        tokenStream* ws = getNext(newline);
+        dllistNode(token)* ws = getNext(newline);
         newline->here.type = TOK_OPEN_INDENT;
         newline->here.as.indent.depth
           = ws->here.type == TOK_UNKNOWN_SPACE ? ws->here.as.unknownSpace.size : 0;
@@ -171,37 +172,21 @@ void disambiguateColons(lexer* st) {
   }
 }
 
-typedef struct indentState {
-  size_t cap;
-  size_t len;
-  size_t* depths;
-} indentState;
-indentState indentState_new() {
-  indentState st = {.cap = 128, .len = 0};
-  size_t* depths = malloc(st.cap * sizeof(size_t));
-  checkOom(depths);
-  st.depths = depths;
-  return st;
-}
-void indentState_push(indentState* st, size_t depth) {
-  if (st->len == st->cap) {
-    st->cap *= 2;
-    st->depths = realloc(st->depths, st->cap);
-    checkOom(st->depths);
-  }
-  st->depths[st->len++] = depth;
-}
+#define TYPE size_t
+#include "shim/dynarr.h"
+typedef dynarr(size_t) indentState;
 size_t indentState_peek(const indentState* st) {
-  return st->len == 0 ? 0 : st->depths[st->len-1];
+  return st->len == 0 ? 0 : st->data[st->len-1];
 }
 size_t indentState_pop(indentState* st) {
-  return st->len == 0 ? 0 : st->depths[--st->len];
+  return st->len == 0 ? 0 : st->data[--st->len];
 }
-bool insertDedents(lexer* st, indentState* depths, tokenStream* endOfLine) {
+
+bool insertDedents(lexer* st, indentState* depths, dllistNode(token)* endOfLine) {
   size_t newDepth;
-  tokenStream* insertPoint;
+  dllistNode(token)* insertPoint;
   if (endOfLine->here.type == TOK_UNKNOWN_NEWLINE) {
-    tokenStream* maybeSpace = getNext(endOfLine);
+    dllistNode(token)* maybeSpace = getNext(endOfLine);
     endOfLine->here.transparent = true;
     if (maybeSpace->here.type == TOK_UNKNOWN_SPACE) {
       newDepth = maybeSpace->here.as.unknownSpace.size;
@@ -231,13 +216,13 @@ bool insertDedents(lexer* st, indentState* depths, tokenStream* endOfLine) {
   while (true) {
     size_t depth = indentState_peek(depths);
     if (newDepth < depth) {
-      token tok = {.loc = loc, .type = TOK_WRAPPER, .as.wrapper = {.chr = '\n', .isOpen = false}};
+      token tok = {.loc = loc, .type = TOK_WRAP, .as.wrap = {.type = WRAP_BLOCK, .isOpen = false}};
       lexer_insertBefore(st, &tok, insertPoint);
       indentState_pop(depths);
     }
     else if (newDepth == depth) {
-      if (insertPoint->here.type == TOK_WRAPPER && !insertPoint->here.as.wrapper.isOpen) {
-        // do nothing: supress newline between dedent and close wrapper
+      if (insertPoint->here.type == TOK_WRAP && !insertPoint->here.as.wrap.isOpen) {
+        // do nothing: supress newline between dedent and close wrap
       }
       else if (insertPoint->here.type == TOK_EOF) {
         // do nothing: no need to insert a newline when we're at the end of the file
@@ -249,15 +234,15 @@ bool insertDedents(lexer* st, indentState* depths, tokenStream* endOfLine) {
       return true;
     }
     else {
-      lexError err = {.loc = loc, .type = LEXERR_OFFSIDES};
-      lexer_addErr(st, &err);
+      eexprError err = {.loc = loc, .type = EEXPRERR_OFFSIDES};
+      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
       return false;
     }
   }
 }
 /*
 Indentation is done on a stack.
-Indentation is pushed when a colon or open wrapper immediately precedes a newline.
+Indentation is pushed when a colon or open wrap immediately precedes a newline.
 A newline followed by more space than is currently on the stack is treated as inline space.
 A newline followed by exactly as much space as is currently on the stack is considered a newline.
 A newline followed by fewer spaces than is on the stack is treated as one or more dedents:
@@ -269,18 +254,18 @@ Usually, when a sequence of dedents is generated, it is immediately followed by 
 However, if the dedent sequence is generated by the end-of-file or a close paren/bracket/brace,
   that newline is respectively redundant, or unwanted.
 Supressing newline before close paren/bracket/brace is consistent with a more general rule:
-  supress newline before close wrapper (which includes dedents, and in a way, end-of-file since that matches start of file).
+  supress newline before close wrap (which includes dedents, and in a way, end-of-file since that matches start of file).
 
-Note that whereas the colon is consumed by the indentation, the open wrapper is not.
+Note that whereas the colon is consumed by the indentation, the open wrap is not.
 */
 // Detecting open indents is done by `disambiguateColons`, even though the name implies it's only worried about colons.
 bool detectIndentation(lexer* st) {
   bool success = false;
-  indentState depths = indentState_new();
-  for (tokenStream* strm = st->tokStream; strm != NULL; strm = strm->next) {
+  indentState depths; dynarr_init(size_t)(&depths, 30);
+  for (dllistNode(token)* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
     if (strm->here.transparent) { continue; }
     if (strm->here.type == TOK_OPEN_INDENT) {
-      tokenStream* next = getNext(strm);
+      dllistNode(token)* next = getNext(strm);
       fileloc loc =
         { .start = {.line = next->here.loc.start.line, .col = 0}
         , .end = next->here.loc.start
@@ -288,15 +273,15 @@ bool detectIndentation(lexer* st) {
       size_t depth = strm->here.as.indent.depth;
       size_t depth0 = indentState_peek(&depths);
       if (depth > depth0) {
-        indentState_push(&depths, depth);
-        token tok = {.loc = loc, .type = TOK_WRAPPER, .as.wrapper = {.chr = '\n', .isOpen = true}};
+        dynarr_push(size_t)(&depths, &depth);
+        token tok = {.loc = loc, .type = TOK_WRAP, .as.wrap = {.type = WRAP_BLOCK, .isOpen = true}};
         lexer_insertBefore(st, &tok, next);
         strm->here.transparent = true;
         success = true;
       }
       else {
-        lexError err = {.loc = loc, .type = LEXERR_SHALLOW_INDENT};
-        lexer_addErr(st, &err);
+        eexprError err = {.loc = loc, .type = EEXPRERR_SHALLOW_INDENT};
+        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
         success = false;
       }
     }
@@ -306,13 +291,13 @@ bool detectIndentation(lexer* st) {
       success = insertDedents(st, &depths, strm);
     }
   }
-  free(depths.depths);
+  dynarr_deinit(size_t)(&depths);
   return success;
 }
 
 // This really just checks that newlines and inline space have all been handled.
 void disambiguateSpaces(lexer* st) {
-  for (tokenStream* strm = st->tokStream; strm != NULL; strm = strm->next) {
+  for (dllistNode(token)* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
     if (strm->here.transparent) { continue; }
     // all newlines should already have been handled
     assert (strm->here.type != TOK_UNKNOWN_NEWLINE);
@@ -321,18 +306,18 @@ void disambiguateSpaces(lexer* st) {
       strm->here.type = TOK_SPACE;
       // we should already have merged adjacent spaces
       {
-        tokenStream* prev = getPrev(strm);
+        dllistNode(token)* prev = getPrev(strm);
         assert(prev->here.type != TOK_SPACE);
       }
       // space at start of a line should already have been handled
       {
-        tokenStream* prev = getPrev(strm);
+        dllistNode(token)* prev = getPrev(strm);
         assert(prev != NULL);
         assert(prev->here.type != TOK_NEWLINE);
       }
       // space at end of line should already have been handled
       {
-        tokenStream* next = getPrev(strm);
+        dllistNode(token)* next = getPrev(strm);
         assert(next->here.type != TOK_NEWLINE);
         assert(next->here.type != TOK_EOF);
       }
@@ -341,29 +326,38 @@ void disambiguateSpaces(lexer* st) {
 }
 
 /*
-  `(chain | ellipsis | number) (chain | ellipsis) --> error`
+  `(chain | ellipsis) (chain | ellipsis) --> error`
+  `number chain --> error`
   `(number | symbol) (number | symbol) --> error`
+  `string.(close | plain) string.(open | plain) --> error`
 */
 void detectCramming(lexer* st) {
-  for (tokenStream* strm = st->tokStream; strm != NULL; strm = strm->next) {
+  for (dllistNode(token)* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
     if (strm->here.transparent) { continue; }
     if (strm->here.type == TOK_EOF) { continue; }
     enum tokenType hereType = strm->here.type;
-    bool hereIsDotLike = hereType == TOK_ELLIPSIS || hereType == TOK_CHAIN || hereType == TOK_SYNTHFIX;
-    tokenStream* next = getNext(strm);
+    bool hereIsDotLike = hereType == TOK_ELLIPSIS || hereType == TOK_CHAIN || hereType == TOK_PREDOT;
+    dllistNode(token)* next = getNext(strm);
     enum tokenType nextType = next->here.type;
-    bool nextIsDotLike = nextType == TOK_ELLIPSIS || nextType == TOK_CHAIN || nextType == TOK_SYNTHFIX;
+    bool nextIsDotLike = nextType == TOK_ELLIPSIS || nextType == TOK_CHAIN || nextType == TOK_PREDOT;
     fileloc loc = {.start = strm->here.loc.start, .end = next->here.loc.end};
-    lexError err = {.loc = loc, .type = LEXERR_CRAMMED_TOKENS};
+    eexprError err = {.loc = loc, .type = EEXPRERR_CRAMMED_TOKENS};
     if (hereIsDotLike && nextIsDotLike) {
-      lexer_addErr(st, &err);
+      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
     }
-    else if (hereType == TOK_NUMBER && nextIsDotLike) {
-      lexer_addErr(st, &err);
+    else if (hereType == TOK_NUMBER && nextType == TOK_CHAIN) {
+      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
     }
     else if (hereType == TOK_SYMBOL || hereType == TOK_NUMBER) {
       if (nextType == TOK_SYMBOL || nextType == TOK_NUMBER) {
-        lexer_addErr(st, &err);
+        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+      }
+    }
+    else if (hereType == TOK_STRING && nextType == TOK_STRING) {
+      bool hereStringClosed = strm->here.as.string.splice == STRSPLICE_PLAIN || strm->here.as.string.splice == STRSPLICE_CLOSE;
+      bool nextStringOpen = strm->here.as.string.splice == STRSPLICE_PLAIN || strm->here.as.string.splice == STRSPLICE_OPEN;
+      if (hereStringClosed && nextStringOpen) {
+        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
       }
     }
   }
@@ -379,5 +373,6 @@ void lexer_cook(lexer* st) {
   disambiguateDots(st);
   detectCramming(st);
   // TODO detect mixed indentation
+  // TODO detect mixed newlines
   // TODO create error if file starts with indent
 }

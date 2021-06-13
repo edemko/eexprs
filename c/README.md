@@ -7,6 +7,20 @@ A C version would help me constrain a) memory usage and b) type-level cleverness
 Also, as I go I'll be documenting every grammar rule in comments, since the C version parser be as "readable" as the Haskell combinator version.
 I hope these comments can make it directly into some documentation.
 
+## Notes to Self
+
+- [ ] eliminate easy `TODO`/`FIXME`s
+- [ ] decide about isSymbolChar
+  - [ ] go through ASCII for the allow/denylist
+  - [ ] understand unicode character classes
+  - [ ] go through mathematical symbols for the allow/denylist
+- [ ] create tests
+  - [ ] make test runner
+  - [ ] every production in the grammar must succeed
+  - [ ] valgrind everything for good measure
+  - [ ] ungrammatical eexprs should have good error reporting
+
+
 ## Building
 
 ```
