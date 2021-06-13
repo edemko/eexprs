@@ -23,8 +23,6 @@ The header will automatically undefine `TYPE` when it is done.
 #include <stddef.h>
 
 
-#define dllistNode(T) __dllistNode(T)
-#define __dllistNode(T) dllistNode_ ## T
 typedef struct _dllistNode _dllistNode;
 struct _dllistNode {
   _dllistNode* next; // owned, null for end of stream
@@ -32,67 +30,47 @@ struct _dllistNode {
   char here[];
 };
 
-#define dllist(T) __dllist(T)
-#define __dllist(T) dllist_ ## T
 typedef struct _dllist {
   _dllistNode* start; // null for empty list
   _dllistNode* end; // null for empty list
 } _dllist;
 
-#define dllist_empty(T) __dllist_empty(T)
-#define __dllist_empty(T) dllist_empty_ ## T
 
-#define dllist_singleton(T) __dllist_singleton(T)
-#define __dllist_singleton(T) dllist_singleton_ ## T
 // copies the element into a new singleton list
 _dllist _dllist_singleton(const void* elem, size_t elemSize);
 
-#define dllist_cat(T) __dllist_cat(T)
-#define __dllist_cat(T) dllist_cat_ ## T
 // Concatenate two lists.
 // Ownership of the nodes is taken, and given to the return value.
 _dllist _dllist_cat(_dllist* l1, _dllist* l2);
 
-#define dllist_insertBefore(T) __dllist_insertBefore(T)
-#define __dllist_insertBefore(T) dllist_insertBefore_ ## T
 // Copies an element into a new node placed just before the given node.
 // If the given node is NULL, inserts at the start of the list.
 // It is undefined behaviour for the node to not be neither in the list nor NULL.
 // Returns a reference to the new node (which is owned by the list).
 _dllistNode* _dllist_insertBefore(_dllist* list, const void* elem, _dllistNode* node, size_t elemSize);
 
-#define dllist_insertAfter(T) __dllist_insertAfter(T)
-#define __dllist_insertAfter(T) dllist_insertAfter_ ## T
 // Copies an element into a new node placed just after the given node.
 // If the given node is NULL, inserts at the end of the list.
 // It is undefined behaviour for the node to not be neither in the list nor NULL.
 // Returns a reference to the new node (which is owned by the list).
 _dllistNode* _dllist_insertAfter(_dllist* list, _dllistNode* node, const void* elem, size_t elemSize);
 
-#define dllist_moveAfter(T) __dllist_moveAfter(T)
-#define __dllist_moveAfter(T) dllist_moveAfter_ ## T
 // Move the source node from the source list to the destination list, inserting directly after the destination node.
 // The relationship between the destination list and node is like that of _dllist_insertAfter.
 // Also, if the source node is not part of the source list, that is undefined behavior as well.
 // Ownership of the memory for the node is transferred from the source list to the destination list.
 void _dllist_moveAfter(_dllist* dstList, _dllistNode* dstNode, _dllist* srcList, _dllistNode* srcNode);
 
-#define dllist_popStart(T) __dllist_popStart(T)
-#define __dllist_popStart(T) dllist_popStart_ ## T
 // Removes the first element of a (non-null, non-empty) list and copies it into the given address.
 // If the address is NULL, the copy does not occur.
 // The memory used by the node is freed.
 void _dllist_popStart(_dllist* list, void* into, size_t elemSize);
 
-#define dllist_popEnd(T) __dllist_popEnd(T)
-#define __dllist_popEnd(T) dllist_popEnd_ ## T
 // Removes the last element of a (non-null, non-empty) list and copies it into the given address.
 // If the address is NULL, the copy does not occur.
 // The memory used by the node is freed.
 void _dllist_popEnd(_dllist* list, void*, size_t elemSize);
 
-#define dllist_del(T) __dllist_del(T)
-#define __dllist_del(T) dllist_del_ ## T
 // free the memory used for the list, and re-initialize as empty
 // does not attempt to free any memory owned by the elements
 void _dllist_del(_dllist* list);
@@ -101,6 +79,30 @@ void _dllist_del(_dllist* list);
 
 
 #ifdef TYPE
+  // macros to paste expanded arguments
+  #define _dllistNode_paste(T) dllistNode_ ## T
+  #define _dllist_paste(T) dllist_ ## T
+  #define _dllist_empty_paste(T) dllist_empty_ ## T
+  #define _dllist_singleton_paste(T) dllist_singleton_ ## T
+  #define _dllist_cat_paste(T) dllist_cat_ ## T
+  #define _dllist_insertBefore_paste(T) dllist_insertBefore_ ## T
+  #define _dllist_insertAfter_paste(T) dllist_insertAfter_ ## T
+  #define _dllist_moveAfter_paste(T) dllist_moveAfter_ ## T
+  #define _dllist_popStart_paste(T) dllist_popStart_ ## T
+  #define _dllist_popEnd_paste(T) dllist_popEnd_ ## T
+  #define _dllist_del_paste(T) dllist_del_ ## T
+  // macros I actually use
+  #define dllistNode(T) _dllistNode_paste(T)
+  #define dllist(T) _dllist_paste(T)
+  #define dllist_empty(T) _dllist_empty_paste(T)
+  #define dllist_singleton(T) _dllist_singleton_paste(T)
+  #define dllist_cat(T) _dllist_cat_paste(T)
+  #define dllist_insertBefore(T) _dllist_insertBefore_paste(T)
+  #define dllist_insertAfter(T) _dllist_insertAfter_paste(T)
+  #define dllist_moveAfter(T) _dllist_moveAfter_paste(T)
+  #define dllist_popStart(T) _dllist_popStart_paste(T)
+  #define dllist_popEnd(T) _dllist_popEnd_paste(T)
+  #define dllist_del(T) _dllist_del_paste(T)
 
 typedef struct dllistNode(TYPE) dllistNode(TYPE);
 struct dllistNode(TYPE) {
@@ -171,6 +173,27 @@ void dllist_del(TYPE)(dllist(TYPE)* list) {
   _dllist_del((_dllist*) list);
 }
 
-
+  #undef dllistNode
+  #undef dllist
+  #undef dllist_empty
+  #undef dllist_singleton
+  #undef dllist_cat
+  #undef dllist_insertBefore
+  #undef dllist_insertAfter
+  #undef dllist_moveAfter
+  #undef dllist_popStart
+  #undef dllist_popEnd
+  #undef dllist_del
+  #undef _dllistNode_paste
+  #undef _dllist_paste
+  #undef _dllist_empty_paste
+  #undef _dllist_singleton_paste
+  #undef _dllist_cat_paste
+  #undef _dllist_insertBefore_paste
+  #undef _dllist_insertAfter_paste
+  #undef _dllist_moveAfter_paste
+  #undef _dllist_popStart_paste
+  #undef _dllist_popEnd_paste
+  #undef _dllist_del_paste
   #undef TYPE
 #endif

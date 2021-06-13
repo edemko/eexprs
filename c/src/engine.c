@@ -13,17 +13,17 @@ void parser_init(parser* it) {
     it->loc.col = 0;
   }
   {
-    dynarr_init(eexprPtr)(&it->eexprStream, 64);
-    it->tokStream = dllist_empty(token)();
-    it->warnStream = dllist_empty(eexprError)();
-    it->errStream = dllist_empty(eexprError)();
+    dynarr_init_eexpr_p(&it->eexprStream, 64);
+    it->tokStream = dllist_empty_token();
+    it->warnStream = dllist_empty_eexprError();
+    it->errStream = dllist_empty_eexprError();
     it->fatal.type = EEXPRERR_NOERROR;
   }
   {
     it->discoveredNewline = NEWLINE_NONE;
     it->indent.chr = UCHAR_NULL;
     it->indent.knownMixed = false;
-    dynarr_init(openWrap)(&it->wrapStack, 30);
+    dynarr_init_openWrap(&it->wrapStack, 30);
   }
   it->allInput = emptyStr;
   {
@@ -59,20 +59,20 @@ void parser_del(lexer* it) {
     it->rest.bytes = NULL;
     it->rest.len = 0;
   }
-  dynarr_deinit(openWrap)(&it->wrapStack);
+  dynarr_deinit_openWrap(&it->wrapStack);
   // WARNING I'm assuming there's no owned pointer data in eexprError
   it->fatal.type = EEXPRERR_NOERROR;
-  dllist_del(eexprError)(&it->errStream);
-  dllist_del(eexprError)(&it->warnStream);
+  dllist_del_eexprError(&it->errStream);
+  dllist_del_eexprError(&it->warnStream);
 
-  for (dllistNode(token)* node = it->tokStream.start; node != NULL; node = node->next) {
+  for (dllistNode_token* node = it->tokStream.start; node != NULL; node = node->next) {
     token_deinit(&node->here);
   }
-  dllist_del(token)(&it->tokStream);
+  dllist_del_token(&it->tokStream);
 
   for (size_t i = 0; i < it->eexprStream.len; ++i) {
     eexpr_deinit(it->eexprStream.data[i]);
     free(it->eexprStream.data[i]);
   }
-  dynarr_deinit(eexprPtr)(&it->eexprStream);
+  dynarr_deinit_eexpr_p(&it->eexprStream);
 }

@@ -23,39 +23,27 @@ The header will automatically undefine `TYPE` when it is done.
 #include <stddef.h>
 
 
-#define dynarr(T) __dynarr(T)
-#define __dynarr(T) dynarr_ ## T
 typedef struct _dynarr {
   size_t cap;
   size_t len;
   char* data;
 } _dynarr;
 
-#define dynarr_init(T) __dynarr_init(T)
-#define __dynarr_init(T) dynarr_init_ ## T
 // mallocs new internal data structures, and initialize length and capacity
 // it does not attempt to clean up previous data
 void _dynarr_init(_dynarr* arr, size_t initialCapacity, size_t elemSize);
 
-#define dynarr_deinit(T) __dynarr_deinit(T)
-#define __dynarr_deinit(T) dynarr_deinit_ ## T
 // frees internal data structures used by the dynarr
 // makes no attempt to free any pointers owned by the elements
 void _dynarr_deinit(_dynarr* arr);
 
-#define dynarr_push(T) __dynarr_push(T)
-#define __dynarr_push(T) dynarr_push_ ## T
 // copies an element to the end of the dynamic array, resizing if necessary
 void _dynarr_push(_dynarr* arr, const void* elem, size_t elemSize);
 
-#define dynarr_peek(T) __dynarr_peek(T)
-#define __dynarr_peek(T) dynarr_peek_ ## T
 // return a reference to the last element of the array
 // return NULL if length is zero
 void* _dynarr_peek(const _dynarr* arr, size_t elemSize);
 
-#define dynarr_pop(T) __dynarr_pop(T)
-#define __dynarr_pop(T) dynarr_pop_ ## T
 // removes the last element and returns a reference to it, which the caller must take ownership of
 // the reference only lasts until the next time elements are added to the array, or the array shrinks
 // returns NULL if length is zero
@@ -65,6 +53,20 @@ void* _dynarr_pop(_dynarr* arr, size_t elemSize);
 
 
 #ifdef TYPE
+  // macros to paste expanded arguments
+  #define _dynarr_paste(T) dynarr_ ## T
+  #define _dynarr_init_paste(T) dynarr_init_ ## T
+  #define _dynarr_deinit_paste(T) dynarr_deinit_ ## T
+  #define _dynarr_push_paste(T) dynarr_push_ ## T
+  #define _dynarr_peek_paste(T) dynarr_peek_ ## T
+  #define _dynarr_pop_paste(T) dynarr_pop_ ## T
+  // macros I actually use
+  #define dynarr(T) _dynarr_paste(T)
+  #define dynarr_init(T) _dynarr_init_paste(T)
+  #define dynarr_deinit(T) _dynarr_deinit_paste(T)
+  #define dynarr_push(T) _dynarr_push_paste(T)
+  #define dynarr_peek(T) _dynarr_peek_paste(T)
+  #define dynarr_pop(T) _dynarr_pop_paste(T)
 
 typedef struct dynarr(TYPE) {
   size_t cap;
@@ -106,5 +108,17 @@ TYPE* dynarr_pop(TYPE)(dynarr(TYPE)* arr) {
   return (TYPE*)_dynarr_pop((_dynarr*)arr, sizeof(TYPE));
 }
 
+  #undef dynarr
+  #undef dynarr_init
+  #undef dynarr_deinit
+  #undef dynarr_push
+  #undef dynarr_peek
+  #undef dynarr_pop
+  #undef _dynarr_paste
+  #undef _dynarr_init_paste
+  #undef _dynarr_deinit_paste
+  #undef _dynarr_push_paste
+  #undef _dynarr_peek_paste
+  #undef _dynarr_pop_paste
   #undef TYPE
 #endif

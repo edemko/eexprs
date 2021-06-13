@@ -28,16 +28,16 @@ void lexer_incLine(lexer* st, size_t bytes) {
 }
 
 void lexer_addTok(lexer* st, const token* tok) {
-  dllistNode(token)* node = dllist_insertAfter(token)(&st->tokStream, NULL, tok);
+  dllistNode_token* node = dllist_insertAfter_token(&st->tokStream, NULL, tok);
   node->here.transparent = false;
 }
 
-void lexer_insertBefore(lexer* st, const token* t, dllistNode(token)* node) {
-  dllistNode(token)* new = dllist_insertBefore(token)(&st->tokStream, t, node);
+void lexer_insertBefore(lexer* st, const token* t, dllistNode_token* node) {
+  dllistNode_token* new = dllist_insertBefore_token(&st->tokStream, t, node);
   new->here.transparent = false;
 }
 
 void lexer_delTok(lexer* st) {
   if (st->tokStream.end != NULL) { token_deinit(&st->tokStream.end->here); }
-  dllist_popEnd(token)(&st->tokStream, NULL);
+  dllist_popEnd_token(&st->tokStream, NULL);
 }

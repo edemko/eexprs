@@ -12,7 +12,7 @@ void lexer_incLine(parser* st, size_t bytes);
 
 // `lexer_addTok` and `lexer_insertBefore` ensure that added tokens are non-transparent
 void lexer_addTok(parser* st, const token* t);
-void lexer_insertBefore(parser* st, const token* t, dllistNode(token)* point);
+void lexer_insertBefore(parser* st, const token* t, dllistNode_token* point);
 
 // remove the last token (useful for re-using standard `take*` procedures as part of others)
 // ensures the memory used by that token is also deallocated

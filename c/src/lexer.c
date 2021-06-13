@@ -62,7 +62,7 @@ uchar takeCharEscape(lexer* st) {
     if (!decodeUnihex(2, &c, &digits[4])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; }
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -73,7 +73,7 @@ uchar takeCharEscape(lexer* st) {
     if (!decodeUnihex(4, &c, &digits[2])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -84,7 +84,7 @@ uchar takeCharEscape(lexer* st) {
     if (!decodeUnihex(6, &c, digits)) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -120,7 +120,7 @@ bool takeNullEscape(lexer* st) {
     }
     else {
       eexprError err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_MISSING_LINE_PICKUP};
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
     }
     return true;
   }
@@ -171,7 +171,7 @@ bool takeWhitespace(lexer* st) {
       { .loc = tok.loc
       , .type = EEXPRERR_MIXED_SPACE
       };
-    dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+    dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
   }
   return true;
 }
@@ -203,7 +203,7 @@ bool takeLineContinue(lexer* st) {
     }
     if (trailingSpace) {
       err.loc.end = st->loc;
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
     }
   }
   if (takeNewline(st)) {
@@ -214,7 +214,7 @@ bool takeLineContinue(lexer* st) {
   else {
     eexprError err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = EEXPRERR_BAD_CHAR};
     err.as.badChar = escapeLeader;
-    dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+    dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
   }
   return true;
 }
@@ -245,7 +245,7 @@ bool takeNewline(lexer* st) {
       { .loc = tok.loc
       , .type = EEXPRERR_MIXED_NEWLINES
       };
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
     }
   }
   return true;
@@ -337,7 +337,7 @@ void checkDigitSepContext(const radixParams* radix, filelocPoint start, bool alw
     || (!isDigit(radix, lookahead) && lookahead != digitSep)
      ) {
     eexprError err = {.loc = {.start = start, .end = st->loc}, .type = EEXPRERR_BAD_DIGIT_SEPARATOR};
-    dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+    dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
   }
 }
 /*
@@ -474,7 +474,7 @@ bool takeNumber(lexer* st) {
             eexprError err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_EXPONENT_SIGN};
             lexer_advance(st, adv, 1);
             err.loc.end = st->loc;
-            dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+            dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
           }
         }
         else {
@@ -524,7 +524,7 @@ bool takeNumber(lexer* st) {
           tok.loc.end = st->loc;
           lexer_addTok(st, &tok);
           eexprError err = {.loc = tok.loc, .type = EEXPRERR_MISSING_EXPONENT};
-          dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+          dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
           return true;
         }
       }
@@ -582,7 +582,7 @@ bool takeCodepoint(lexer* st) {
           else if (escapeCharErr.as.badEscapeChar != UCHAR_NULL) { // don't try to consume eof
             lexer_advance(st, adv, 1);
           }
-          dllist_insertAfter(eexprError)(&st->errStream, NULL, &escapeCharErr);
+          dllist_insertAfter_eexprError(&st->errStream, NULL, &escapeCharErr);
         }
         goto codepointBuilt;
       }
@@ -598,7 +598,7 @@ bool takeCodepoint(lexer* st) {
         lexer_advance(st, adv, 1);
       }
       codepointErr.loc.end = st->loc;
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &codepointErr);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &codepointErr);
       goto codepointBuilt;
     }
   }; codepointBuilt:
@@ -625,7 +625,7 @@ bool takeCodepoint(lexer* st) {
         }
       }
       noCloseErr.loc.end = st->loc;
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &noCloseErr);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &noCloseErr);
       goto tokenClosed;
     }
   } tokenClosed:
@@ -633,7 +633,7 @@ bool takeCodepoint(lexer* st) {
     eexprError overflowErr = {.loc = tok.loc, .type = EEXPRERR_UNICODE_OVERFLOW};
     overflowErr.as.unicodeOverflow = tok.as.codepoint;
     tok.as.codepoint = UCHAR_NULL;
-    dllist_insertAfter(eexprError)(&st->errStream, NULL, &overflowErr);
+    dllist_insertAfter_eexprError(&st->errStream, NULL, &overflowErr);
   }
   if (tok.as.codepoint >= 0) {
     tok.loc.end = st->loc;
@@ -713,7 +713,7 @@ bool takeString(lexer* st) {
           else if (escapeCharErr.as.badEscapeChar != UCHAR_NULL) { // don't try to consume eof
             lexer_advance(st, adv, 1);
           }
-          dllist_insertAfter(eexprError)(&st->errStream, NULL, &escapeCharErr);
+          dllist_insertAfter_eexprError(&st->errStream, NULL, &escapeCharErr);
         }
       }
     }
@@ -729,7 +729,7 @@ bool takeString(lexer* st) {
         eexprError err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_STRING_CHAR, .as.badStringChar = c};
         lexer_advance(st, adv, 1);
         err.loc.end = st->loc;
-        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+        dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
       }
     }
   }
@@ -740,7 +740,7 @@ bool takeString(lexer* st) {
     }
     else {
       eexprError err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_UNCLOSED_STRING};
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
     }
   }
   tok.loc.end = st->loc;
@@ -834,7 +834,7 @@ bool takeHeredoc(lexer* st) {
     }
     if (trailingSpace) {
       err.loc.end = st->loc;
-      dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
     }
   }
   { // consume a newline, or else it's a fatal error
@@ -904,7 +904,7 @@ bool takeHeredoc(lexer* st) {
         err.as.mixedIndentation.chr = st->indent.chr;
         err.as.mixedIndentation.loc = st->indent.established;
         st->indent.knownMixed = true;
-        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+        dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
       }
     }
     else {
@@ -955,13 +955,13 @@ bool takeHeredoc(lexer* st) {
           if (i != 0) {
             err.type = EEXPRERR_TRAILING_SPACE;
             err.loc.end = st->loc;
-            dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+            dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
           }
           break;
         }
         else {
           err.loc.end = st->loc;
-          dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+          dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
           break;
         }
       }
@@ -1047,7 +1047,7 @@ bool takeUnexpected(lexer* st) {
     lexer_advance(st, adv, 1);
   }
   err.loc.end = st->loc;
-  dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+  dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
   return true;
 }
 

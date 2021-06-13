@@ -34,7 +34,7 @@ typedef struct options {
 } options;
 
 void relevelErrors(lexer* st, options opts) {
-  for (dllistNode(eexprError)* strm = st->errStream.start; strm != NULL; /*increment in body*/) {
+  for (dllistNode_eexprError* strm = st->errStream.start; strm != NULL; /*increment in body*/) {
     level l;
     switch (strm->here.type) {
       case EEXPRERR_MIXED_SPACE: { l = opts.levels.mixedSpace; } break;
@@ -47,12 +47,12 @@ void relevelErrors(lexer* st, options opts) {
     switch (l) {
       case ERROR: {}; break;
       case WARN: {
-        dllistNode(eexprError)* next = strm->next;
-        dllist_moveAfter(eexprError)(&st->warnStream, NULL, &st->errStream, strm);
+        dllistNode_eexprError* next = strm->next;
+        dllist_moveAfter_eexprError(&st->warnStream, NULL, &st->errStream, strm);
         strm = next; continue;
       }; break;
       case IGNORE: {
-        dllistNode(eexprError)* next = strm->next;
+        dllistNode_eexprError* next = strm->next;
         if (strm->prev != NULL) { strm->prev->next = strm->next; }
         free(strm);
         strm = next; continue;
@@ -87,7 +87,7 @@ void dumpParser(char* filename, const lexer* st, const options* opts) {
   fprintf(fp, "\n, \"lineOffsets\": ");
   fdumpLineIndex(fp, &st->lineIndex);
   fprintf(fp, "\n, \"eexprs\":");
-  fdumpEexprStream(fp, "  ", &st->eexprStream);
+  fdumpEexprArray(fp, 2, &st->eexprStream);
   fprintf(fp, "\n, \"warnings\":");
   fdumpErrorStream(fp, "  ", st->warnStream.start);
   fprintf(fp, "\n, \"errors\":");
@@ -107,6 +107,9 @@ options parseOpts(int argc, char** argv) {
       , .eexprs = NULL
       }
     , .levels =
+      // NOTE I decide default levels based on whether it's possible for a script to automatically fix things.
+      // If not it's an error, if so it's a warning.
+      // In some cases, the fixup script might need some configuration (e.g. width of a tab).
       // { .badBytes = ERROR
       // , .badChar = ERROR
       { .mixedSpace = WARN
@@ -134,6 +137,10 @@ options parseOpts(int argc, char** argv) {
       // , .offsides = ERROR
       // , .badDot = ERROR
       // , .crammedTokens = ERROR
+      // , .unbalancedWrap = ERROR
+      // , .expectingNewlineOrDedent = ERROR
+      // , .missingTemplateExpr = ERROR
+      // , .missingCloseTemplate = ERROR
       }
     };
   for (int i = 1; i < argc; ++i) {
@@ -210,6 +217,10 @@ int main(int argc, char** argv) {
   options opts = parseOpts(argc, argv);
 
   parser st = parser_newFromFile(opts.inFilename);
+  if (st.allInput.bytes == NULL) {
+    parser_del(&st);
+    die("error opening input file for reading");
+  }
   if (opts.dump.original != NULL) {
     FILE* fp = fopen(opts.dump.original, "w");
     fwrite(st.allInput.bytes, 1/*byte per element*/, st.allInput.len/*elements*/, fp);
@@ -229,7 +240,7 @@ int main(int argc, char** argv) {
   lexer_raw(&st);
   relevelErrors(&st, opts);
   if (st.fatal.type != EEXPRERR_NOERROR) {
-    dllist_insertAfter(eexprError)(&st.errStream, NULL, &st.fatal);
+    dllist_insertAfter_eexprError(&st.errStream, NULL, &st.fatal);
     st.fatal.type = EEXPRERR_NOERROR;
   }
   dumpLexer(opts.dump.rawTokens, &st, &opts);
@@ -244,7 +255,7 @@ int main(int argc, char** argv) {
   parser_parse(&st);
   relevelErrors(&st, opts);
   if (st.fatal.type != EEXPRERR_NOERROR) {
-    dllist_insertAfter(eexprError)(&st.errStream, NULL, &st.fatal);
+    dllist_insertAfter_eexprError(&st.errStream, NULL, &st.fatal);
     st.fatal.type = EEXPRERR_NOERROR;
   }
   dumpParser(opts.dump.eexprs, &st, &opts);
@@ -257,7 +268,7 @@ int main(int argc, char** argv) {
     fprintf(stdout, "{ \"filename\": ");
     fdumpCStr(stdout, opts.inFilename);
     fprintf(stdout, "\n, \"eexprs\":");
-    fdumpEexprStream(stdout, "  ", &st.eexprStream);
+    fdumpEexprArray(stdout, 2, &st.eexprStream);
     if (st.warnStream.start != NULL) {
       fprintf(stdout, "\n, \"warnings\":");
       fdumpErrorStream(stdout, "  ", st.warnStream.start);

@@ -7,18 +7,25 @@ A C version would help me constrain a) memory usage and b) type-level cleverness
 Also, as I go I'll be documenting every grammar rule in comments, since the C version parser be as "readable" as the Haskell combinator version.
 I hope these comments can make it directly into some documentation.
 
+[homepage]: https://github.com/Zankoku-Okuno/eexprs
+[issue-tracker]: https://github.com/Zankoku-Okuno/eexprs/issues
+
 ## Notes to Self
 
-- [ ] eliminate easy `TODO`/`FIXME`s
+- [x] eliminate easy `TODO`/`FIXME`s
 - [ ] decide about isSymbolChar
   - [ ] go through ASCII for the allow/denylist
   - [ ] understand unicode character classes
   - [ ] go through mathematical symbols for the allow/denylist
 - [ ] create tests
-  - [ ] make test runner
+  - [x] make test runner
   - [ ] every production in the grammar must succeed
   - [ ] valgrind everything for good measure
   - [ ] ungrammatical eexprs should have good error reporting
+  - [ ] fuzz it
+  - [ ] sanitize (at least for undefined behavior)
+- [ ] create a C interface
+  - [ ] include version metadata from METADATA.toml
 
 
 ## Building
@@ -30,21 +37,30 @@ I hope these comments can make it directly into some documentation.
 The source is compliant C99, but the build script assumes gcc.
 It's not hard to edit the script as-needed.
 
+The only build artifact is `bin/eexpr2json`, which takes an input file,
+  parses it as a file of eexprs,
+  and produces a json representation of those eexprs to stdout.
+
+After building, test with `./test/run.sh` or `./test/run.sh run <case name>`.
+Once the actual output is satisfactory, it can easily be made the expected output with `./test/run.sh commit <case name>`.
+
+### Dependencies
+
+There are none (okay, fine, just a C99 or newer compiler).
+I've decided not to depend in stuff like GNU MP or ICU, since I really need only a fragment of their functionality (and performance).
+Managing dependencies in C is a pain, so I prefer not to if I can get away with it, and I expect users will be the same.
+
+It's entirely possible that it might not compile with gcc.
+If so, that's unintentional, and should be [reported as a bug](issue-tracker).
+
+
 ## Contributing
 
 If you run across something you think should parse but doesn't, open an issue and include the misbehaving input.
+Same thing if you find something that doesn't parse, but the error isn't correct or descriptive enough.
 I really don't care if it's a minimal example, I'll take as many test cases as I can get my hands on.
 
 If you've got some code to contribute, submit a pull request.
 Be aware that this project is BSD-3 licensed, so do not open a pull request unless you consent to have your code also under this same license.
 
 The source tree contains `README.md` files that explain the structure of each directory.
-
-
-I'm working on the lexer right now.
-The most important file here is `lexer.c`, which contains everything to detect and consume each token type and produce from errors/warnings.
-The next landmark is `parameters.c`, which defines sets of characters (what is allowed in numbers/symbols, how to interpret escape sequences).
-
-All of that is built in `strstuff.h`, which defines a sane string type for my own use, as well as types and functions for handling unicode.
-My basic idea is to consume everything as Utf8 (as that is the only valid encoding for eexpr files), but manipulate individual characters as Utf32.
-I'm not doing any normalization algorithms, since (without ICU) that's complex, annoying, and actually might need to be avoided in downstream interpreters of eexprs.

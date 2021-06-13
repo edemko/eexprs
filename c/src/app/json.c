@@ -202,8 +202,8 @@ void fdumpToken(FILE* fp, const token* tok) {
   fprintf(fp, "}");
 }
 
-void fdumpEexpr(FILE* fp, const eexpr* expr) {
-  fprintf(fp, "{\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
+void fdumpEexpr(FILE* fp, int indent, const eexpr* expr) {
+  fprintf(fp, "{ \"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
          , expr->loc.start.line + 1
          , expr->loc.start.col + 1
          , expr->loc.end.line + 1
@@ -211,13 +211,15 @@ void fdumpEexpr(FILE* fp, const eexpr* expr) {
          );
   switch (expr->type) {
     case EEXPR_SYMBOL: {
-      fprintf(fp, ",\"type\":\"symbol\",\"text\":");
+      fprintf(fp, "\n%*s, \"type\":\"symbol\",\"text\":", indent, "");
       fdumpStr(fp, expr->as.symbol.text);
     }; break;
     case EEXPR_NUMBER: {
       {
         str tmp = bigint_toDecimal(expr->as.number.mantissa);
-        fprintf(fp, ",\"type\":\"number\",\"%s\":", expr->as.number.fractionalDigits ? "value" : "mantissa");
+        fprintf( fp, "\n%*s, \"type\":\"number\",\"%s\":"
+               , indent, ""
+               , expr->as.number.fractionalDigits == 0 ? "value" : "mantissa");
         fdumpStr(fp, tmp);
         free(tmp.bytes);
       }
@@ -241,124 +243,108 @@ void fdumpEexpr(FILE* fp, const eexpr* expr) {
       }
     }; break;
     case EEXPR_CODEPOINT: {
-      fprintf(fp, ",\"type\":\"codepoint\",\"value\":");
+      fprintf(fp, "\n%*s, \"type\":\"codepoint\",\"value\":", indent, "");
       fdumpChar(fp, expr->as.codepoint);
     }; break;
     case EEXPR_STRING: {
-      fprintf(fp, ",\"type\":\"string\"");
+      fprintf(fp, "\n%*s, \"type\":\"string\"", indent, "");
       if (expr->as.string.parts.len == 0) {
         fprintf(fp, ",\"text\":");
         fdumpStr(fp, expr->as.string.text1);
       }
       else {
-        fprintf(fp, ",\"template\":[");
+        fprintf(fp, ",\"template\":\n%*s[ ", indent+2, "");
         fdumpStr(fp, expr->as.string.text1);
         for (size_t i = 0; i < expr->as.string.parts.len; ++i) {
-          fprintf(fp, ",");
-          fdumpEexpr(fp, expr->as.string.parts.data[i].expr);
-          fprintf(fp, ",");
+          fprintf(fp, "\n%*s, ", indent+2, "");
+          fdumpEexpr(fp, indent+4, expr->as.string.parts.data[i].expr);
+          fprintf(fp, "\n%*s, ", indent+2, "");
           fdumpStr(fp, expr->as.string.parts.data[i].textAfter);
         }
-        fprintf(fp, "]");
+        fprintf(fp, "\n%*s]", indent+2, "");
       }
-
     }; break;
     case EEXPR_PAREN: {
-      fprintf(fp, ",\"type\":\"paren\",\"subexpr\":");
-      if (expr->as.wrap == NULL) { fprintf(fp, "null"); }
-      else { fdumpEexpr(fp, expr->as.wrap); }
+      fprintf(fp, "\n%*s, \"type\":\"paren\"", indent, "");
+      if (expr->as.wrap == NULL) {
+        fprintf(fp, ",\"subexpr\":null");
+      }
+      else {
+        fprintf(fp, ",\"subexpr\":\n%*s  ", indent, "");
+        fdumpEexpr(fp, indent+2, expr->as.wrap);
+      }
     }; break;
     case EEXPR_BRACK: {
-      fprintf(fp, ",\"type\":\"bracket\",\"subexpr\":");
-      if (expr->as.wrap == NULL) { fprintf(fp, "null"); }
-      else { fdumpEexpr(fp, expr->as.wrap); }
+      fprintf(fp, "\n%*s, \"type\":\"bracket\"", indent, "");
+      if (expr->as.wrap == NULL) {
+        fprintf(fp, ",\"subexpr\":null");
+      }
+      else {
+        fprintf(fp, ",\"subexpr\":\n%*s  ", indent, "");
+        fdumpEexpr(fp, indent+2, expr->as.wrap);
+      }
     }; break;
     case EEXPR_BRACE: {
-      fprintf(fp, ",\"type\":\"brace\",\"subexpr\":");
-      if (expr->as.wrap == NULL) { fprintf(fp, "null"); }
-      else { fdumpEexpr(fp, expr->as.wrap); }
+      fprintf(fp, "\n%*s, \"type\":\"brace\"", indent, "");
+      if (expr->as.wrap == NULL) {
+        fprintf(fp, ",\"subexpr\":null");
+      }
+      else {
+        fprintf(fp, ",\"subexpr\":\n%*s  ", indent, "");
+        fdumpEexpr(fp, indent+2, expr->as.wrap);
+      }
     }; break;
     case EEXPR_BLOCK: {
-      fprintf(fp, ",\"type\":\"block\",\"subexprs\":");
-      char* separator = "[";
-      for (size_t i = 0; i < expr->as.list.len; ++i) {
-        fprintf(fp, "%s", separator);
-        fdumpEexpr(fp, expr->as.list.data[i]);
-        separator = ",";
-      }
-      fprintf(fp, "]");
+      fprintf(fp, "\n%*s, \"type\":\"block\",\"subexprs\":", indent, "");
+      fdumpEexprArray(fp, indent+2, &expr->as.list);
     }; break;
     case EEXPR_PREDOT: {
-      fprintf(fp, ",\"type\":\"predot\",\"subexpr\":");
-      fdumpEexpr(fp, expr->as.wrap);
+      fprintf(fp, "\n%*s, \"type\":\"predot\",\"subexpr\":", indent, "");
+      fdumpEexpr(fp, indent+2, expr->as.wrap);
     }; break;
     case EEXPR_CHAIN: {
-      fprintf(fp, ",\"type\":\"chain\",\"subexprs\":");
-      char* separator = "[";
-      for (size_t i = 0; i < expr->as.list.len; ++i) {
-        fprintf(fp, "%s", separator);
-        fdumpEexpr(fp, expr->as.list.data[i]);
-        separator = ",";
-      }
-      fprintf(fp, "]");
+      fprintf(fp, "\n%*s, \"type\":\"chain\",\"subexprs\":", indent, "");
+      fdumpEexprArray(fp, indent+2, &expr->as.list);
     }; break;
     case EEXPR_SPACE: {
-      fprintf(fp, ",\"type\":\"space\",\"subexprs\":");
-      char* separator = "[";
-      for (size_t i = 0; i < expr->as.list.len; ++i) {
-        fprintf(fp, "%s", separator);
-        fdumpEexpr(fp, expr->as.list.data[i]);
-        separator = ",";
-      }
-      fprintf(fp, "]");
+      fprintf(fp, "\n%*s, \"type\":\"space\",\"subexprs\":", indent, "");
+      fdumpEexprArray(fp, indent+2, &expr->as.list);
     }; break;
     case EEXPR_ELLIPSIS: {
-      fprintf(fp, ",\"type\":\"ellipsis\",\"before\":");
-      if (expr->as.ellipsis[0] == NULL) { fprintf(fp, "null"); }
-      else { fdumpEexpr(fp, expr->as.ellipsis[0]); }
-      fprintf(fp, ",\"after\":");
-      if (expr->as.ellipsis[1] == NULL) { fprintf(fp, "null"); }
-      else { fdumpEexpr(fp, expr->as.ellipsis[1]); }
+      fprintf(fp, "\n%*s, \"type\":\"ellipsis\"", indent, "");
+      fprintf(fp, "\n%*s, \"before\":", indent, "");
+      if (expr->as.ellipsis[0] == NULL) {
+        fprintf(fp, "null");
+      }
+      else {
+        fprintf(fp, "\n%*s", indent+2, "");
+        fdumpEexpr(fp, indent+2, expr->as.ellipsis[0]);
+      }
+      fprintf(fp, "\n%*s, \"after\":", indent, "");
+      if (expr->as.ellipsis[1] == NULL) {
+        fprintf(fp, "null");
+      }
+      else {
+        fprintf(fp, "\n%*s", indent+2, "");
+        fdumpEexpr(fp, indent+2, expr->as.ellipsis[1]);
+      }
     }; break;
     case EEXPR_COLON: {
-      fprintf(fp, ",\"type\":\"colon\",\"subexprs\":[");
-      fdumpEexpr(fp, expr->as.pair[0]);
-      fprintf(fp, ",");
-      fdumpEexpr(fp, expr->as.pair[1]);
-      fprintf(fp, "]");
+      fprintf(fp, "\n%*s, \"type\":\"colon\",\"subexprs\":\n%*s[ ", indent, "", indent+2, "");
+      fdumpEexpr(fp, indent+4, expr->as.pair[0]);
+      fprintf(fp, "\n%*s, ", indent+2, "");
+      fdumpEexpr(fp, indent+4, expr->as.pair[1]);
+      fprintf(fp, "\n%*s]", indent+2, "");
     }; break;
     case EEXPR_COMMA: {
-      fprintf(fp, ",\"type\":\"comma\",\"subexprs\":");
-      if (expr->as.list.len == 0) {
-        fprintf(fp, "[]");
-      }
-      else {
-        char* separator = "[";
-        for (size_t i = 0; i < expr->as.list.len; ++i) {
-          fprintf(fp, "%s", separator);
-          fdumpEexpr(fp, expr->as.list.data[i]);
-          separator = ",";
-        }
-        fprintf(fp, "]");
-      }
+      fprintf(fp, "\n%*s, \"type\":\"comma\",\"subexprs\":", indent, "");
+      fdumpEexprArray(fp, indent+2, &expr->as.list);
     }; break;
     case EEXPR_SEMICOLON: {
-      fprintf(fp, ",\"type\":\"semicolon\",\"subexprs\":");
-      if (expr->as.list.len == 0) {
-        fprintf(fp, "[]");
-      }
-      else {
-        char* separator = "[";
-        for (size_t i = 0; i < expr->as.list.len; ++i) {
-          fprintf(fp, "%s", separator);
-          fdumpEexpr(fp, expr->as.list.data[i]);
-          separator = ",";
-        }
-        fprintf(fp, "]");
-      }
-    }; break;
+      fprintf(fp, "\n%*s, \"type\":\"semicolon\",\"subexprs\":", indent, "");
+      fdumpEexprArray(fp, indent+2, &expr->as.list);}; break;
   }
-  fprintf(fp, "}");
+  fprintf(fp, "\n%*s}", indent, "");
 }
 
 void fdumpError(FILE* fp, const eexprError* err) {
@@ -488,20 +474,17 @@ void fdumpError(FILE* fp, const eexprError* err) {
     case EEXPRERR_MISSING_CLOSE_TEMPLATE: {
       fprintf(fp, ",\"type\":\"missing-close-template\"");
     }; break;
-    case EEXPRERR_EXPECT_CHAIN_AFTER_SPACE: {
-      fprintf(fp, ",\"type\":\"expect-chain-after-space\"");
-    }; break;
   }
   fprintf(fp, "}");
 }
 
-void fdumpTokenStream(FILE* fp, const char* indent, const dllistNode(token)* root) {
+void fdumpTokenStream(FILE* fp, const char* indent, const dllistNode_token* root) {
   if (root == NULL) {
     fprintf(fp, " []");
   }
   else {
     char* separator = "[ ";
-    for (const dllistNode(token)* strm = root; strm != NULL; strm = strm->next) {
+    for (const dllistNode_token* strm = root; strm != NULL; strm = strm->next) {
       if (strm->here.transparent) { continue; }
       fprintf(fp, "\n%s%s", indent, separator);
       fdumpToken(fp, &strm->here);
@@ -511,28 +494,28 @@ void fdumpTokenStream(FILE* fp, const char* indent, const dllistNode(token)* roo
   }
 }
 
-void fdumpEexprStream(FILE* fp, const char* indent, const dynarr(eexprPtr)* arr) {
+void fdumpEexprArray(FILE* fp, int indent, const dynarr_eexpr_p* arr) {
   if (arr->len == 0) {
-    fprintf(fp, " []");
+    fprintf(fp, "[]");
   }
   else {
     char* separator = "[ ";
     for (size_t i = 0; i < arr->len; ++i) {
-      fprintf(fp, "\n%s%s", indent, separator);
-      fdumpEexpr(fp, arr->data[i]);
+      fprintf(fp, "\n%*s%s", indent, "", separator);
+      fdumpEexpr(fp, indent + 2, arr->data[i]);
       separator = ", ";
     }
-    fprintf(fp, "\n%s]", indent);
+    fprintf(fp, "\n%*s]", indent, "");
   }
 }
 
-void fdumpErrorStream(FILE* fp, const char* indent, const dllistNode(eexprError)* root) {
+void fdumpErrorStream(FILE* fp, const char* indent, const dllistNode_eexprError* root) {
   if (root == NULL) {
     fprintf(fp, " []");
   }
   else {
     char* separator = "[ ";
-    for (const dllistNode(eexprError)* strm = root; strm != NULL; strm = strm->next) {
+    for (const dllistNode_eexprError* strm = root; strm != NULL; strm = strm->next) {
       if (strm->here.type == EEXPRERR_NOERROR) { continue; }
       fprintf(fp, "\n%s%s", indent, separator);
       fdumpError(fp, &strm->here);

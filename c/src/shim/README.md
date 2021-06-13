@@ -13,9 +13,12 @@ This also allows me to have `NUL` bytes inside a string.
 I also have a `strBuilder` type for the occasions when I need it (mostly interpreting string literals during lexing).
 
 I need a limited ability to manipulate Unicode.
-Namely, I store all strings as UTF-8 (since that is the only encoding eexprs accept), so I need a way to pop the variable-width characters off the front of a string, as well as encode a unicode character `uchar` to a plain bytestring.
+Namely, I store all strings as UTF-8 (since that is the only encoding eexprs accept),
+  so I need a way to pop the variable-width characters off the front of a string,
+  as well as encode a unicode codepoint `uchar` to a plain bytestring.
 I've also added a handful of other unicode-aware functions as I needed them.
 Beyond that however, UTF-8 can be usually be "blindly" worked with using plain C string functions.
+Importantly, I'm not using any normalization algorithms, since (without an existing implementation) that's complex, annoying, and actually might need to be avoided in downstream interpreters of eexprs.
 
 I find myself using doubly-linked lists a lot (or needing a sequence data structure, and a doubly-linked list will do).
 This is implemented in a type-safe, polymorphic way in `dllist.{h,c}`.

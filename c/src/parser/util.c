@@ -7,11 +7,11 @@
 
 
 token* parser_peek(parser* st) {
-  dllistNode(token)* node = st->tokStream.start;
+  dllistNode_token* node = st->tokStream.start;
   while (node != NULL) {
     if (node->here.transparent) {
       token_deinit(&node->here);
-      dllist_popStart(token)(&st->tokStream, NULL);
+      dllist_popStart_token(&st->tokStream, NULL);
       node = st->tokStream.start;
     }
     else {
@@ -22,15 +22,15 @@ token* parser_peek(parser* st) {
 }
 
 void parser_pop(parser* st) {
-  dllistNode(token)* node = st->tokStream.start;
+  dllistNode_token* node = st->tokStream.start;
   while (node != NULL) {
     if (node->here.transparent) {
       token_deinit(&node->here);
-      dllist_popStart(token)(&st->tokStream, NULL);
+      dllist_popStart_token(&st->tokStream, NULL);
       node = st->tokStream.start;
     }
     else {
-      dllist_popStart(token)(&st->tokStream, NULL);
+      dllist_popStart_token(&st->tokStream, NULL);
       return;
     }
   }

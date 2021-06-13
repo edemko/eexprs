@@ -24,10 +24,10 @@ typedef struct openWrap {
 typedef struct parser {
   str rest; // alias into .allInput
   filelocPoint loc; // use zero-indexed line/col and only translate to 1-indexd for human consumption
-  dllist(token) tokStream; //owned
-  dynarr(eexprPtr) eexprStream; //owned
-  dllist(eexprError) warnStream; // owned
-  dllist(eexprError) errStream; // owned
+  dllist_token tokStream; //owned
+  dynarr_eexpr_p eexprStream; //owned
+  dllist_eexprError warnStream; // owned
+  dllist_eexprError errStream; // owned
   eexprError fatal; // use EEXPRERR_NOERROR for no error
   newlineType discoveredNewline; // NEWLINE_NONE if not set
   struct lexer_indent {
@@ -35,7 +35,7 @@ typedef struct parser {
     uchar chr;
     fileloc established;
   } indent;
-  dynarr(openWrap) wrapStack;
+  dynarr_openWrap wrapStack;
   str allInput; // owned
   struct lineIndex {
     size_t cap;

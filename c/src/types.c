@@ -38,7 +38,7 @@ void eexpr_deinit(eexpr* expr) {
         free(expr->as.string.parts.data[i].expr);
         free(expr->as.string.parts.data[i].textAfter.bytes);
       }
-      dynarr_deinit(strTemplPart)(&expr->as.string.parts);
+      dynarr_deinit_strTemplPart(&expr->as.string.parts);
     }; break;
     case EEXPR_PAREN: {
       if (expr->as.wrap != NULL) {
@@ -63,7 +63,7 @@ void eexpr_deinit(eexpr* expr) {
         eexpr_deinit(expr->as.list.data[i]);
         free(expr->as.list.data[i]);
       }
-      dynarr_deinit(eexprPtr)(&expr->as.list);
+      dynarr_deinit_eexpr_p(&expr->as.list);
     }; break;
     case EEXPR_PREDOT: {
       eexpr_deinit(expr->as.wrap);
@@ -74,14 +74,14 @@ void eexpr_deinit(eexpr* expr) {
         eexpr_deinit(expr->as.list.data[i]);
         free(expr->as.list.data[i]);
       }
-      dynarr_deinit(eexprPtr)(&expr->as.list);
+      dynarr_deinit_eexpr_p(&expr->as.list);
     }; break;
     case EEXPR_SPACE: {
       for (size_t i = 0; i < expr->as.list.len; ++i) {
         eexpr_deinit(expr->as.list.data[i]);
         free(expr->as.list.data[i]);
       }
-      dynarr_deinit(eexprPtr)(&expr->as.list);
+      dynarr_deinit_eexpr_p(&expr->as.list);
     }; break;
     case EEXPR_ELLIPSIS: {
       if (expr->as.ellipsis[0] != NULL) {
@@ -104,14 +104,14 @@ void eexpr_deinit(eexpr* expr) {
         eexpr_deinit(expr->as.list.data[i]);
         free(expr->as.list.data[i]);
       }
-      dynarr_deinit(eexprPtr)(&expr->as.list);
+      dynarr_deinit_eexpr_p(&expr->as.list);
     }; break;
     case EEXPR_SEMICOLON: {
       for (size_t i = 0; i < expr->as.list.len; ++i) {
         eexpr_deinit(expr->as.list.data[i]);
         free(expr->as.list.data[i]);
       }
-      dynarr_deinit(eexprPtr)(&expr->as.list);
+      dynarr_deinit_eexpr_p(&expr->as.list);
     }; break;
   }
 }

@@ -15,7 +15,7 @@ void mkUnbalanceError(lexer* st) {
     st->fatal.as.unbalancedWrap.type = UCHAR_NULL;
   }
   else {
-    const openWrap* match = dynarr_peek(openWrap)(&st->wrapStack);
+    const openWrap* match = dynarr_peek_openWrap(&st->wrapStack);
     st->fatal.as.unbalancedWrap.type = match->type;
     st->fatal.as.unbalancedWrap.loc = match->loc;
   }
@@ -48,22 +48,22 @@ eexpr* parseWrap(parser* st) {
     switch (open->as.wrap.type) {
       case WRAP_NULL: assert(false);
       case WRAP_PAREN: {
-        dynarr_push(openWrap)(&st->wrapStack, &openInfo);
+        dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_PAREN;
         goto nonIndent;
       }; break;
       case WRAP_BRACK: {
-        dynarr_push(openWrap)(&st->wrapStack, &openInfo);
+        dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_BRACK;
         goto nonIndent;
       }; break;
       case WRAP_BRACE: {
-        dynarr_push(openWrap)(&st->wrapStack, &openInfo);
+        dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_BRACE;
         goto nonIndent;
       }; break;
       case WRAP_BLOCK: {
-        dynarr_push(openWrap)(&st->wrapStack, &openInfo);
+        dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_BLOCK;
         goto indent;
       }; break;
@@ -77,9 +77,9 @@ eexpr* parseWrap(parser* st) {
     if ( st->wrapStack.len != 0
       && close->type == TOK_WRAP
       && !close->as.wrap.isOpen
-      && close->as.wrap.type == dynarr_peek(openWrap)(&st->wrapStack)->type
+      && close->as.wrap.type == dynarr_peek_openWrap(&st->wrapStack)->type
        ) {
-      dynarr_pop(openWrap)(&st->wrapStack);
+      dynarr_pop_openWrap(&st->wrapStack);
       out->loc.end = close->loc.end;
       parser_pop(st);
     }
@@ -91,19 +91,19 @@ eexpr* parseWrap(parser* st) {
   indent: {
     out->loc.start = open->loc.start;
     parser_pop(st);
-    dynarr_init(eexprPtr)(&out->as.list, 4);
+    dynarr_init_eexpr_p(&out->as.list, 4);
     while (true) {
       eexpr* subexpr = parseSemicolon(st);
       if (subexpr != NULL) {
-        dynarr_push(eexprPtr)(&out->as.list, &subexpr);
+        dynarr_push_eexpr_p(&out->as.list, &subexpr);
       }
       token* lookahead = parser_peek(st);
       if (lookahead->type == TOK_WRAP) {
         if ( st->wrapStack.len != 0
           && !lookahead->as.wrap.isOpen
-          && lookahead->as.wrap.type == dynarr_peek(openWrap)(&st->wrapStack)->type
+          && lookahead->as.wrap.type == dynarr_peek_openWrap(&st->wrapStack)->type
            ) {
-          dynarr_pop(openWrap)(&st->wrapStack);
+          dynarr_pop_openWrap(&st->wrapStack);
           out->loc.end = lookahead->loc.end;
           parser_pop(st);
         }
@@ -117,7 +117,7 @@ eexpr* parseWrap(parser* st) {
       }
       else {
         eexprError err = {.loc = lookahead->loc, .type = EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT};
-        dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+        dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
         return out;
       }
     }
@@ -154,11 +154,11 @@ eexpr* parseTemplate(parser* st) {
         out->loc = tok->loc;
         out->type = EEXPR_STRING;
         out->as.string.text1 = tok->as.string.text;
-        dynarr_init(strTemplPart)(&out->as.string.parts, 2);
+        dynarr_init_strTemplPart(&out->as.string.parts, 2);
       }
       { // push to wrapStack
         openWrap info = {.loc = tok->loc, .type = '\"'};
-        dynarr_push(openWrap)(&st->wrapStack, &info);
+        dynarr_push_openWrap(&st->wrapStack, &info);
       }
       parser_pop(st);
       while (true) {
@@ -185,7 +185,7 @@ eexpr* parseTemplate(parser* st) {
           if ( lookahead->type == TOK_STRING
             && (lookahead->as.string.splice == STRSPLICE_MIDDLE || lookahead->as.string.splice == STRSPLICE_CLOSE)
              ) {
-            dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+            dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
           }
           else {
             st->fatal = err;
@@ -196,17 +196,17 @@ eexpr* parseTemplate(parser* st) {
           { // append last template part
             part.textAfter = lookahead->as.string.text;
             if (part.expr != NULL) {
-              dynarr_push(strTemplPart)(&out->as.string.parts, &part);
+              dynarr_push_strTemplPart(&out->as.string.parts, &part);
             }
             out->loc.end = lookahead->loc.end;
           }
           // ensure we are expecting a close string
-          if (st->wrapStack.len == 0 || dynarr_peek(openWrap)(&st->wrapStack)->type != '\"') {
+          if (st->wrapStack.len == 0 || dynarr_peek_openWrap(&st->wrapStack)->type != '\"') {
             mkUnbalanceError(st);
           }
           else { // ensure the splice type makes sense
             if (lookahead->as.string.splice == STRSPLICE_CLOSE) {
-              dynarr_pop(openWrap)(&st->wrapStack);
+              dynarr_pop_openWrap(&st->wrapStack);
               parser_pop(st);
               return out;
             }
@@ -219,10 +219,10 @@ eexpr* parseTemplate(parser* st) {
         else {
           if (part.expr != NULL) {
             part.textAfter.len = 0; part.textAfter.bytes = NULL;
-            dynarr_push(strTemplPart)(&out->as.string.parts, &part);
+            dynarr_push_strTemplPart(&out->as.string.parts, &part);
           }
           eexprError err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_CLOSE_TEMPLATE};
-          dllist_insertAfter(eexprError)(&st->errStream, NULL, &err);
+          dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
           return out;
         }
       }
@@ -331,8 +331,8 @@ eexpr* parseChain(parser* st) {
           chain->loc.end = lookahead->loc.end;
           parser_pop(st);
         }
-        dynarr_init(eexprPtr)(&chain->as.list, 4);
-        dynarr_push(eexprPtr)(&chain->as.list, &expr1);
+        dynarr_init_eexpr_p(&chain->as.list, 4);
+        dynarr_push_eexpr_p(&chain->as.list, &expr1);
       }
       else {
         chain = expr1;
@@ -342,7 +342,7 @@ eexpr* parseChain(parser* st) {
     while (true) { // get further chained expressions
       eexpr* next = parseAtomic(st);
       if (next == NULL) { goto finish; }
-      dynarr_push(eexprPtr)(&chain->as.list, &next);
+      dynarr_push_eexpr_p(&chain->as.list, &next);
       token* lookahead = parser_peek(st);
       if (lookahead->type == TOK_CHAIN) {
         // continue the chain when there's another chain dot
@@ -395,8 +395,8 @@ eexpr* parseSpace(parser* st) {
     out->loc.start = expr1->loc.start;
     out->loc.end = expr1->loc.end;
     out->type = EEXPR_SPACE;
-    dynarr_init(eexprPtr)(&out->as.list, 4);
-    dynarr_push(eexprPtr)(&out->as.list, &expr1);
+    dynarr_init_eexpr_p(&out->as.list, 4);
+    dynarr_push_eexpr_p(&out->as.list, &expr1);
   }
   while (true) {
     token* lookahead = parser_peek(st);
@@ -404,7 +404,7 @@ eexpr* parseSpace(parser* st) {
       parser_pop(st);
       eexpr* next = parseChain(st);
       if (next != NULL) {
-        dynarr_push(eexprPtr)(&out->as.list, &next);
+        dynarr_push_eexpr_p(&out->as.list, &next);
         out->loc.end = next->loc.end;
       }
       else {
@@ -417,7 +417,7 @@ eexpr* parseSpace(parser* st) {
   } assert(false);
   output: {
     if (out->as.list.len == 1) {
-      dynarr_deinit(eexprPtr)(&out->as.list);
+      dynarr_deinit_eexpr_p(&out->as.list);
       free(out);
       return expr1;
     }
@@ -481,7 +481,7 @@ eexpr* parseComma(parser* st) {
     if (maybeComma->type == TOK_COMMA) {
       out = malloc(sizeof(eexpr));
       checkOom(out);
-      dynarr_init(eexprPtr)(&out->as.list, 4);
+      dynarr_init_eexpr_p(&out->as.list, 4);
       out->loc = maybeComma->loc;
       parser_pop(st);
     }
@@ -499,7 +499,7 @@ eexpr* parseComma(parser* st) {
       }
     }
     else if (out != NULL) { // found a sub-expression, and we already have evidence of a comma
-      dynarr_push(eexprPtr)(&out->as.list, &tmp);
+      dynarr_push_eexpr_p(&out->as.list, &tmp);
       if (lookahead->type == TOK_COMMA) { // there's also comma afterwards to be consumed
         out->loc.end = lookahead->loc.end;
         parser_pop(st);
@@ -511,8 +511,8 @@ eexpr* parseComma(parser* st) {
     else if (lookahead->type == TOK_COMMA) { // found a sub-expression, and the first evidence of a comma
       out = malloc(sizeof(eexpr));
       checkOom(out);
-      dynarr_init(eexprPtr)(&out->as.list, 4);
-      dynarr_push(eexprPtr)(&out->as.list, &tmp);
+      dynarr_init_eexpr_p(&out->as.list, 4);
+      dynarr_push_eexpr_p(&out->as.list, &tmp);
       out->loc.start = tmp->loc.start;
       out->loc.end = lookahead->loc.end;
       parser_pop(st);
@@ -530,7 +530,7 @@ eexpr* parseSemicolon(parser* st) {
     if (maybeSemi->type == TOK_SEMICOLON) {
       out = malloc(sizeof(eexpr));
       checkOom(out);
-      dynarr_init(eexprPtr)(&out->as.list, 4);
+      dynarr_init_eexpr_p(&out->as.list, 4);
       out->loc = maybeSemi->loc;
       parser_pop(st);
     }
@@ -548,7 +548,7 @@ eexpr* parseSemicolon(parser* st) {
       }
     }
     else if (out != NULL) { // found a sub-expression, and we already have evidence of a semicolon
-      dynarr_push(eexprPtr)(&out->as.list, &tmp);
+      dynarr_push_eexpr_p(&out->as.list, &tmp);
       if (lookahead->type == TOK_SEMICOLON) { // there's also semicolon afterwards to be consumed
         out->loc.end = lookahead->loc.end;
         parser_pop(st);
@@ -560,8 +560,8 @@ eexpr* parseSemicolon(parser* st) {
     else if (lookahead->type == TOK_SEMICOLON) { // found a sub-expression, and the first evidence of a semicolon
       out = malloc(sizeof(eexpr));
       checkOom(out);
-      dynarr_init(eexprPtr)(&out->as.list, 4);
-      dynarr_push(eexprPtr)(&out->as.list, &tmp);
+      dynarr_init_eexpr_p(&out->as.list, 4);
+      dynarr_push_eexpr_p(&out->as.list, &tmp);
       out->loc.start = tmp->loc.start;
       out->loc.end = lookahead->loc.end;
       parser_pop(st);
@@ -577,7 +577,7 @@ eexpr* parseSemicolon(parser* st) {
 void parseLine(parser* st) {
   eexpr* line = parseSemicolon(st);
   if (line != NULL) {
-      dynarr_push(eexprPtr)(&st->eexprStream, &line);
+      dynarr_push_eexpr_p(&st->eexprStream, &line);
   }
   else {
     size_t depth = 0; { // count up how many dedents we currently expect, then reset the wrapStack

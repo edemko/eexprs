@@ -46,14 +46,13 @@ typedef struct strTemplPart {
 #include "shim/dynarr.h"
 typedef struct eexprStrTempl {
   str text1;
-  dynarr(strTemplPart) parts;
+  dynarr_strTemplPart parts;
 } eexprStrTempl;
 
 // these are just so dynarr can be given a type identifier
-typedef eexpr* eexprPtr;
-#define TYPE eexprPtr
+typedef eexpr* eexpr_p;
+#define TYPE eexpr_p
 #include "shim/dynarr.h"
-// typedef (eexpr*[2]) eexprPair;
 
 
 //////////////////////////////////// Eexprs ////////////////////////
@@ -83,7 +82,7 @@ struct eexpr {
     eexprCodepoint codepoint;
     eexprStrTempl string;
     eexpr* wrap; // paren, bracket, brace, predot
-    dynarr(eexprPtr) list; // chain, space, comma, semicolon, block
+    dynarr_eexpr_p list; // chain, space, comma, semicolon, block
     eexpr* pair[2]; // non-nullable pointers
     eexpr* ellipsis[2]; // nullable pointers
   } as;
@@ -207,8 +206,7 @@ typedef struct eexprError {
     EEXPRERR_UNBALANCED_WRAP,
     EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT,
     EEXPRERR_MISSING_TEMPLATE_EXPR,
-    EEXPRERR_MISSING_CLOSE_TEMPLATE,
-    EEXPRERR_EXPECT_CHAIN_AFTER_SPACE
+    EEXPRERR_MISSING_CLOSE_TEMPLATE
   } type;
   union errorData {
     uchar badChar;

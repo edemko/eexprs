@@ -1,0 +1,53 @@
+  #comment
+137
+0 4567 6_123_456_789
+0.0 123.45
+1e42 1.2345e+2
+0x42 0B0111_1111 0zX 0Z↊ 0ZE 0z↋
+0z10.6^9 1^0xA4
+
+λ hello + -bye
+
+'c' '\'' '\x7f' '\u03Bb' '\U01f600'
+"c\\\'\"\`\e\0\n!"
+""
+"a\&\
+  \b"
+
+"""END
+"\
+ END"""
+END""" hey
+    """ \
+   \ hello
+
+    world
+    """
+
+() [] { }
+(a b)
+( ws )
+:
+  line1
+  line2
+[
+  1
+  2
+] ()
+do:
+  first
+  #asdf
+  second\
+  third
+   fourth
+
+"Hello, `toUpper name`!"
+"Goodbyte, `firstName` `lastName`!"
+
+[1 .. 2] [..2] [1..] [..]
+1: a
+(,) (1,) (,1) (,1,) (1,2,3,)
+{a;b;} [;] (,;,)
+
+x .elem S; map .(get nil) key
+pt.x    arr[4]    world.player[0].pos.x    asciiz"asdfλ"
