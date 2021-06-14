@@ -12,7 +12,15 @@ I hope these comments can make it directly into some documentation.
 
 ## Notes to Self
 
+I'm currently working on defining a solid C interface.
+It's going in `include/`, but I have not documented that fact.
+
 - [x] eliminate easy `TODO`/`FIXME`s
+- [ ] create a C interface
+  - [ ] implement main.c in terms of only eexpr.h
+  - [ ] include version metadata from METADATA.toml
+  - [ ] library artifacts
+  - [ ] is it worth the complexity of letting the user pick an allocator?
 - [ ] decide about isSymbolChar
   - [ ] go through ASCII for the allow/denylist
   - [ ] understand unicode character classes
@@ -24,9 +32,7 @@ I hope these comments can make it directly into some documentation.
   - [ ] ungrammatical eexprs should have good error reporting
   - [ ] fuzz it
   - [ ] sanitize (at least for undefined behavior)
-- [ ] create a C interface
-  - [ ] include version metadata from METADATA.toml
-
+- [ ] check `TODO`/`FIXME` again
 
 ## Building
 
@@ -34,7 +40,7 @@ I hope these comments can make it directly into some documentation.
 ./build.sh
 ```
 
-The source is compliant C99, but the build script assumes gcc.
+The source is standard C11, but the build script uses `gcc` because that's what I personally use.
 It's not hard to edit the script as-needed.
 
 The only build artifact is `bin/eexpr2json`, which takes an input file,

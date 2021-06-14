@@ -11,10 +11,10 @@
 // both parser_peek and parser_pop destroy transparent tokens from the start of the token stream, along with their token data.
 
 // returns a borrowed pointer to the first non-transparent token
-token* parser_peek(parser* st);
+token* parser_peek(engine* st);
 // Removes the first non-transparent token from the stream.
 // It does not free any token data, so you must assume ownership of the popped token's data before popping.
-void parser_pop(parser* st);
+void parser_pop(engine* st);
 
 
 #endif

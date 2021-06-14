@@ -6,7 +6,8 @@
 
 //////////////////////////////////// Helper Procedures ////////////////////////////////////
 
-void mkUnbalanceError(lexer* st) {
+static
+void mkUnbalanceError(engine* st) {
   if (st->fatal.type != EEXPRERR_NOERROR) { return; }
   token* lookahead = parser_peek(st);
   st->fatal.type = EEXPRERR_UNBALANCED_WRAP;
@@ -24,8 +25,8 @@ void mkUnbalanceError(lexer* st) {
 
 //////////////////////////////////// Individual Expression Parsers ////////////////////////////////////
 
-eexpr* parseSemicolon(parser* st);
-eexpr* parseSpace(parser* st);
+static eexpr* parseSemicolon(engine* st);
+static eexpr* parseSpace(engine* st);
 
 /*
 ```
@@ -36,7 +37,8 @@ wrapExpr
    |  indent semicolonExpr (newline semicolonExpr)* dedent
 ```
 */
-eexpr* parseWrap(parser* st) {
+static
+eexpr* parseWrap(engine* st) {
   token* open = parser_peek(st);
   if ( open->type != TOK_WRAP
     || !open->as.wrap.isOpen
@@ -116,8 +118,8 @@ eexpr* parseWrap(parser* st) {
         parser_pop(st);
       }
       else {
-        eexprError err = {.loc = lookahead->loc, .type = EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT};
-        dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+        error err = {.loc = lookahead->loc, .type = EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT};
+        dllist_insertAfter_error(&st->errStream, NULL, &err);
         return out;
       }
     }
@@ -131,7 +133,8 @@ stringTemplate
    |  string.open spaceExpr (string.middle spaceExpr)* string.close
 ```
 */
-eexpr* parseTemplate(parser* st) {
+static
+eexpr* parseTemplate(engine* st) {
   token* tok = parser_peek(st);
   if (tok->type != TOK_STRING) { return NULL; }
   switch (tok->as.string.splice) {
@@ -181,11 +184,11 @@ eexpr* parseTemplate(parser* st) {
           out->loc.end = part.expr->loc.end;
         }
         else {
-          eexprError err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_TEMPLATE_EXPR};
+          error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_TEMPLATE_EXPR};
           if ( lookahead->type == TOK_STRING
             && (lookahead->as.string.splice == STRSPLICE_MIDDLE || lookahead->as.string.splice == STRSPLICE_CLOSE)
              ) {
-            dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+            dllist_insertAfter_error(&st->errStream, NULL, &err);
           }
           else {
             st->fatal = err;
@@ -221,8 +224,8 @@ eexpr* parseTemplate(parser* st) {
             part.textAfter.len = 0; part.textAfter.bytes = NULL;
             dynarr_push_strTemplPart(&out->as.string.parts, &part);
           }
-          eexprError err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_CLOSE_TEMPLATE};
-          dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+          error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_CLOSE_TEMPLATE};
+          dllist_insertAfter_error(&st->errStream, NULL, &err);
           return out;
         }
       }
@@ -245,7 +248,8 @@ atomicExpr
    |  wrapExpr
 ```
 */
-eexpr* parseAtomic(parser* st) {
+static
+eexpr* parseAtomic(engine* st) {
   token* tok = parser_peek(st);
   switch (tok->type) {
     case TOK_SYMBOL: {
@@ -297,7 +301,8 @@ chainTail
 ```
 Note that `stringTemplate strTemplPart` is not a chainExpr, since the postlexer should already have detected it as crammed tokens.
 */
-eexpr* parseChain(parser* st) {
+static
+eexpr* parseChain(engine* st) {
   eexpr* predot = NULL;
   { // check if this is a predot expression
     token* lookahead = parser_peek(st);
@@ -383,7 +388,8 @@ eexpr* parseChain(parser* st) {
 /*
 spaceExpr ::= chainExpr (whitespace chainExpr)*
 */
-eexpr* parseSpace(parser* st) {
+static
+eexpr* parseSpace(engine* st) {
   if (parser_peek(st)->type == TOK_SPACE) {
     parser_pop(st);
   }
@@ -428,11 +434,12 @@ eexpr* parseSpace(parser* st) {
   } assert(false);
 }
 
-eexpr* parseEllipsis(parser* st) {
+static
+eexpr* parseEllipsis(engine* st) {
   eexpr* expr1 = parseSpace(st);
   token* lookahead = parser_peek(st);
   if (lookahead->type == TOK_ELLIPSIS) {
-    fileloc dotsLoc = lookahead->loc;
+    eexpr_loc dotsLoc = lookahead->loc;
     parser_pop(st);
     eexpr* expr2 = parseSpace(st);
     eexpr* out = malloc(sizeof(eexpr));
@@ -449,14 +456,15 @@ eexpr* parseEllipsis(parser* st) {
   }
 }
 
-eexpr* parseColon(parser* st) {
+static
+eexpr* parseColon(engine* st) {
   eexpr* expr1 = parseEllipsis(st);
   token* colon = parser_peek(st);
   if (colon->type != TOK_COLON) {
     return expr1;
   }
   else {
-    fileloc colonLoc = colon->loc;
+    eexpr_loc colonLoc = colon->loc;
     parser_pop(st);
     eexpr* expr2 = parseEllipsis(st);
     if (expr2 == NULL) {
@@ -474,7 +482,8 @@ eexpr* parseColon(parser* st) {
   }
 }
 
-eexpr* parseComma(parser* st) {
+static
+eexpr* parseComma(engine* st) {
   eexpr* out = NULL;
   { // optional initial comma
     token* maybeComma = parser_peek(st);
@@ -523,7 +532,8 @@ eexpr* parseComma(parser* st) {
   }
 }
 
-eexpr* parseSemicolon(parser* st) {
+static
+eexpr* parseSemicolon(engine* st) {
   eexpr* out = NULL;
   { // optional initial semicolon
     token* maybeSemi = parser_peek(st);
@@ -574,7 +584,8 @@ eexpr* parseSemicolon(parser* st) {
 
 //////////////////////////////////// Main Parser ////////////////////////////////////
 
-void parseLine(parser* st) {
+static
+void parseLine(engine* st) {
   eexpr* line = parseSemicolon(st);
   if (line != NULL) {
       dynarr_push_eexpr_p(&st->eexprStream, &line);
@@ -628,7 +639,7 @@ void parseLine(parser* st) {
   }
 }
 
-void parser_parse(parser* st) {
+void engine_parse(engine* st) {
   bool atStart = true;
   while (st->fatal.type == EEXPRERR_NOERROR) {
     token* lookahead = parser_peek(st);

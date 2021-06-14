@@ -10,6 +10,7 @@
 
 // decode a hex-encoded unicode codepoint into `out`
 // if decoding fails, return false and do not modify `out`
+static
 bool decodeUnihex(size_t nChars, uchar* out, uchar* digits) {
   uchar accum = 0;
   for (int i = 0; i < nChars; ++i) {
@@ -42,7 +43,8 @@ bool decodeUnihex(size_t nChars, uchar* out, uchar* digits) {
 // returns a single uchar, or UCHAR_NULL if no valid escape sequence is found
 // input is consumed and errors are emitted (escpe no error is emitted if no valid escape is found; allows chaining with takeStrEscape)
 // call only after detecting an escapeLeader
-uchar takeCharEscape(lexer* st) {
+static
+uchar takeCharEscape(engine* st) {
   uchar c;
   size_t adv;
   adv = peekUchar(&c, st->rest);
@@ -54,7 +56,7 @@ uchar takeCharEscape(lexer* st) {
     }
   }
   uchar digits[6] = {UCHAR_NULL, UCHAR_NULL, UCHAR_NULL, UCHAR_NULL, UCHAR_NULL, UCHAR_NULL};
-  eexprError decodeError = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CODE};
+  error decodeError = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CODE};
   if (c == twoHexEscapeLeader) {
     lexer_advance(st, adv, 1);
     adv = peekUchars(&digits[4], 2, st->rest);
@@ -62,7 +64,7 @@ uchar takeCharEscape(lexer* st) {
     if (!decodeUnihex(2, &c, &digits[4])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; }
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -73,7 +75,7 @@ uchar takeCharEscape(lexer* st) {
     if (!decodeUnihex(4, &c, &digits[2])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -84,7 +86,7 @@ uchar takeCharEscape(lexer* st) {
     if (!decodeUnihex(6, &c, digits)) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -104,9 +106,10 @@ The other is used for breaking strings across lines.
 Comments/whitespace are not allowed before the first linebreak to keep lookahead constant-space.
 */
 // As `takeCharEscape`, but returns true iff characters were consumed.
-bool takeNewline(lexer* st);
-bool takeWhitespace(lexer* st);
-bool takeNullEscape(lexer* st) {
+static bool takeNewline(engine* st);
+static bool takeWhitespace(engine* st);
+static
+bool takeNullEscape(engine* st) {
   uchar c;
   size_t adv;
   adv = peekUchar(&c, st->rest);
@@ -119,8 +122,8 @@ bool takeNullEscape(lexer* st) {
       lexer_advance(st, adv, 1);
     }
     else {
-      eexprError err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_MISSING_LINE_PICKUP};
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+      error err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_MISSING_LINE_PICKUP};
+      dllist_insertAfter_error(&st->errStream, NULL, &err);
     }
     return true;
   }
@@ -139,7 +142,8 @@ bool takeNullEscape(lexer* st) {
   `[:whitespaceChar:]+`
 However, if the whitespace is not simply a repetition of the same character, that it a "mixed whitespace" error.
 */
-bool takeWhitespace(lexer* st) {
+static
+bool takeWhitespace(engine* st) {
   {
     uchar lookahead;
     peekUchar(&lookahead, st->rest);
@@ -167,11 +171,11 @@ bool takeWhitespace(lexer* st) {
   tok.as.unknownSpace.size = advChars;
   lexer_addTok(st, &tok);
   if (mixed) {
-    eexprError err =
+    error err =
       { .loc = tok.loc
       , .type = EEXPRERR_MIXED_SPACE
       };
-    dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+    dllist_insertAfter_error(&st->errStream, NULL, &err);
   }
   return true;
 }
@@ -179,7 +183,8 @@ bool takeWhitespace(lexer* st) {
 /* Lines can be joined with a backslash+newline.
   `\\[:whitespace:]*[:newline:]`
 */
-bool takeLineContinue(lexer* st) {
+static
+bool takeLineContinue(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
   {
     uchar lookahead;
@@ -190,7 +195,7 @@ bool takeLineContinue(lexer* st) {
   tok.as.unknownSpace.chr = escapeLeader;
   tok.as.unknownSpace.size = 0;
   { // detect trailing whitespace
-    eexprError err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
+    error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
     bool trailingSpace = false;
     while (true) {
       uchar c;
@@ -203,7 +208,7 @@ bool takeLineContinue(lexer* st) {
     }
     if (trailingSpace) {
       err.loc.end = st->loc;
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+      dllist_insertAfter_error(&st->errStream, NULL, &err);
     }
   }
   if (takeNewline(st)) {
@@ -212,9 +217,9 @@ bool takeLineContinue(lexer* st) {
     lexer_addTok(st, &tok);
   }
   else {
-    eexprError err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = EEXPRERR_BAD_CHAR};
+    error err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = EEXPRERR_BAD_CHAR};
     err.as.badChar = escapeLeader;
-    dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+    dllist_insertAfter_error(&st->errStream, NULL, &err);
   }
   return true;
 }
@@ -224,7 +229,8 @@ Newlines are one of the newline sequences (i.e. alternation of literals).
 See `parameters.c` for valid newline sequences.
 However, if the newlines of a file are not all the same sequence, that it a "mixed newlines" error.
 */
-bool takeNewline(lexer* st) {
+static
+bool takeNewline(engine* st) {
   newlineType type;
   {
     uchar lookahead[2];
@@ -241,11 +247,11 @@ bool takeNewline(lexer* st) {
       st->discoveredNewline = type;
     }
     else {
-      eexprError err =
+      error err =
       { .loc = tok.loc
       , .type = EEXPRERR_MIXED_NEWLINES
       };
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+      dllist_insertAfter_error(&st->errStream, NULL, &err);
     }
   }
   return true;
@@ -254,7 +260,8 @@ bool takeNewline(lexer* st) {
 /*
   The end of the file also counts as a newline.
 */
-bool takeEof(lexer* st) {
+static
+bool takeEof(engine* st) {
   uchar c;
   peekUchar(&c, st->rest);
   if (c != UCHAR_NULL) {
@@ -275,7 +282,8 @@ Neither option is appealing.
 Comment tokens do not carry their contents, as they should not be used in place of proper syntax for preprocessors, pragmas, or documentation.
 */
 // TODO detect trailing whitespace at end of comment
-bool takeComment(lexer* st) {
+static
+bool takeComment(engine* st) {
   {
     uchar lookahead;
     peekUchar(&lookahead, st->rest);
@@ -304,7 +312,8 @@ bool takeComment(lexer* st) {
 Symbols are simply one or more symbol characters.
   `[:symbolChar:]+`
 */
-bool takeSymbol(lexer* st) {
+static
+bool takeSymbol(engine* st) {
   {
     uchar lookahead[2];
     peekUchars(lookahead, 2, st->rest);
@@ -330,14 +339,15 @@ bool takeSymbol(lexer* st) {
   return true;
 }
 
-void checkDigitSepContext(const radixParams* radix, filelocPoint start, bool alwaysError, lexer* st) {
+static
+void checkDigitSepContext(const radixParams* radix, struct eexpr_locPoint start, bool alwaysError, engine* st) {
   uchar lookahead;
   peekUchar(&lookahead, st->rest);
   if ( alwaysError
     || (!isDigit(radix, lookahead) && lookahead != digitSep)
      ) {
-    eexprError err = {.loc = {.start = start, .end = st->loc}, .type = EEXPRERR_BAD_DIGIT_SEPARATOR};
-    dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+    error err = {.loc = {.start = start, .end = st->loc}, .type = EEXPRERR_BAD_DIGIT_SEPARATOR};
+    dllist_insertAfter_error(&st->errStream, NULL, &err);
   }
 }
 /*
@@ -353,7 +363,8 @@ Then, if the exponent letter was generic, a radix specificaion may be given (jus
   `[+-]?(0[:radixLetter(x):])?[:digit(x):_]+\.[:digit(x):_]+(^[+-]?(0[:radixLetter(y):])?[:digit(y):_]+)?`
   WARNING: I've taken some liberties in these regexes about underscores.
 */
-bool takeNumber(lexer* st) {
+static
+bool takeNumber(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_NUMBER};
   ////// gather sign (or early exit) //////
   bool neg;
@@ -402,7 +413,7 @@ bool takeNumber(lexer* st) {
         integerDigits += 1;
       }
       else if (c == digitSep) {
-        filelocPoint loc0 = st->loc;
+        struct eexpr_locPoint loc0 = st->loc;
         lexer_advance(st, adv, 1);
         checkDigitSepContext(radix, loc0, integerDigits == 0, st);
       }
@@ -427,7 +438,7 @@ bool takeNumber(lexer* st) {
           fractionalDigits += 1;
         }
         else if (c == digitSep) {
-          filelocPoint loc0 = st->loc;
+          struct eexpr_locPoint loc0 = st->loc;
           lexer_advance(st, adv, 1);
           checkDigitSepContext(radix, loc0, fractionalDigits == 0, st);
         }
@@ -471,10 +482,10 @@ bool takeNumber(lexer* st) {
           }
           else {
             expNeg = false;
-            eexprError err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_EXPONENT_SIGN};
+            error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_EXPONENT_SIGN};
             lexer_advance(st, adv, 1);
             err.loc.end = st->loc;
-            dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+            dllist_insertAfter_error(&st->errStream, NULL, &err);
           }
         }
         else {
@@ -513,7 +524,7 @@ bool takeNumber(lexer* st) {
             bigint_inc(&exponent, decodeDigit(expRadix, c));
           }
           else if (c == digitSep) {
-            filelocPoint loc0 = st->loc;
+            struct eexpr_locPoint loc0 = st->loc;
             lexer_advance(st, adv, 1);
             checkDigitSepContext(expRadix, loc0, expDigits == 0, st);
           }
@@ -523,8 +534,8 @@ bool takeNumber(lexer* st) {
           tok.type = TOK_NUMBER_ERROR;
           tok.loc.end = st->loc;
           lexer_addTok(st, &tok);
-          eexprError err = {.loc = tok.loc, .type = EEXPRERR_MISSING_EXPONENT};
-          dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+          error err = {.loc = tok.loc, .type = EEXPRERR_MISSING_EXPONENT};
+          dllist_insertAfter_error(&st->errStream, NULL, &err);
           return true;
         }
       }
@@ -549,7 +560,8 @@ Escape sequences are also permitted, as long as they encode exactly one codepoin
 // FIXME: the question is, do I even want codepoint literals if I could just `fromString` them?
 // I could make eexpr consumers recognize something like `c"\n"` or `fromString` them under the appropriate type context
 // if I take them out, that would allow me to write sql strings (single-quote-delimited multiline strings where the only escape sequence---and the only one needed---is two single-quotes to insert a snigle quote into the string
-bool takeCodepoint(lexer* st) {
+static
+bool takeCodepoint(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_CODEPOINT, .as = {.codepoint = UCHAR_NULL}};
   {
     uchar lookahead;
@@ -574,7 +586,7 @@ bool takeCodepoint(lexer* st) {
         lexer_advance(st, adv, 1);
         tok.as.codepoint = takeCharEscape(st);
         if (tok.as.codepoint == UCHAR_NULL) {
-          eexprError escapeCharErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR};
+          error escapeCharErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR};
           adv = peekUchar(&escapeCharErr.as.badEscapeChar, st->rest);
           if (isCodepointDelim(escapeCharErr.as.badEscapeChar)) { // don't consume the next char if it's a tick
             escapeCharErr.as.badEscapeChar = UCHAR_NULL;
@@ -582,14 +594,14 @@ bool takeCodepoint(lexer* st) {
           else if (escapeCharErr.as.badEscapeChar != UCHAR_NULL) { // don't try to consume eof
             lexer_advance(st, adv, 1);
           }
-          dllist_insertAfter_eexprError(&st->errStream, NULL, &escapeCharErr);
+          dllist_insertAfter_error(&st->errStream, NULL, &escapeCharErr);
         }
         goto codepointBuilt;
       }
     }
     { // no valid codepoint found
       tok.as.codepoint = UCHAR_NULL;
-      eexprError codepointErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_CODEPOINT};
+      error codepointErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_CODEPOINT};
       size_t adv = peekUchar(&codepointErr.as.badCodepoint, st->rest);
       if (isCodepointDelim(codepointErr.as.badCodepoint)) { // don't consume the next char if it's a tick
         codepointErr.as.badCodepoint = UCHAR_NULL;
@@ -598,7 +610,7 @@ bool takeCodepoint(lexer* st) {
         lexer_advance(st, adv, 1);
       }
       codepointErr.loc.end = st->loc;
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &codepointErr);
+      dllist_insertAfter_error(&st->errStream, NULL, &codepointErr);
       goto codepointBuilt;
     }
   }; codepointBuilt:
@@ -612,7 +624,7 @@ bool takeCodepoint(lexer* st) {
       }
     }
     {
-      eexprError noCloseErr = {.loc = {.start = st->loc}, .type = EEXPRERR_UNCLOSED_CODEPOINT};
+      error noCloseErr = {.loc = {.start = st->loc}, .type = EEXPRERR_UNCLOSED_CODEPOINT};
       while (true) {
         uchar c;
         size_t adv = peekUchar(&c, st->rest);
@@ -625,15 +637,15 @@ bool takeCodepoint(lexer* st) {
         }
       }
       noCloseErr.loc.end = st->loc;
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &noCloseErr);
+      dllist_insertAfter_error(&st->errStream, NULL, &noCloseErr);
       goto tokenClosed;
     }
   } tokenClosed:
   if (tok.as.codepoint > 0x10FFFF) {
-    eexprError overflowErr = {.loc = tok.loc, .type = EEXPRERR_UNICODE_OVERFLOW};
+    error overflowErr = {.loc = tok.loc, .type = EEXPRERR_UNICODE_OVERFLOW};
     overflowErr.as.unicodeOverflow = tok.as.codepoint;
     tok.as.codepoint = UCHAR_NULL;
-    dllist_insertAfter_eexprError(&st->errStream, NULL, &overflowErr);
+    dllist_insertAfter_error(&st->errStream, NULL, &overflowErr);
   }
   if (tok.as.codepoint >= 0) {
     tok.loc.end = st->loc;
@@ -650,7 +662,8 @@ An entire string template is between two double-quotes, but the template may hav
 This parser really only creates a token for each string part.
 These parts can end with a backtick (to begin an interpolation), start with a backtick (to resume the string after interpolation), or both.
 */
-bool takeString(lexer* st) {
+static
+bool takeString(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
   uchar open; {
     size_t adv = peekUchar(&open, st->rest);
@@ -705,7 +718,7 @@ bool takeString(lexer* st) {
           // do nothing
         }
         else { // no valid escape sequence found
-          eexprError escapeCharErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR};
+          error escapeCharErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR};
           adv = peekUchar(&escapeCharErr.as.badEscapeChar, st->rest);
           if (isStringDelim(escapeCharErr.as.badEscapeChar)) { // don't consume the next char if it's a string delimiter
             escapeCharErr.as.badEscapeChar = UCHAR_NULL;
@@ -713,7 +726,7 @@ bool takeString(lexer* st) {
           else if (escapeCharErr.as.badEscapeChar != UCHAR_NULL) { // don't try to consume eof
             lexer_advance(st, adv, 1);
           }
-          dllist_insertAfter_eexprError(&st->errStream, NULL, &escapeCharErr);
+          dllist_insertAfter_error(&st->errStream, NULL, &escapeCharErr);
         }
       }
     }
@@ -726,10 +739,10 @@ bool takeString(lexer* st) {
         || isNewlineChar(c)
         ) { break; }
       else if (!more) { // characters that did not match above are invalid and error recovery should skip them
-        eexprError err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_STRING_CHAR, .as.badStringChar = c};
+        error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_STRING_CHAR, .as.badStringChar = c};
         lexer_advance(st, adv, 1);
         err.loc.end = st->loc;
-        dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+        dllist_insertAfter_error(&st->errStream, NULL, &err);
       }
     }
   }
@@ -739,8 +752,8 @@ bool takeString(lexer* st) {
       lexer_advance(st, adv, 1);
     }
     else {
-      eexprError err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_UNCLOSED_STRING};
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+      error err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_UNCLOSED_STRING};
+      dllist_insertAfter_error(&st->errStream, NULL, &err);
     }
   }
   tok.loc.end = st->loc;
@@ -768,7 +781,8 @@ If the indentation is listed in tabs, the terminating backslash must be followed
 The last newline of a heredoc is not included in the string.
 If you want a trailing newline in the string, explicitly include a blank line.
 */
-bool takeHeredoc(lexer* st) {
+static
+bool takeHeredoc(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
   {
     uchar lookahead[3];
@@ -807,7 +821,7 @@ bool takeHeredoc(lexer* st) {
   }
   bool indented = false;
   { // detect indentation flag (skipping whitespace around first backslash)
-    eexprError err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
+    error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
     bool trailingSpace = false;
     while (true) {
       uchar c; size_t adv = peekUchar(&c, st->rest);
@@ -834,7 +848,7 @@ bool takeHeredoc(lexer* st) {
     }
     if (trailingSpace) {
       err.loc.end = st->loc;
-      dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+      dllist_insertAfter_error(&st->errStream, NULL, &err);
     }
   }
   { // consume a newline, or else it's a fatal error
@@ -852,7 +866,7 @@ bool takeHeredoc(lexer* st) {
   { // accumulate indentation
     if (indented) {
       // determine indentation character
-      filelocPoint indentPosStart = st->loc;
+      struct eexpr_locPoint indentPosStart = st->loc;
       uchar c; size_t adv = peekUchar(&c, st->rest);
       if (isSpaceChar(c)) {
         lexer_advance(st, adv, 1);
@@ -900,11 +914,11 @@ bool takeHeredoc(lexer* st) {
         st->indent.established.end = st->loc;
       }
       else if (indentChar != st->indent.chr && !st->indent.knownMixed) {
-        eexprError err = {.loc = {.start = indentPosStart, .end = st->loc}, .type = EEXPRERR_MIXED_INDENTATION};
+        error err = {.loc = {.start = indentPosStart, .end = st->loc}, .type = EEXPRERR_MIXED_INDENTATION};
         err.as.mixedIndentation.chr = st->indent.chr;
         err.as.mixedIndentation.loc = st->indent.established;
         st->indent.knownMixed = true;
-        dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+        dllist_insertAfter_error(&st->errStream, NULL, &err);
       }
     }
     else {
@@ -945,7 +959,7 @@ bool takeHeredoc(lexer* st) {
       }
     }
     { // consume indentation
-      eexprError err = {.loc = {.start = st->loc}, .type = EEXPRERR_HEREDOC_BAD_INDENTATION};
+      error err = {.loc = {.start = st->loc}, .type = EEXPRERR_HEREDOC_BAD_INDENTATION};
       for (size_t i = 0; i < indentNChars; ++i) {
         uchar c; size_t adv = peekUchar(&c, st->rest);
         if (c == indentChar) {
@@ -955,13 +969,13 @@ bool takeHeredoc(lexer* st) {
           if (i != 0) {
             err.type = EEXPRERR_TRAILING_SPACE;
             err.loc.end = st->loc;
-            dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+            dllist_insertAfter_error(&st->errStream, NULL, &err);
           }
           break;
         }
         else {
           err.loc.end = st->loc;
-          dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+          dllist_insertAfter_error(&st->errStream, NULL, &err);
           break;
         }
       }
@@ -989,10 +1003,11 @@ bool takeHeredoc(lexer* st) {
 Wraps are parens, brackets, and braces.
   `[()\[\]{}]`
 */
-bool takeWrap(lexer* st) {
+static
+bool takeWrap(engine* st) {
   uchar lookahead;
   size_t adv = peekUchar(&lookahead, st->rest);
-  wrapType type = isWrapChar(lookahead);
+  eexpr_wrapType type = isWrapChar(lookahead);
   if (type == WRAP_NULL) { return false; }
   token tok = {.loc = {.start = st->loc}, .type = TOK_WRAP};
   {
@@ -1009,7 +1024,8 @@ bool takeWrap(lexer* st) {
 Splitters are colon, dot, ellipsis, semicolon, and comma.
   `\.\.[:.;,]`
 */
-bool takeSplitter(lexer* st) {
+static
+bool takeSplitter(engine* st) {
   splitter info;
   {
     uchar lookahead[2];
@@ -1033,10 +1049,11 @@ bool takeSplitter(lexer* st) {
 }
 
 // always consumes a character (or byte if the remaining input is not valid utf8)
-bool takeUnexpected(lexer* st) {
+static
+bool takeUnexpected(engine* st) {
   uchar c;
   size_t adv = peekUchar(&c, st->rest);
-  eexprError err = {.loc = {.start = st->loc}};
+  error err = {.loc = {.start = st->loc}};
   if (c < 0 || c > 0x10FFFF) {
     err.type = EEXPRERR_BAD_BYTES;
     lexer_advance(st, adv, 0);
@@ -1047,13 +1064,13 @@ bool takeUnexpected(lexer* st) {
     lexer_advance(st, adv, 1);
   }
   err.loc.end = st->loc;
-  dllist_insertAfter_eexprError(&st->errStream, NULL, &err);
+  dllist_insertAfter_error(&st->errStream, NULL, &err);
   return true;
 }
 
 //////////////////////////////////// Main Lexer Functions ////////////////////////////////////
 
-void lexer_raw(lexer* st) {
+void engine_rawLex(engine* st) {
   while (st->fatal.type == EEXPRERR_NOERROR) {
     if (takeWhitespace(st)) { continue; }
     if (takeNewline(st)) { continue; }

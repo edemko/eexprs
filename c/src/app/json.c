@@ -77,6 +77,9 @@ void fdumpToken(FILE* fp, const token* tok) {
          , tok->loc.end.line + 1
          , tok->loc.end.col + 1
          );
+  if (tok->transparent) {
+    fprintf(fp, ",\"ignore\":true");
+  }
   switch (tok->type) {
     case TOK_NUMBER: {
       {
@@ -347,7 +350,7 @@ void fdumpEexpr(FILE* fp, int indent, const eexpr* expr) {
   fprintf(fp, "\n%*s}", indent, "");
 }
 
-void fdumpError(FILE* fp, const eexprError* err) {
+void fdumpError(FILE* fp, const eexpr_error* err) {
   fprintf(fp, "{\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
          , err->loc.start.line + 1
          , err->loc.start.col + 1
@@ -478,16 +481,15 @@ void fdumpError(FILE* fp, const eexprError* err) {
   fprintf(fp, "}");
 }
 
-void fdumpTokenStream(FILE* fp, const char* indent, const dllistNode_token* root) {
-  if (root == NULL) {
+void fdumpTokenArray(FILE* fp, const char* indent, size_t n, token** arr) {
+  if (n == 0) {
     fprintf(fp, " []");
   }
   else {
     char* separator = "[ ";
-    for (const dllistNode_token* strm = root; strm != NULL; strm = strm->next) {
-      if (strm->here.transparent) { continue; }
+    for (size_t i = 0; i < n; ++i) {
       fprintf(fp, "\n%s%s", indent, separator);
-      fdumpToken(fp, &strm->here);
+      fdumpToken(fp, arr[i]);
       separator = ", ";
     }
     fprintf(fp, "\n%s]", indent);
@@ -509,26 +511,25 @@ void fdumpEexprArray(FILE* fp, int indent, const dynarr_eexpr_p* arr) {
   }
 }
 
-void fdumpErrorStream(FILE* fp, const char* indent, const dllistNode_eexprError* root) {
-  if (root == NULL) {
+void fdumpErrorArray(FILE* fp, const char* indent, size_t n, eexpr_error* arr) {
+  if (n == 0) {
     fprintf(fp, " []");
   }
   else {
     char* separator = "[ ";
-    for (const dllistNode_eexprError* strm = root; strm != NULL; strm = strm->next) {
-      if (strm->here.type == EEXPRERR_NOERROR) { continue; }
+    for (size_t i = 0; i < n; ++i) {
       fprintf(fp, "\n%s%s", indent, separator);
-      fdumpError(fp, &strm->here);
+      fdumpError(fp, &arr[i]);
       separator = ", ";
     }
     fprintf(fp, "\n%s]", indent);
   }
 }
 
-void fdumpLineIndex(FILE* fp, const struct lineIndex* index) {
+void fdumpLineIndex(FILE* fp, size_t len, size_t* offsets) {
   char separator = '[';
-  for (size_t i = 0; i < index->len; ++i) {
-    fprintf(fp, "%c%zu", separator, index->offsets[i]);
+  for (size_t i = 0; i < len; ++i) {
+    fprintf(fp, "%c%zu", separator, offsets[i]);
     separator = ',';
   }
   fprintf(fp, "]");

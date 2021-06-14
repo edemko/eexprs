@@ -110,7 +110,7 @@ struct untilEol untilEol(str in);
 
 //////////////////////////////////// Punctuation ////////////////////////
 
-wrapType isWrapChar(uchar c);
+eexpr_wrapType isWrapChar(uchar c);
 bool isOpenWrap(uchar c);
 
 typedef enum splitterType {

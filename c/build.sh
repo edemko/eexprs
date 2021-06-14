@@ -6,4 +6,8 @@ cd "$here"
 
 mkdir -p bin
 
-gcc -std=c11 -pedantic -I src -Wall -Wimplicit-fallthrough -Werror src/**/*.c src/*.c -o bin/eexpr2json
+gcc -std=c11 -pedantic \
+  -Wall -Wimplicit-fallthrough -Werror \
+  -I include -I src \
+  src/**/*.c src/*.c \
+  -o bin/eexpr2json

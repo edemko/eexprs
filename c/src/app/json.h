@@ -11,13 +11,13 @@ void fdumpStr(FILE* fp, str text);
 void fdumpCStr(FILE* fp, char* s);
 
 void fdumpToken(FILE* fp, const token* tok);
-void fdumpError(FILE* fp, const eexprError* err);
+void fdumpError(FILE* fp, const eexpr_error* err);
 
-void fdumpTokenStream(FILE* fp, const char* indent, const dllistNode_token* root);
+void fdumpTokenArray(FILE* fp, const char* indent, size_t n, token** arr);
 void fdumpEexprArray(FILE* fp, int indent, const dynarr_eexpr_p* eexprs);
-void fdumpErrorStream(FILE* fp, const char* indent, const dllistNode_eexprError* root);
+void fdumpErrorArray(FILE* fp, const char* indent, size_t n, eexpr_error* arr);
 
-void fdumpLineIndex(FILE* fp, const struct lineIndex* index);
+void fdumpLineIndex(FILE* fp, size_t len, size_t* offsets);
 
 
 #endif

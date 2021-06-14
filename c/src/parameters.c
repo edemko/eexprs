@@ -279,7 +279,7 @@ struct untilEol untilEol(str in) {
 
 //////////////////////////////////// Punctuation ////////////////////////
 
-wrapType isWrapChar(uchar c) {
+eexpr_wrapType isWrapChar(uchar c) {
   switch(c) {
     case '(': return WRAP_PAREN;
     case ')': return WRAP_PAREN;

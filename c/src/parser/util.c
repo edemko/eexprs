@@ -6,7 +6,7 @@
 #include "shim/common.h"
 
 
-token* parser_peek(parser* st) {
+token* parser_peek(engine* st) {
   dllistNode_token* node = st->tokStream.start;
   while (node != NULL) {
     if (node->here.transparent) {
@@ -21,7 +21,7 @@ token* parser_peek(parser* st) {
   return NULL;
 }
 
-void parser_pop(parser* st) {
+void parser_pop(engine* st) {
   dllistNode_token* node = st->tokStream.start;
   while (node != NULL) {
     if (node->here.transparent) {

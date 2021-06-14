@@ -1,26 +1,13 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include "eexpr.h"
+
 #include "shim/bigint.h"
 #include "shim/strstuff.h"
 
-
-//////////////////////////////////// Locations ////////////////////////
-
-typedef struct filelocPoint {
-  size_t line;
-  size_t col;
-} filelocPoint;
-
-typedef struct fileloc {
-  filelocPoint start;
-  filelocPoint end;
-} fileloc;
-
-
-//////////////////////////////////// Forward Declarations ////////////////////////
-
-typedef struct eexpr eexpr;
+// TODO investigate how to have a uchar based on char32_t
+_Static_assert((char32_t)(-1) < (char32_t)0 || (char32_t)0x10FFFF < (char32_t)(-1), "-1 is not a sentinel for char32_t");
 
 
 //////////////////////////////////// Payloads ////////////////////////
@@ -36,7 +23,7 @@ typedef struct eexprNumber {
   bigint exponent; // owned
 } eexprNumber;
 
-typedef uchar eexprCodepoint;
+typedef uchar eexprCodepoint; // FIXME this should be an actual char32_t, since it should never be null/sentinel
 
 typedef struct strTemplPart {
   eexpr* expr;
@@ -49,7 +36,7 @@ typedef struct eexprStrTempl {
   dynarr_strTemplPart parts;
 } eexprStrTempl;
 
-// these are just so dynarr can be given a type identifier
+// eexpr_p is just so dynarr can be given a type identifier
 typedef eexpr* eexpr_p;
 #define TYPE eexpr_p
 #include "shim/dynarr.h"
@@ -58,7 +45,7 @@ typedef eexpr* eexpr_p;
 //////////////////////////////////// Eexprs ////////////////////////
 
 struct eexpr {
-  fileloc loc;
+  eexpr_loc loc;
   enum eexprType {
     EEXPR_SYMBOL,
     EEXPR_NUMBER,
@@ -88,18 +75,12 @@ struct eexpr {
   } as;
 };
 
+// FIXME this doesn't free expr, only things it pionts to
+// I should make an eexpr_del, which I think will see more use
 void eexpr_deinit(eexpr* expr);
 
 
 //////////////////////////////////// Tokens ////////////////////////
-
-typedef enum wrapType {
-  WRAP_NULL,
-  WRAP_PAREN,
-  WRAP_BRACK,
-  WRAP_BRACE,
-  WRAP_BLOCK
-} wrapType;
 
 typedef enum strSpliceType {
   STRSPLICE_PLAIN,
@@ -110,7 +91,7 @@ typedef enum strSpliceType {
 } strSpliceType;
 
 typedef struct token {
-  fileloc loc;
+  eexpr_loc loc;
   enum tokenType {
     TOK_NUMBER,
     TOK_CODEPOINT,
@@ -153,7 +134,7 @@ typedef struct token {
     } string;
     eexprSymbol symbol;
     struct token_wrap {
-      wrapType type;
+      eexpr_wrapType type;
       bool isOpen;
     } wrap;
     struct token_indent {
@@ -171,43 +152,10 @@ void token_deinit(token* tok);
 
 //////////////////////////////////// Errors ////////////////////////
 
-typedef struct eexprError {
-  fileloc loc;
-  enum eexprErrorType {
-    EEXPRERR_NOERROR, // only for use as a sentinel
-    EEXPRERR_BAD_BYTES,
-    EEXPRERR_BAD_CHAR,
-    EEXPRERR_MIXED_SPACE,
-    EEXPRERR_MIXED_NEWLINES,
-    EEXPRERR_BAD_DIGIT_SEPARATOR,
-    EEXPRERR_MISSING_EXPONENT,
-    EEXPRERR_BAD_EXPONENT_SIGN,
-    EEXPRERR_BAD_CODEPOINT, // empty or badly-escaped codepoint
-    EEXPRERR_BAD_ESCAPE_CHAR,
-    EEXPRERR_BAD_ESCAPE_CODE,
-    EEXPRERR_UNICODE_OVERFLOW,
-    EEXPRERR_UNCLOSED_CODEPOINT,
-    EEXPRERR_BAD_STRING_CHAR,
-    EEXPRERR_MISSING_LINE_PICKUP,
-    EEXPRERR_UNCLOSED_STRING,
-    EEXPRERR_HEREDOC_BAD_OPEN,
-    EEXPRERR_HEREDOC_BAD_INDENT_DEFINITION,
-    EEXPRERR_HEREDOC_BAD_INDENTATION,
-    EEXPRERR_UNCLOSED_HEREDOC,
-    EEXPRERR_MIXED_INDENTATION,
-    // context-sensitive errors
-    EEXPRERR_TRAILING_SPACE,
-    EEXPRERR_NO_TRAILING_NEWLINE,
-    EEXPRERR_SHALLOW_INDENT,
-    EEXPRERR_OFFSIDES,
-    EEXPRERR_BAD_DOT,
-    EEXPRERR_CRAMMED_TOKENS,
-    // parser errors
-    EEXPRERR_UNBALANCED_WRAP,
-    EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT,
-    EEXPRERR_MISSING_TEMPLATE_EXPR,
-    EEXPRERR_MISSING_CLOSE_TEMPLATE
-  } type;
+
+typedef struct error {
+  eexpr_loc loc;
+  eexpr_errorType type;
   union errorData {
     uchar badChar;
     uchar badCodepoint;
@@ -215,16 +163,16 @@ typedef struct eexprError {
     uchar badEscapeCode[6]; // if <6 uchars, then pad at start with UCHAR_NULL
     uchar unicodeOverflow;
     uchar badStringChar;
-    struct eexprError_mixedIndentation {
+    struct {
       uchar chr;
-      fileloc loc;
+      eexpr_loc loc;
     } mixedIndentation;
-    struct eexprError_unbalancedWrap {
-      wrapType type; // what close wrap was left open, or WRAP_NULL for start-of-file
-      fileloc loc; // location where the unmatched open wrap is
+    struct {
+      eexpr_wrapType type; // what close wrap was left open, or WRAP_NULL for start-of-file
+      eexpr_loc loc; // location where the unmatched open wrap is
     } unbalancedWrap;
   } as;
-} eexprError;
+} error;
 
 
 #endif

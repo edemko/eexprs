@@ -5,7 +5,8 @@
 #include "parser/util.h"
 #include "shim/common.h"
 
-void parser_init(parser* it) {
+static
+void engine_init(engine* it) {
   str emptyStr = {.len = 0, .bytes = NULL};
   {
     it->rest = emptyStr;
@@ -15,8 +16,8 @@ void parser_init(parser* it) {
   {
     dynarr_init_eexpr_p(&it->eexprStream, 64);
     it->tokStream = dllist_empty_token();
-    it->warnStream = dllist_empty_eexprError();
-    it->errStream = dllist_empty_eexprError();
+    it->warnStream = dllist_empty_error();
+    it->errStream = dllist_empty_error();
     it->fatal.type = EEXPRERR_NOERROR;
   }
   {
@@ -35,16 +36,25 @@ void parser_init(parser* it) {
   }
 }
 
-parser parser_newFromFile(const char* filename) {
-  parser out;
-  parser_init(&out);
+engine engine_newFromFile(const char* filename) {
+  engine out;
+  engine_init(&out);
   out.allInput = readFile(filename);
   out.rest = out.allInput;
   return out;
 }
 
+engine engine_newFromStrn(size_t n, uint8_t* input) {
+  engine out;
+  engine_init(&out);
+  out.allInput.len = n;
+  out.allInput.bytes = input;
+  out.rest = out.allInput;
+  return out;
+}
 
-void parser_del(lexer* it) {
+
+void engine_deinit(engine* it) {
   if (it->lineIndex.offsets != NULL) {
     free(it->lineIndex.offsets);
     it->lineIndex.offsets = NULL;
@@ -60,10 +70,10 @@ void parser_del(lexer* it) {
     it->rest.len = 0;
   }
   dynarr_deinit_openWrap(&it->wrapStack);
-  // WARNING I'm assuming there's no owned pointer data in eexprError
+  // WARNING I'm assuming there's no owned pointer data in error
   it->fatal.type = EEXPRERR_NOERROR;
-  dllist_del_eexprError(&it->errStream);
-  dllist_del_eexprError(&it->warnStream);
+  dllist_del_error(&it->errStream);
+  dllist_del_error(&it->warnStream);
 
   for (dllistNode_token* node = it->tokStream.start; node != NULL; node = node->next) {
     token_deinit(&node->here);
