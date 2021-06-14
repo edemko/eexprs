@@ -9,13 +9,13 @@
 #include "shim/bigint.h"
 
 
-bool needsJsonEscape(uchar c) {
+bool needsJsonEscape(char32_t c) {
   return c < 0x20  || c == 0x7F // TODO encode other control codepoints
       || c == '\"' || c == '\\'
        ;
 }
-void fjsonEscapeChar(FILE* fp, uchar c) {
-  if (c < 0 || c > 0x10FFFF) { return; }
+void fjsonEscapeChar(FILE* fp, char32_t c) {
+  if (c < 0 || 0x10FFFF < c) { return; }
   if (c == '\"') {
     fprintf(fp, "\\\"");
   }
@@ -34,20 +34,17 @@ void fjsonEscapeChar(FILE* fp, uchar c) {
   }
 }
 
-void fdumpChar(FILE* fp, uchar c) {
+void fdumpChar(FILE* fp, char32_t c) {
   fprintf(fp, "\"");
   fjsonEscapeChar(fp, c);
   fprintf(fp, "\"");
 }
 void fdumpStr(FILE* fp, str text) {
   fprintf(fp, "\"");
-  while (true) {
-    uchar c;
+  while (text.len > 0) {
+    char32_t c;
     size_t adv = peekUchar(&c, text);
-    if (c == UCHAR_NULL) {
-      break;
-    }
-    else if (c < 0 || c > 0x10FFFF) {
+    if (c < 0 || 0x10FFFF < c) {
       text.len--;
       text.bytes++;
       continue;
@@ -106,10 +103,6 @@ void fdumpToken(FILE* fp, const token* tok) {
         }
         fprintf(fp, "}");
       }
-    }; break;
-    case TOK_CODEPOINT: {
-      fprintf(fp, ",\"type\":\"codepoint\",\"value\":");
-      fdumpChar(fp, tok->as.codepoint);
     }; break;
     case TOK_STRING: {
       fprintf(fp, ",\"type\":\"string\",\"text\":");
@@ -245,10 +238,6 @@ void fdumpEexpr(FILE* fp, int indent, const eexpr* expr) {
         fprintf(fp, "}");
       }
     }; break;
-    case EEXPR_CODEPOINT: {
-      fprintf(fp, "\n%*s, \"type\":\"codepoint\",\"value\":", indent, "");
-      fdumpChar(fp, expr->as.codepoint);
-    }; break;
     case EEXPR_STRING: {
       fprintf(fp, "\n%*s, \"type\":\"string\"", indent, "");
       if (expr->as.string.parts.len == 0) {
@@ -381,10 +370,6 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
     case EEXPRERR_BAD_EXPONENT_SIGN: {
       fprintf(fp, ",\"type\":\"bad-exponent-sign\"");
     }; break;
-    case EEXPRERR_BAD_CODEPOINT: {
-      fprintf(fp, ",\"type\":\"bad-codepoint\",\"input\":");
-      fdumpChar(fp, err->as.badCodepoint);
-    }; break;
     case EEXPRERR_BAD_ESCAPE_CHAR: {
       fprintf(fp, ",\"type\":\"bad-escape-char\",\"input\":");
       fdumpChar(fp, err->as.badEscapeChar);
@@ -399,9 +384,6 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
     case EEXPRERR_UNICODE_OVERFLOW: {
       fprintf(fp, ",\"type\":\"unicode-overflow\",\"value\":%"PRIi32, err->as.unicodeOverflow);
     }; break;
-    case EEXPRERR_UNCLOSED_CODEPOINT: {
-      fprintf(fp, ",\"type\":\"unclosed-codepoint\"");
-    }; break;
     case EEXPRERR_BAD_STRING_CHAR: {
       fprintf(fp, ",\"type\":\"bad-string-char\",\"input\":");
       fdumpChar(fp, err->as.badStringChar);
@@ -412,6 +394,10 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
     case EEXPRERR_UNCLOSED_STRING: {
       fprintf(fp, ",\"type\":\"unclosed-string\"");
     }; break;
+    case EEXPRERR_UNCLOSED_MULTILINE_STRING: {
+      fprintf(fp, ",\"type\":\"unclosed-multiline-string\"");
+    }; break;
+    case EEXPRERR_MIXED_INDENTATION: {
     case EEXPRERR_HEREDOC_BAD_OPEN: {
       fprintf(fp, ",\"type\":\"heredoc-bad-open\"");
     }; break;
@@ -421,10 +407,6 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
     case EEXPRERR_HEREDOC_BAD_INDENTATION: {
       fprintf(fp, ",\"type\":\"heredoc-bad-indentation\"");
     }; break;
-    case EEXPRERR_UNCLOSED_HEREDOC: {
-      fprintf(fp, ",\"type\":\"unclosed-heredoc\"");
-    }; break;
-    case EEXPRERR_MIXED_INDENTATION: {
       fprintf(fp, ",\"type\":\"mixed-indentation\",\"established\":{\"codepoint\":");
       fdumpChar(fp, err->as.mixedIndentation.chr);
       fprintf(fp, ",\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}}"
@@ -454,7 +436,7 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
     }; break;
     case EEXPRERR_UNBALANCED_WRAP: {
       fprintf(fp, ",\"type\":\"unbalanced-wrap\"");
-      if (err->as.unbalancedWrap.type != UCHAR_NULL) {
+      if (err->as.unbalancedWrap.type != WRAP_NULL) {
         fprintf(fp, ",\"unclosed\":{\"open\":");
         fdumpChar(fp, err->as.unbalancedWrap.type);
         fprintf(fp, ",\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}}"

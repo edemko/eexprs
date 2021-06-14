@@ -7,30 +7,30 @@
 //////////////////////////////////// Numbers ////////////////////////
 
 // base 2
-uchar _leader2[] = {'b','B',UCHAR_NULL};
-uchar _digits2[] = {'0','1',UCHAR_NULL};
-uchar _exp2[] = {'b','B',UCHAR_NULL};
+char32_t _leader2[] = {'b','B',UCHAR_NULL};
+char32_t _digits2[] = {'0','1',UCHAR_NULL};
+char32_t _exp2[] = {'b','B',UCHAR_NULL};
 // base 8
-uchar _leader8[] = {'o','O',UCHAR_NULL};
-uchar _digits8[] = {'0','1','2','3','4','5','6','7',UCHAR_NULL};
-uchar _exp8[] = {UCHAR_NULL}; // I don't know of any widespread agreement
+char32_t _leader8[] = {'o','O',UCHAR_NULL};
+char32_t _digits8[] = {'0','1','2','3','4','5','6','7',UCHAR_NULL};
+char32_t _exp8[] = {UCHAR_NULL}; // I don't know of any widespread agreement
 // base 10
-uchar _leader10[] = {UCHAR_NULL};
-uchar _digits10[] = {'0','1','2','3','4','5','6','7','8','9',UCHAR_NULL};
-uchar _exp10[] = {'e','E',UCHAR_NULL};
+char32_t _leader10[] = {UCHAR_NULL};
+char32_t _digits10[] = {'0','1','2','3','4','5','6','7','8','9',UCHAR_NULL};
+char32_t _exp10[] = {'e','E',UCHAR_NULL};
 // base 12
-uchar _leader12[] = {'z','Z',UCHAR_NULL}; // as in doZenal
-uchar _digits12[] = { '0','1','2','3','4','5','6','7','8','9',0x218A/*↊*/,0x218B/*↋*/
+char32_t _leader12[] = {'z','Z',UCHAR_NULL}; // as in doZenal
+char32_t _digits12[] = { '0','1','2','3','4','5','6','7','8','9',0x218A/*↊*/,0x218B/*↋*/
                     , '0','1','2','3','4','5','6','7','8','9','X','E' // after the usage of the Dozenal Society of America when they use ASCII
                     , UCHAR_NULL};
-uchar _exp12[] = {UCHAR_NULL}; // I don't know of any widespread agreement
+char32_t _exp12[] = {UCHAR_NULL}; // I don't know of any widespread agreement
 // base 16
-uchar _leader16[] = {'x','X',UCHAR_NULL};
-uchar _digits16[] = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'
+char32_t _leader16[] = {'x','X',UCHAR_NULL};
+char32_t _digits16[] = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'
                     , '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
                     , UCHAR_NULL
                     };
-uchar _exp16[] = {'h','H',UCHAR_NULL};
+char32_t _exp16[] = {'h','H',UCHAR_NULL};
 // base 62, base64(url) are not included, since they aren't easily understood by humans. instead, interpret a string (preferrably at compiletime)
 
 // all the bases, from most-to-least commonly-used
@@ -65,23 +65,23 @@ const radixParams radices[] =
 
 const radixParams* defaultRadix = &radices[0];
 
-bool isDigit(const radixParams* radix, uchar c) {
+bool isDigit(const radixParams* radix, char32_t c) {
   return ucharElem(c, radix->digits);
 }
 
-const uchar positiveSign = '+';
-const uchar negativeSign = '-';
-bool isSign(uchar c) {
+const char32_t positiveSign = '+';
+const char32_t negativeSign = '-';
+bool isSign(char32_t c) {
   return c == positiveSign || c == negativeSign;
 }
 
 
-const uchar digitSep = '_';
-const uchar digitPoint = '.';
+const char32_t digitSep = '_';
+const char32_t digitPoint = '.';
 
-const uchar genericExpLetter = '^';
+const char32_t genericExpLetter = '^';
 
-const radixParams* decodeRadix(uchar c) {
+const radixParams* decodeRadix(char32_t c) {
   for (size_t i = 0; radices[i].radix != 0; ++i) {
     if (ucharElem(c, radices[i].leaderLetters)) {
       return &radices[i];
@@ -90,7 +90,7 @@ const radixParams* decodeRadix(uchar c) {
   return NULL;
 }
 
-uint8_t decodeDigit(const radixParams* radix, uchar c) {
+uint8_t decodeDigit(const radixParams* radix, char32_t c) {
   assert(isDigit(radix, c));
   size_t amt = ucharFind(c, radix->digits);
   while (amt > radix->radix) { amt -= radix->radix; }
@@ -111,8 +111,8 @@ isSymbolChar c = good && defensive
         C.CurrencySymbol -> True
         _ -> False
 */
-bool isSymbolChar(uchar c) {
-  static const uchar miscChars[] =
+bool isSymbolChar(char32_t c) {
+  static const char32_t miscChars[] =
     { '_' // TODO more!
     , '+', '-' // these are special because they can also start a number
     , '\'' // I do allow primes, but not at the start of a symbol
@@ -124,14 +124,14 @@ bool isSymbolChar(uchar c) {
       || c == 0x03BB // DEBUG
       ;
 }
-bool isSymbolStart(uchar cs[2]) {
+bool isSymbolStart(char32_t cs[2]) {
   // if the first char is a plus/minus, then the second char must not start a digit
   if (isSign(cs[0])) {
     return !isDigit(defaultRadix, cs[1]);
   }
   // otherwise, the first char needs in a proper subset of the symbol characters
   else {
-    uchar c = cs[0];
+    char32_t c = cs[0];
     return isSymbolChar(c)
         && !isDigit(defaultRadix, c)
         && c != '\'';
@@ -142,14 +142,14 @@ bool isSymbolStart(uchar cs[2]) {
 
 //////////////////////////////////// Strings ////////////////////////
 
-bool isCodepointDelim(uchar c) {
+bool isCodepointDelim(char32_t c) {
   return c == '\'';
 }
-bool isStringDelim(uchar c) {
+bool isStringDelim(char32_t c) {
   return (c == '\"') | (c == '`');
 }
 
-strSpliceType spliceType(uchar open, uchar close) {
+strSpliceType spliceType(char32_t open, char32_t close) {
   if (open == '\"') {
     if (close == '\"') { return STRSPLICE_PLAIN; }
     else if (close == '`') { return STRSPLICE_OPEN; }
@@ -160,9 +160,10 @@ strSpliceType spliceType(uchar open, uchar close) {
   }
   return STRSPLICE_CORRUPT;
 }
-uchar plainStringDelim = '\"';
+char32_t plainStringDelim = '\"';
+char32_t sqlStringDelim = '\'';
 
-bool isStringChar(uchar c) {
+bool isStringChar(char32_t c) {
   return (0x20 <= c)
        & (c < 0x10FFFF)
        & (c != escapeLeader)
@@ -172,7 +173,7 @@ bool isStringChar(uchar c) {
       // TODO I should probably rule out all non-printing characters
 }
 
-uchar escapeLeader = '\\';
+char32_t escapeLeader = '\\';
 
 struct stdEscape commonEscapes[] =
   { {'\\', '\\'}
@@ -191,11 +192,11 @@ struct stdEscape commonEscapes[] =
   , {UCHAR_NULL, UCHAR_NULL}
   };
 // don't allow to escape any character (i.e. `\z` === `z`), since escape should mean "something special is going on here", not "something might need to happen here, I dunno"
-uchar nullEscape = '&';
+char32_t nullEscape = '&';
 
-uchar twoHexEscapeLeader = 'x';
-uchar fourHexEscapeLeader = 'u';
-uchar sixHexEscapeLeader = 'U';
+char32_t twoHexEscapeLeader = 'x';
+char32_t fourHexEscapeLeader = 'u';
+char32_t sixHexEscapeLeader = 'U';
 
 
 
@@ -203,20 +204,20 @@ uchar sixHexEscapeLeader = 'U';
 
 //////////////////////////////////// Whitespace ////////////////////////
 
-const uchar spaceChar = ' ';
-const uchar tabChar = '\t';
-bool isSpaceChar(uchar c) {
+const char32_t spaceChar = ' ';
+const char32_t tabChar = '\t';
+bool isSpaceChar(char32_t c) {
   return (spaceChar == c) | (tabChar == c);
 }
 
-bool isNewlineChar(uchar c) {
+bool isNewlineChar(char32_t c) {
   return ('\n' == c)
        | ('\r' == c)
        | ('\x1E' == c) // FIXME I think accepting \x1E is unnecessary, adds complication, and probly slows the lexer a little
        ;
 }
 
-newlineType decodeNewline(uchar c[2]) {
+newlineType decodeNewline(char32_t c[2]) {
   // taken from the table at https://en.wikipedia.org/wiki/Newline
   switch (c[0]) {
     case '\n': switch (c[1]) {
@@ -255,9 +256,9 @@ const char* encodeNewline(newlineType nl) {
 }
 
 struct untilEol untilEol(str in) {
-  struct untilEol out = { .bytes = 0, .uchars = 0 };
+  struct untilEol out = { .bytes = 0, .chars = 0 };
   while (true) {
-    uchar c;
+    char32_t c;
     size_t adv = peekUchar(&c, in);
     in.bytes += adv;
     in.len -= adv;
@@ -265,13 +266,12 @@ struct untilEol untilEol(str in) {
        | (c == '\r')
        | (c == '\x1E')
        | (c == UCHAR_NULL)
-       | (c < 0)
        ) {
       return out;
     }
     else {
       out.bytes += adv;
-      out.uchars += 1;
+      out.chars += 1;
     }
   }
 }
@@ -279,7 +279,7 @@ struct untilEol untilEol(str in) {
 
 //////////////////////////////////// Punctuation ////////////////////////
 
-eexpr_wrapType isWrapChar(uchar c) {
+eexpr_wrapType isWrapChar(char32_t c) {
   switch(c) {
     case '(': return WRAP_PAREN;
     case ')': return WRAP_PAREN;
@@ -290,36 +290,36 @@ eexpr_wrapType isWrapChar(uchar c) {
     default: return WRAP_NULL;
   }
 }
-bool isOpenWrap(uchar c) {
+bool isOpenWrap(char32_t c) {
   return (c == '(')
        | (c == '[')
        | (c == '{')
        ;
 }
 
-splitter decodeSplitter(uchar c[2]) {
-  splitter out = {.bytes = 0, .uchars = 0, .type = SPLITTER_NONE};
+splitter decodeSplitter(char32_t c[2]) {
+  splitter out = {.bytes = 0, .chars = 0, .type = SPLITTER_NONE};
   switch (c[0]) {
     case ':': {
-      out.bytes = out.uchars = 1;
+      out.bytes = out.chars = 1;
       out.type = SPLITTER_COLON;
     }; break;
     case '.': switch (c[1]) {
       case '.': {
-        out.bytes = out.uchars = 2;
+        out.bytes = out.chars = 2;
         out.type = SPLITTER_ELLIPSIS;
       }; break;
       default: {
-        out.bytes = out.uchars = 1;
+        out.bytes = out.chars = 1;
         out.type = SPLITTER_DOT;
       }; break;
     }; break;
     case ';': {
-      out.bytes = out.uchars = 1;
+      out.bytes = out.chars = 1;
       out.type = SPLITTER_SEMICOLON;
     }; break;
     case ',': {
-      out.bytes = out.uchars = 1;
+      out.bytes = out.chars = 1;
       out.type = SPLITTER_COMMA;
     }; break;
   }
@@ -327,7 +327,7 @@ splitter decodeSplitter(uchar c[2]) {
 }
 
 
-bool isSeparateChar(uchar c) {
+bool isSeparateChar(char32_t c) {
   return (c == ':')
        | (c == ';')
        | (c == '.')
@@ -337,4 +337,4 @@ bool isSeparateChar(uchar c) {
 
 //////////////////////////////////// Miscellaneous ////////////////////////
 
-const uchar commentChar = '#';
+const char32_t commentChar = '#';

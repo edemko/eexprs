@@ -32,11 +32,11 @@ typedef struct engine {
   newlineType discoveredNewline; // NEWLINE_NONE if not set
   struct lexer_indent {
     bool knownMixed;
-    uchar chr;
+    char32_t chr; // UCHAR_NULL when indentation is not yet established
     eexpr_loc established;
   } indent;
   dynarr_openWrap wrapStack;
-  str allInput; // owned
+  str allInput; // owned FIXME this should be removed, or possibly put into eexpr_parser so the user has access to it
   struct lineIndex {
     size_t cap;
     size_t len;

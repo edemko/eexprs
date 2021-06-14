@@ -30,7 +30,6 @@ void eexpr_deinit(eexpr* expr) {
       free(expr->as.number.mantissa.buf);
       free(expr->as.number.exponent.buf);
     }; break;
-    case EEXPR_CODEPOINT: break;
     case EEXPR_STRING: {
       free(expr->as.string.text1.bytes);
       for (size_t i = 0; i < expr->as.string.parts.len; ++i) {

@@ -11,9 +11,9 @@
 // decode a hex-encoded unicode codepoint into `out`
 // if decoding fails, return false and do not modify `out`
 static
-bool decodeUnihex(size_t nChars, uchar* out, uchar* digits) {
-  uchar accum = 0;
-  for (int i = 0; i < nChars; ++i) {
+bool decodeUnihex(char32_t* out, size_t nDigits, char32_t* digits) {
+  char32_t accum = 0;
+  for (int i = 0; i < nDigits; ++i) {
     accum = accum << 4;
     if ('0' <= digits[i] && digits[i] <= '9') {
       accum |= digits[i] - '0';
@@ -40,12 +40,12 @@ bool decodeUnihex(size_t nChars, uchar* out, uchar* digits) {
   `\\U[:hexDigit:]{6}`
 */
 // helper for takeCodepoint and takeString
-// returns a single uchar, or UCHAR_NULL if no valid escape sequence is found
+// returns a single char32_t, or UCHAR_NULL if no valid escape sequence is found
 // input is consumed and errors are emitted (escpe no error is emitted if no valid escape is found; allows chaining with takeStrEscape)
 // call only after detecting an escapeLeader
 static
-uchar takeCharEscape(engine* st) {
-  uchar c;
+char32_t takeCharEscape(engine* st) {
+  char32_t c;
   size_t adv;
   adv = peekUchar(&c, st->rest);
   // standard escapes
@@ -55,13 +55,13 @@ uchar takeCharEscape(engine* st) {
       return commonEscapes[i].decode;
     }
   }
-  uchar digits[6] = {UCHAR_NULL, UCHAR_NULL, UCHAR_NULL, UCHAR_NULL, UCHAR_NULL, UCHAR_NULL};
+  char32_t digits[6] = {'0', '0', '0', '0', '0', '0'};
   error decodeError = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CODE};
   if (c == twoHexEscapeLeader) {
     lexer_advance(st, adv, 1);
     adv = peekUchars(&digits[4], 2, st->rest);
     lexer_advance(st, adv, 2);
-    if (!decodeUnihex(2, &c, &digits[4])) {
+    if (!decodeUnihex(&c, 2, &digits[4])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; }
       dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
@@ -72,7 +72,7 @@ uchar takeCharEscape(engine* st) {
     lexer_advance(st, adv, 1);
     adv = peekUchars(&digits[2], 4, st->rest);
     lexer_advance(st, adv, 4);
-    if (!decodeUnihex(4, &c, &digits[2])) {
+    if (!decodeUnihex(&c, 4, &digits[2])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
       dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
@@ -83,7 +83,7 @@ uchar takeCharEscape(engine* st) {
     lexer_advance(st, adv, 1);
     adv = peekUchars(digits, 6, st->rest);
     lexer_advance(st, adv, 6);
-    if (!decodeUnihex(6, &c, digits)) {
+    if (!decodeUnihex(&c, 6, digits)) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
       dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
@@ -110,7 +110,7 @@ static bool takeNewline(engine* st);
 static bool takeWhitespace(engine* st);
 static
 bool takeNullEscape(engine* st) {
-  uchar c;
+  char32_t c;
   size_t adv;
   adv = peekUchar(&c, st->rest);
   if (isNewlineChar(c)) {
@@ -145,16 +145,16 @@ However, if the whitespace is not simply a repetition of the same character, tha
 static
 bool takeWhitespace(engine* st) {
   {
-    uchar lookahead;
+    char32_t lookahead;
     peekUchar(&lookahead, st->rest);
     if (!isSpaceChar(lookahead)) { return false; }
   }
   token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
-  uchar c0; peekUchar(&c0, st->rest);
+  char32_t c0; peekUchar(&c0, st->rest);
   bool mixed = false;
   size_t advChars = 0;
   while (true) {
-    uchar c;
+    char32_t c;
     size_t adv = peekUchar(&c, st->rest);
     if (isSpaceChar(c)) {
       lexer_advance(st, adv, 1);
@@ -167,7 +167,7 @@ bool takeWhitespace(engine* st) {
   }
   assert(advChars != 0);
   tok.loc.end = st->loc;
-  tok.as.unknownSpace.chr = mixed ? UCHAR_SENTINEL : c0;
+  tok.as.unknownSpace.chr = mixed ? '\0' : c0;
   tok.as.unknownSpace.size = advChars;
   lexer_addTok(st, &tok);
   if (mixed) {
@@ -187,7 +187,7 @@ static
 bool takeLineContinue(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
   {
-    uchar lookahead;
+    char32_t lookahead;
     size_t adv = peekUchar(&lookahead, st->rest);
     if (lookahead != escapeLeader) { return false; }
     lexer_advance(st, adv, 1);
@@ -198,7 +198,7 @@ bool takeLineContinue(engine* st) {
     error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
     bool trailingSpace = false;
     while (true) {
-      uchar c;
+      char32_t c;
       size_t adv = peekUchar(&c, st->rest);
       if (isSpaceChar(c)) {
         lexer_advance(st, adv, 1);
@@ -233,7 +233,7 @@ static
 bool takeNewline(engine* st) {
   newlineType type;
   {
-    uchar lookahead[2];
+    char32_t lookahead[2];
     peekUchars(lookahead, 2, st->rest);
     type = decodeNewline(lookahead) != 0;
     if (type == NEWLINE_NONE) { return false; }
@@ -262,9 +262,9 @@ bool takeNewline(engine* st) {
 */
 static
 bool takeEof(engine* st) {
-  uchar c;
-  peekUchar(&c, st->rest);
-  if (c != UCHAR_NULL) {
+  char32_t c;
+  size_t adv = peekUchar(&c, st->rest);
+  if (adv != 0) {
     return false;
   }
   token tok = {.loc = {.start = st->loc, .end = st->loc}, .type=TOK_EOF};
@@ -285,24 +285,23 @@ Comment tokens do not carry their contents, as they should not be used in place 
 static
 bool takeComment(engine* st) {
   {
-    uchar lookahead;
+    char32_t lookahead;
     peekUchar(&lookahead, st->rest);
     if (lookahead != commentChar) { return false; }
   }
   token tok = {.loc = {.start = st->loc}, .type = TOK_COMMENT};
   struct untilEol skip = untilEol(st->rest);
-  lexer_advance(st, skip.bytes, skip.uchars);
+  lexer_advance(st, skip.bytes, skip.chars);
   tok.loc.end = st->loc;
   lexer_addTok(st, &tok);
   {
-    uchar lookahead;
-    peekUchar(&lookahead, st->rest);
-    if (lookahead < 0 && lookahead != UCHAR_NULL) {
-      // at this point I don't know what to beleive about where the end-of-line is supposed to be
-      st->fatal.type = EEXPRERR_BAD_BYTES;
-      st->fatal.loc.start = st->loc;
-      lexer_advance(st, 1, 1);
-      st->fatal.loc.end = st->loc;
+    char32_t lookahead;
+    size_t adv = peekUchar(&lookahead, st->rest);
+    if (lookahead == UCHAR_NULL && adv != 0) {
+      error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES};
+      lexer_advance(st, adv, 0);
+      err.loc.end = st->loc;
+      dllist_insertAfter_error(&st->errStream, NULL, &err);
     }
   }
   return true;
@@ -315,14 +314,14 @@ Symbols are simply one or more symbol characters.
 static
 bool takeSymbol(engine* st) {
   {
-    uchar lookahead[2];
+    char32_t lookahead[2];
     peekUchars(lookahead, 2, st->rest);
     if (!isSymbolStart(lookahead)) { return false; }
   }
   str text = { .len = 0, .bytes = st->rest.bytes };
   token tok = {.loc = {.start = st->loc}, .type = TOK_SYMBOL};
   while (true) {
-    uchar c;
+    char32_t c;
     size_t adv = peekUchar(&c, st->rest);
     if (isSymbolChar(c)) {
       text.len += adv;
@@ -341,7 +340,7 @@ bool takeSymbol(engine* st) {
 
 static
 void checkDigitSepContext(const radixParams* radix, struct eexpr_locPoint start, bool alwaysError, engine* st) {
-  uchar lookahead;
+  char32_t lookahead;
   peekUchar(&lookahead, st->rest);
   if ( alwaysError
     || (!isDigit(radix, lookahead) && lookahead != digitSep)
@@ -369,7 +368,7 @@ bool takeNumber(engine* st) {
   ////// gather sign (or early exit) //////
   bool neg;
   {
-    uchar lookahead[2];
+    char32_t lookahead[2];
     size_t adv = peekUchars(lookahead, 1, st->rest);
     if (isDigit(defaultRadix, lookahead[0])) {
       neg = false;
@@ -387,7 +386,7 @@ bool takeNumber(engine* st) {
   ////// determine radix //////
   const radixParams* radix = NULL;
   {
-    uchar lookahead[2];
+    char32_t lookahead[2];
     size_t adv = peekUchars(lookahead, 2, st->rest);
     if (lookahead[0] == defaultRadix->digits[0]) {
       radix = decodeRadix(lookahead[1]);
@@ -404,7 +403,7 @@ bool takeNumber(engine* st) {
   {
     uint32_t integerDigits = 0;
     while (true) {
-      uchar c;
+      char32_t c;
       size_t adv = peekUchar(&c, st->rest);
       if (isDigit(radix, c)) {
         lexer_advance(st, adv, 1);
@@ -423,13 +422,13 @@ bool takeNumber(engine* st) {
   ////// gather fractional part //////
   uint32_t fractionalDigits = 0;
   { // decimal point
-    uchar lookahead[2];
+    char32_t lookahead[2];
     size_t adv = peekUchar(lookahead, st->rest);
     peekUchars(lookahead, 2, st->rest);
     if (lookahead[0] == digitPoint && isDigit(radix, lookahead[1])) {
       lexer_advance(st, adv, 1);
       while (true) {
-        uchar c;
+        char32_t c;
         size_t adv = peekUchar(&c, st->rest);
         if (isDigit(radix, c)) {
           lexer_advance(st, adv, 1);
@@ -454,7 +453,7 @@ bool takeNumber(engine* st) {
     bool expPresent; 
     bool expRadixMayDiffer;
     {
-      uchar lookahead;
+      char32_t lookahead;
       size_t adv = peekUchar(&lookahead, st->rest);
       if (ucharElem(lookahead, radix->exponentLetters)) {
         lexer_advance(st, adv, 1);
@@ -473,7 +472,7 @@ bool takeNumber(engine* st) {
     if (expPresent) {
       ////// gather exponent sign //////
       {
-        uchar lookahead;
+        char32_t lookahead;
         size_t adv = peekUchar(&lookahead, st->rest);
         if (isSign(lookahead)) {
           if (fractionalDigits) {
@@ -498,7 +497,7 @@ bool takeNumber(engine* st) {
         expRadix = radix;
       }
       else {
-        uchar lookahead[2];
+        char32_t lookahead[2];
         size_t adv = peekUchars(lookahead, 2, st->rest);
         if (lookahead[0] == defaultRadix->digits[0]) {
           expRadix = decodeRadix(lookahead[1]);
@@ -515,7 +514,7 @@ bool takeNumber(engine* st) {
         // ensure exponent has at least one digit
         uint32_t expDigits = 0;
         while (true) {
-          uchar c;
+          char32_t c;
           size_t adv = peekUchar(&c, st->rest);
           if (isDigit(expRadix, c)) {
             expDigits += 1;
@@ -553,108 +552,6 @@ bool takeNumber(engine* st) {
 }
 
 /*
-A codepoint literal is any (reasonable) character between single-ticks.
-Escape sequences are also permitted, as long as they encode exactly one codepoint.
-  `'[:stringChar::charEscape:]'`
-*/
-// FIXME: the question is, do I even want codepoint literals if I could just `fromString` them?
-// I could make eexpr consumers recognize something like `c"\n"` or `fromString` them under the appropriate type context
-// if I take them out, that would allow me to write sql strings (single-quote-delimited multiline strings where the only escape sequence---and the only one needed---is two single-quotes to insert a snigle quote into the string
-static
-bool takeCodepoint(engine* st) {
-  token tok = {.loc = {.start = st->loc}, .type = TOK_CODEPOINT, .as = {.codepoint = UCHAR_NULL}};
-  {
-    uchar lookahead;
-    size_t adv = peekUchar(&lookahead, st->rest);
-    if (!isCodepointDelim(lookahead)) { return false; }
-    lexer_advance(st, adv, 1);
-  }
-  { // obtain a single codepoint
-    { // standard character
-      uchar c;
-      size_t adv = peekUchar(&c, st->rest);
-      if (isStringChar(c)) {
-        tok.as.codepoint = c;
-        lexer_advance(st, adv, 1);
-        goto codepointBuilt;
-      }
-    }
-    { // single-codepoint escape sequence
-      uchar c;
-      size_t adv = peekUchar(&c, st->rest);
-      if (c == escapeLeader) {
-        lexer_advance(st, adv, 1);
-        tok.as.codepoint = takeCharEscape(st);
-        if (tok.as.codepoint == UCHAR_NULL) {
-          error escapeCharErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR};
-          adv = peekUchar(&escapeCharErr.as.badEscapeChar, st->rest);
-          if (isCodepointDelim(escapeCharErr.as.badEscapeChar)) { // don't consume the next char if it's a tick
-            escapeCharErr.as.badEscapeChar = UCHAR_NULL;
-          }
-          else if (escapeCharErr.as.badEscapeChar != UCHAR_NULL) { // don't try to consume eof
-            lexer_advance(st, adv, 1);
-          }
-          dllist_insertAfter_error(&st->errStream, NULL, &escapeCharErr);
-        }
-        goto codepointBuilt;
-      }
-    }
-    { // no valid codepoint found
-      tok.as.codepoint = UCHAR_NULL;
-      error codepointErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_CODEPOINT};
-      size_t adv = peekUchar(&codepointErr.as.badCodepoint, st->rest);
-      if (isCodepointDelim(codepointErr.as.badCodepoint)) { // don't consume the next char if it's a tick
-        codepointErr.as.badCodepoint = UCHAR_NULL;
-      }
-      else if (codepointErr.as.badCodepoint != UCHAR_NULL) { // don't try to consume eof
-        lexer_advance(st, adv, 1);
-      }
-      codepointErr.loc.end = st->loc;
-      dllist_insertAfter_error(&st->errStream, NULL, &codepointErr);
-      goto codepointBuilt;
-    }
-  }; codepointBuilt:
-  { // closing tick, or error recovery
-    {
-      uchar lookahead;
-      size_t adv = peekUchar(&lookahead, st->rest);
-      if (isCodepointDelim(lookahead)) {
-        lexer_advance(st, adv, 1);
-        goto tokenClosed;
-      }
-    }
-    {
-      error noCloseErr = {.loc = {.start = st->loc}, .type = EEXPRERR_UNCLOSED_CODEPOINT};
-      while (true) {
-        uchar c;
-        size_t adv = peekUchar(&c, st->rest);
-        lexer_advance(st, adv, c == UCHAR_NULL ? 0 : 1);
-        if ( isCodepointDelim(c)
-          || isNewlineChar(c)
-          || c == UCHAR_NULL
-           ) {
-          break;
-        }
-      }
-      noCloseErr.loc.end = st->loc;
-      dllist_insertAfter_error(&st->errStream, NULL, &noCloseErr);
-      goto tokenClosed;
-    }
-  } tokenClosed:
-  if (tok.as.codepoint > 0x10FFFF) {
-    error overflowErr = {.loc = tok.loc, .type = EEXPRERR_UNICODE_OVERFLOW};
-    overflowErr.as.unicodeOverflow = tok.as.codepoint;
-    tok.as.codepoint = UCHAR_NULL;
-    dllist_insertAfter_error(&st->errStream, NULL, &overflowErr);
-  }
-  if (tok.as.codepoint >= 0) {
-    tok.loc.end = st->loc;
-    lexer_addTok(st, &tok);
-  }
-  return true;
-}
-
-/*
 Strings are make of a number of (reasonable, as in the codepoitn parser) characters and escape sequences.
 The valid escape sequences are those of character strings, plus null escape sequences (see `takeNullEscape`).
   `[:strDelimChar:]([:stringChar:]|\\[:charEscape:]|[:nullEscape:])*[:strDelimChar:]`
@@ -665,7 +562,7 @@ These parts can end with a backtick (to begin an interpolation), start with a ba
 static
 bool takeString(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
-  uchar open; {
+  char32_t open; {
     size_t adv = peekUchar(&open, st->rest);
     if (!isStringDelim(open)) { return false; }
     lexer_advance(st, adv, 1);
@@ -681,7 +578,7 @@ bool takeString(engine* st) {
       size_t advLen = 0;
       uint8_t* start = st->rest.bytes;
       while (true) {
-        uchar c;
+        char32_t c;
         size_t adv = peekUchar(&c, st->rest);
         if (!isStringChar(c)) { break; }
         lexer_advance(st, adv, 1);
@@ -699,12 +596,12 @@ bool takeString(engine* st) {
       }
     }
     { // escape sequences
-      uchar c;
+      char32_t c;
       size_t adv = peekUchar(&c, st->rest);
       if (c == escapeLeader) {
         lexer_advance(st, adv, 1);
         more = true;
-        uchar decoded = takeCharEscape(st);
+        char32_t decoded = takeCharEscape(st);
         if (decoded != UCHAR_NULL) { // found a single-character escape
           utf8Char encoded = encodeUchar(decoded);
           if (cap - len < encoded.nbytes) {
@@ -714,27 +611,37 @@ bool takeString(engine* st) {
           }
           memcpy(&buf[len], encoded.codeunits, encoded.nbytes);
           len += encoded.nbytes;
-        } else if (takeNullEscape(st)) { // found a null escape
+        }
+        else if (takeNullEscape(st)) { // found a null escape
           // do nothing
         }
-        else { // no valid escape sequence found
-          error escapeCharErr = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR};
-          adv = peekUchar(&escapeCharErr.as.badEscapeChar, st->rest);
-          if (isStringDelim(escapeCharErr.as.badEscapeChar)) { // don't consume the next char if it's a string delimiter
-            escapeCharErr.as.badEscapeChar = UCHAR_NULL;
+        else {
+          adv = peekUchar(&c, st->rest);
+          if (adv == 0) {
+            // if it was end of file, let the next stage deal with it
           }
-          else if (escapeCharErr.as.badEscapeChar != UCHAR_NULL) { // don't try to consume eof
+          else if (c == UCHAR_NULL) { // corrupt bytes
+            more = true;
+            error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES};
+            lexer_advance(st, adv, 0);
+            err.loc.end = st->loc;
+            dllist_insertAfter_error(&st->errStream, NULL, &err);
+          }
+          else { // no valid escape sequence found
+            more = true;
+            error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR, .as.badEscapeChar = c};
             lexer_advance(st, adv, 1);
+            err.loc.end = st->loc;
+            dllist_insertAfter_error(&st->errStream, NULL, &err);
           }
-          dllist_insertAfter_error(&st->errStream, NULL, &escapeCharErr);
         }
       }
     }
     {
-      uchar c;
+      char32_t c;
       size_t adv = peekUchar(&c, st->rest);
       // stop at close delimiter or end of line/file
-      if ( c == UCHAR_NULL
+      if ( adv == 0
         || isStringDelim(c)
         || isNewlineChar(c)
         ) { break; }
@@ -746,7 +653,7 @@ bool takeString(engine* st) {
       }
     }
   }
-  uchar close; {
+  char32_t close; {
     size_t adv = peekUchar(&close, st->rest);
     if (isStringDelim(close)) {
       lexer_advance(st, adv, 1);
@@ -763,6 +670,82 @@ bool takeString(engine* st) {
   lexer_addTok(st, &tok);
   return true;
 }
+
+/*
+Single-quote strings offer a way to write strings with minimal escaping.
+In particular, I expect it will help significatly with embedding languages that make frequent use of backslash (e.g. regex).
+They are any characters enclosed in single-quotes, where single-quotes can be embedded by doubling them.
+  `'([^']|'')*'`
+*/
+bool takeSqlString(engine* st) {
+  char32_t c; size_t adv = peekUchar(&c, st->rest);
+  if (c != sqlStringDelim) { return false; }
+  token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  lexer_advance(st, adv, 1);
+  strBuilder buf = strBuilder_new(128);
+  while (true) {
+    adv = peekUchar(&c, st->rest);
+    str tmp = {.len = adv, .bytes = st->rest.bytes};
+    if (isNewlineChar(c)) {
+      if (takeNewline(st)) {
+        lexer_delTok(st);
+        tmp.len = st->rest.bytes - tmp.bytes;
+        strBuilder_append(&buf, tmp);
+      }
+      else {
+        free(buf.bytes);
+        st->fatal.type = EEXPRERR_UNCLOSED_MULTILINE_STRING;
+        st->fatal.loc.start = tok.loc.start;
+        st->fatal.loc.end = st->loc;
+        return true;
+      }
+    }
+    else if (c == sqlStringDelim) {
+      char32_t lookahead[2]; size_t bigAdv = peekUchars(lookahead, 2, st->rest);
+      if (lookahead[1] == sqlStringDelim) {
+        strBuilder_append(&buf, tmp);
+        lexer_advance(st, bigAdv, 1);
+      }
+      else {
+        lexer_advance(st, adv, 1);
+        tok.loc.end = st->loc;
+        tok.as.string.text.len = buf.len;
+        tok.as.string.text.bytes = realloc(buf.bytes, buf.len);
+        tok.as.string.splice = STRSPLICE_PLAIN;
+        lexer_addTok(st, &tok);
+        return true;
+      }
+    }
+    else if (adv == 0) {
+      free(buf.bytes);
+      st->fatal.type = EEXPRERR_UNCLOSED_MULTILINE_STRING;
+      st->fatal.loc.start = tok.loc.start;
+      st->fatal.loc.end = st->loc;
+      return true;
+    }
+    else if (c == UCHAR_NULL) {
+      error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES}; // FIXME it really looks like I should make a skipCorruptBytes function
+      lexer_advance(st, adv, 0);
+      err.loc.end = st->loc;
+      dllist_insertAfter_error(&st->errStream, NULL, &err);
+    }
+    else {
+      lexer_advance(st, adv, 1);
+      strBuilder_append(&buf, tmp);
+    }
+  }
+}
+// /*
+// A codepoint literal is any (reasonable) character between single-ticks.
+// Escape sequences are also permitted, as long as they encode exactly one codepoint.
+//   `'[:stringChar::charEscape:]'`
+// */
+// // the question is, do I even want codepoint literals if I could just `fromString` them?
+// // I could make eexpr consumers recognize something like `c"\n"` or `fromString` them under the appropriate type context
+// // if I take them out, that would allow me to write sql strings (single-quote-delimited multiline strings where the only escape sequence---and the only one needed---is two single-quotes to insert a snigle quote into the string
+// // heck, how often does a programmer want a codepoint literal instead of a grapheme cluster literal, or a user-perceived character literal?
+// //   I don't see why I should favor codepoints by making them so integral to eexprs
+
 
 /*
 Heredocs offer a way to embed multi-line strings without escaping.
@@ -785,7 +768,7 @@ static
 bool takeHeredoc(engine* st) {
   token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
   {
-    uchar lookahead[3];
+    char32_t lookahead[3];
     size_t adv = peekUchars(lookahead, 3, st->rest);
     if ( lookahead[0] != plainStringDelim
       || lookahead[1] != plainStringDelim
@@ -799,7 +782,7 @@ bool takeHeredoc(engine* st) {
   { // accumulate delimiter name
     str delimName = {.len = 0, .bytes = st->rest.bytes};
     while (true) {
-      uchar c;
+      char32_t c;
       size_t adv = peekUchar(&c, st->rest);
       if (isSymbolChar(c)) {
         delimName.len += adv;
@@ -824,21 +807,21 @@ bool takeHeredoc(engine* st) {
     error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
     bool trailingSpace = false;
     while (true) {
-      uchar c; size_t adv = peekUchar(&c, st->rest);
+      char32_t c; size_t adv = peekUchar(&c, st->rest);
       if (isSpaceChar(c)) {
         lexer_advance(st, adv, 1);
         trailingSpace = true;
       }
       else { break; }
     }
-    uchar lookahead; size_t adv = peekUchar(&lookahead, st->rest);
+    char32_t lookahead; size_t adv = peekUchar(&lookahead, st->rest);
     if (lookahead == escapeLeader) {
       indented = true;
       lexer_advance(st, adv, 1);
       trailingSpace = false;
       err.loc.start = st->loc;
       while (true) {
-        uchar c; size_t adv = peekUchar(&c, st->rest);
+        char32_t c; size_t adv = peekUchar(&c, st->rest);
         if (isSpaceChar(c)) {
           lexer_advance(st, adv, 1);
           trailingSpace = true;
@@ -861,13 +844,13 @@ bool takeHeredoc(engine* st) {
       st->fatal.loc.end = st->loc;
     }
   }
-  uchar indentChar;
+  char32_t indentChar;
   size_t indentNChars = 0;
   { // accumulate indentation
     if (indented) {
       // determine indentation character
       struct eexpr_locPoint indentPosStart = st->loc;
-      uchar c; size_t adv = peekUchar(&c, st->rest);
+      char32_t c; size_t adv = peekUchar(&c, st->rest);
       if (isSpaceChar(c)) {
         lexer_advance(st, adv, 1);
         indentChar = c;
@@ -878,7 +861,7 @@ bool takeHeredoc(engine* st) {
       }
       // count indentation depth
       while (true) {
-        uchar c; size_t adv = peekUchar(&c, st->rest);
+        char32_t c; size_t adv = peekUchar(&c, st->rest);
         if (c == indentChar) {
           lexer_advance(st, adv, 1);
           indentNChars += 1;
@@ -888,7 +871,7 @@ bool takeHeredoc(engine* st) {
           indentNChars += 1;
           if (c == tabChar) {
             // tab-based indentation needs an alignment tab after the closing backslash
-            uchar c; size_t adv = peekUchar(&c, st->rest);
+            char32_t c; size_t adv = peekUchar(&c, st->rest);
             if (c == tabChar) {
               lexer_advance(st, adv, 1);
             }
@@ -909,6 +892,7 @@ bool takeHeredoc(engine* st) {
       }
       // make sure we aren't already mixing indentation
       if (st->indent.chr == UCHAR_NULL) {
+        // this is the first time we've seen indentation
         st->indent.chr = indentChar;
         st->indent.established.start = indentPosStart;
         st->indent.established.end = st->loc;
@@ -931,10 +915,16 @@ bool takeHeredoc(engine* st) {
     { // consume line
       str tmp = {.len = 0, .bytes = st->rest.bytes};
       while (true) {
-        uchar c; size_t adv = peekUchar(&c, st->rest);
-        if ( c == UCHAR_NULL
+        char32_t c; size_t adv = peekUchar(&c, st->rest);
+        if ( adv == 0
           || isNewlineChar(c)
            ) { break; }
+        else if (c == UCHAR_NULL) {
+          error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES};
+          lexer_advance(st, adv, 0);
+          err.loc.end = st->loc;
+          dllist_insertAfter_error(&st->errStream, NULL, &err);
+        }
         else {
           lexer_advance(st, adv, 1);
           tmp.len += adv;
@@ -953,7 +943,7 @@ bool takeHeredoc(engine* st) {
         tok.type = TOK_STRING_ERROR;
         tok.loc.end = st->loc;
         lexer_addTok(st, &tok);
-        st->fatal.type = EEXPRERR_UNCLOSED_HEREDOC;
+        st->fatal.type = EEXPRERR_UNCLOSED_MULTILINE_STRING;
         st->fatal.loc = tok.loc;
         return true;
       }
@@ -961,7 +951,7 @@ bool takeHeredoc(engine* st) {
     { // consume indentation
       error err = {.loc = {.start = st->loc}, .type = EEXPRERR_HEREDOC_BAD_INDENTATION};
       for (size_t i = 0; i < indentNChars; ++i) {
-        uchar c; size_t adv = peekUchar(&c, st->rest);
+        char32_t c; size_t adv = peekUchar(&c, st->rest);
         if (c == indentChar) {
           lexer_advance(st, adv, 1);
         }
@@ -1005,7 +995,7 @@ Wraps are parens, brackets, and braces.
 */
 static
 bool takeWrap(engine* st) {
-  uchar lookahead;
+  char32_t lookahead;
   size_t adv = peekUchar(&lookahead, st->rest);
   eexpr_wrapType type = isWrapChar(lookahead);
   if (type == WRAP_NULL) { return false; }
@@ -1028,7 +1018,7 @@ static
 bool takeSplitter(engine* st) {
   splitter info;
   {
-    uchar lookahead[2];
+    char32_t lookahead[2];
     peekUchars(lookahead, 2, st->rest);
     info = decodeSplitter(lookahead);
     if (info.type == SPLITTER_NONE) { return false; }
@@ -1042,7 +1032,7 @@ bool takeSplitter(engine* st) {
     case SPLITTER_COMMA: tok.type = TOK_COMMA; break;
     default: assert(false);
   }
-  lexer_advance(st, info.bytes, info.uchars);
+  lexer_advance(st, info.bytes, info.chars);
   tok.loc.end = st->loc;
   lexer_addTok(st, &tok);
   return true;
@@ -1051,11 +1041,11 @@ bool takeSplitter(engine* st) {
 // always consumes a character (or byte if the remaining input is not valid utf8)
 static
 bool takeUnexpected(engine* st) {
-  uchar c;
+  char32_t c;
   size_t adv = peekUchar(&c, st->rest);
   error err = {.loc = {.start = st->loc}};
   if (c < 0 || c > 0x10FFFF) {
-    err.type = EEXPRERR_BAD_BYTES;
+    err.type = EEXPRERR_BAD_BYTES; // TODO it'd be great to merge adjacent badBytes errors together
     lexer_advance(st, adv, 0);
   }
   else {
@@ -1079,7 +1069,8 @@ void engine_rawLex(engine* st) {
     if (takeNumber(st)) { continue; }
     if (takeHeredoc(st)) { continue; }
     if (takeString(st)) { continue; }
-    if (takeCodepoint(st)) { continue; }
+    // if (takeCodepoint(st)) { continue; }
+    if (takeSqlString(st)) { continue; }
     if (takeSplitter(st)) { continue; }
     if (takeWrap(st)) { continue; }
     if (takeLineContinue(st)) { continue; }

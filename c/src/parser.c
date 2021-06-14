@@ -13,7 +13,7 @@ void mkUnbalanceError(engine* st) {
   st->fatal.type = EEXPRERR_UNBALANCED_WRAP;
   st->fatal.loc = lookahead->loc;
   if (st->wrapStack.len == 0) {
-    st->fatal.as.unbalancedWrap.type = UCHAR_NULL;
+    st->fatal.as.unbalancedWrap.type = WRAP_NULL;
   }
   else {
     const openWrap* match = dynarr_peek_openWrap(&st->wrapStack);
@@ -267,15 +267,6 @@ eexpr* parseAtomic(engine* st) {
       out->loc = tok->loc;
       out->type = EEXPR_NUMBER;
       out->as.number = tok->as.number;
-      parser_pop(st);
-      return out;
-    }; break;
-    case TOK_CODEPOINT: {
-      eexpr* out = malloc(sizeof(eexpr));
-      checkOom(out);
-      out->loc = tok->loc;
-      out->type = EEXPR_CODEPOINT;
-      out->as.codepoint = tok->as.codepoint;
       parser_pop(st);
       return out;
     }; break;

@@ -84,7 +84,7 @@ typedef struct eexpr_parser {
   // On output: an array that holds the byte offsets from start of input of the beginning of each line (zero-indexed)
   // Initialize `.lines.offsets` to NULL, or memory will leak
   // Owned by the caller of `expr_parse` has gotten past the rawlex stage.
-  struct eexpr_lineIndex {
+  struct eexpr_lineIndex { // TODO if I inlude a byte offset in locPoint, I don't need a line index
     size_t len;
     size_t* offsets;
   } lines;
@@ -199,18 +199,16 @@ typedef enum eexpr_errorType {
   EEXPRERR_BAD_DIGIT_SEPARATOR,
   EEXPRERR_MISSING_EXPONENT,
   EEXPRERR_BAD_EXPONENT_SIGN,
-  EEXPRERR_BAD_CODEPOINT, // empty or badly-escaped codepoint
   EEXPRERR_BAD_ESCAPE_CHAR,
   EEXPRERR_BAD_ESCAPE_CODE,
   EEXPRERR_UNICODE_OVERFLOW,
-  EEXPRERR_UNCLOSED_CODEPOINT,
   EEXPRERR_BAD_STRING_CHAR,
   EEXPRERR_MISSING_LINE_PICKUP,
   EEXPRERR_UNCLOSED_STRING,
+  EEXPRERR_UNCLOSED_MULTILINE_STRING,
   EEXPRERR_HEREDOC_BAD_OPEN,
   EEXPRERR_HEREDOC_BAD_INDENT_DEFINITION,
   EEXPRERR_HEREDOC_BAD_INDENTATION,
-  EEXPRERR_UNCLOSED_HEREDOC,
   EEXPRERR_MIXED_INDENTATION,
   // cooking errors
   EEXPRERR_TRAILING_SPACE,
@@ -231,7 +229,6 @@ struct eexpr_error {
   eexpr_errorType type;
   union eexpr_errorInfo {
     char32_t badChar;
-    char32_t badCodepoint;
     char32_t badEscapeChar;
     char32_t badEscapeCode[6]; // if <6 `char32_t`s, then pad at start with U+0000
     uint32_t unicodeOverflow;

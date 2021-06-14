@@ -6,9 +6,6 @@
 #include "shim/bigint.h"
 #include "shim/strstuff.h"
 
-// TODO investigate how to have a uchar based on char32_t
-_Static_assert((char32_t)(-1) < (char32_t)0 || (char32_t)0x10FFFF < (char32_t)(-1), "-1 is not a sentinel for char32_t");
-
 
 //////////////////////////////////// Payloads ////////////////////////
 
@@ -22,8 +19,6 @@ typedef struct eexprNumber {
   uint32_t fractionalDigits;
   bigint exponent; // owned
 } eexprNumber;
-
-typedef uchar eexprCodepoint; // FIXME this should be an actual char32_t, since it should never be null/sentinel
 
 typedef struct strTemplPart {
   eexpr* expr;
@@ -49,7 +44,6 @@ struct eexpr {
   enum eexprType {
     EEXPR_SYMBOL,
     EEXPR_NUMBER,
-    EEXPR_CODEPOINT,
     EEXPR_STRING,
     EEXPR_PAREN,
     EEXPR_BRACK,
@@ -66,7 +60,6 @@ struct eexpr {
   union eexprData {
     eexprSymbol symbol;
     eexprNumber number;
-    eexprCodepoint codepoint;
     eexprStrTempl string;
     eexpr* wrap; // paren, bracket, brace, predot
     dynarr_eexpr_p list; // chain, space, comma, semicolon, block
@@ -94,7 +87,6 @@ typedef struct token {
   eexpr_loc loc;
   enum tokenType {
     TOK_NUMBER,
-    TOK_CODEPOINT,
     TOK_STRING,
     TOK_SYMBOL,
     TOK_WRAP,
@@ -123,11 +115,10 @@ typedef struct token {
   } type;
   union tokenData {
     struct token_unknownSpace {
-      uchar chr;
+      char32_t chr; // '\0' for mixed spaces, otherwise one of ' ', '\t' // TODO but I should probably make this an enum
       size_t size;
     } unknownSpace;
     eexprNumber number;
-    eexprCodepoint codepoint;
     struct token_string {
       str text; // owned
       strSpliceType splice;
@@ -157,14 +148,13 @@ typedef struct error {
   eexpr_loc loc;
   eexpr_errorType type;
   union errorData {
-    uchar badChar;
-    uchar badCodepoint;
-    uchar badEscapeChar;
-    uchar badEscapeCode[6]; // if <6 uchars, then pad at start with UCHAR_NULL
-    uchar unicodeOverflow;
-    uchar badStringChar;
+    char32_t badChar; // non-null
+    char32_t badEscapeChar; // non-null
+    char32_t badEscapeCode[6]; // if <6 uchars needed fo rthe digits, pad at start with '0'
+    uint32_t unicodeOverflow;
+    char32_t badStringChar; // non-null
     struct {
-      uchar chr;
+      char32_t chr; // non-null
       eexpr_loc loc;
     } mixedIndentation;
     struct {

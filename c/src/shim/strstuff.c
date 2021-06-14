@@ -81,7 +81,7 @@ void strBuilder_append(strBuilder* self, str other) {
 
 
 
-size_t peekUchar(uchar* out, str in) {
+size_t peekUchar(char32_t* out, str in) {
   if (in.len == 0) {
     *out = UCHAR_NULL;
     return 0;
@@ -135,12 +135,12 @@ size_t peekUchar(uchar* out, str in) {
     return 4;
   }
   else badbyte: {
-    *out = -(int32_t)in.bytes[0];
+    *out = UCHAR_NULL;
     return 1;
   }
 }
 
-size_t peekUchars(uchar* out, size_t n, str in) {
+size_t peekUchars(char32_t* out, size_t n, str in) {
   size_t adv = 0;
   for (size_t i = 0; i < n; ++i) {
     size_t adv1 = peekUchar(&out[i], in);
@@ -152,7 +152,7 @@ size_t peekUchars(uchar* out, size_t n, str in) {
 }
 
 
-bool ucharElem(uchar c, const uchar* set) {
+bool ucharElem(char32_t c, const char32_t* set) {
   // if (c == UCHAR_NULL) { return false; } // TODO would this help performance?
   for (size_t i = 0; set[i] != UCHAR_NULL; ++i) {
     if (set[i] == c) { return true; }
@@ -160,7 +160,7 @@ bool ucharElem(uchar c, const uchar* set) {
   return false;
 }
 
-size_t ucharFind(uchar c, const uchar* set) {
+size_t ucharFind(char32_t c, const char32_t* set) {
   for (size_t i = 0; set[i] != UCHAR_NULL; ++i) {
     if (set[i] == c) { return i; }
   }
@@ -168,7 +168,7 @@ size_t ucharFind(uchar c, const uchar* set) {
 }
 
 
-utf8Char encodeUchar(uchar c) {
+utf8Char encodeUchar(char32_t c) {
   utf8Char out = {.nbytes = 0, .codeunits = {0, 0, 0, 0}};
   if (c < 0) {
     return out;

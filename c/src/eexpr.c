@@ -23,16 +23,6 @@ void* useRealloc(void* closure, void* orig_p, size_t newNBytes) {
   return realloc(orig_p, newNBytes);
 }
 
-static inline
-void copyChar(char32_t* dst, uchar src) {
-  assert(0 <= src && src <= 0x10FFFF);
-  *dst = src;
-}
-static inline
-void copyCharNullable(char32_t* dst, uchar src) {
-  if (src == UCHAR_NULL) { *dst = '\0'; }
-  else { copyChar(dst, src); }
-}
 
 static
 void copyError(eexpr_error* dst, const error* src) {
@@ -42,39 +32,41 @@ void copyError(eexpr_error* dst, const error* src) {
     case EEXPRERR_NOERROR: { assert(false); }; break;
     case EEXPRERR_BAD_BYTES: {}; break;
     case EEXPRERR_BAD_CHAR: {
-      copyChar(&dst->as.badChar, src->as.badChar);
+      assert(src->as.badChar != UCHAR_NULL);
+      dst->as.badChar = src->as.badChar;
     }; break;
     case EEXPRERR_MIXED_SPACE: {}; break;
     case EEXPRERR_MIXED_NEWLINES: {}; break;
     case EEXPRERR_BAD_DIGIT_SEPARATOR: {}; break;
     case EEXPRERR_MISSING_EXPONENT: {}; break;
     case EEXPRERR_BAD_EXPONENT_SIGN: {}; break;
-    case EEXPRERR_BAD_CODEPOINT: {
-      copyChar(&dst->as.badCodepoint, src->as.badCodepoint);
-    }; break;
     case EEXPRERR_BAD_ESCAPE_CHAR: {
-      copyChar(&dst->as.badEscapeChar, src->as.badEscapeChar);
+      assert(src->as.badEscapeChar != UCHAR_NULL);
+      dst->as.badEscapeChar = src->as.badEscapeChar;
     }; break;
     case EEXPRERR_BAD_ESCAPE_CODE: {
       for (int i = 0; i < 6; ++i) {
-        copyCharNullable(&dst->as.badEscapeCode[i], src->as.badEscapeCode[i]);
+        assert(src->as.badEscapeCode[i] != UCHAR_NULL);
+        dst->as.badEscapeCode[i] = src->as.badEscapeCode[i];
       }
     }; break;
     case EEXPRERR_UNICODE_OVERFLOW: {
-      copyChar(&dst->as.unicodeOverflow, src->as.unicodeOverflow);
+      assert(src->as.unicodeOverflow != UCHAR_NULL);
+      dst->as.unicodeOverflow = src->as.unicodeOverflow;
     }; break;
-    case EEXPRERR_UNCLOSED_CODEPOINT: {}; break;
     case EEXPRERR_BAD_STRING_CHAR: {
-      copyChar(&dst->as.badStringChar, src->as.badStringChar);
+      assert(src->as.badStringChar != UCHAR_NULL);
+      dst->as.badStringChar = src->as.badStringChar;
     }; break;
     case EEXPRERR_MISSING_LINE_PICKUP: {}; break;
     case EEXPRERR_UNCLOSED_STRING: {}; break;
+    case EEXPRERR_UNCLOSED_MULTILINE_STRING: {}; break;
     case EEXPRERR_HEREDOC_BAD_OPEN: {}; break;
     case EEXPRERR_HEREDOC_BAD_INDENT_DEFINITION: {}; break;
     case EEXPRERR_HEREDOC_BAD_INDENTATION: {}; break;
-    case EEXPRERR_UNCLOSED_HEREDOC: {}; break;
     case EEXPRERR_MIXED_INDENTATION: {
-      copyChar(&dst->as.mixedIndentation.chr, src->as.mixedIndentation.chr);
+      assert(src->as.mixedIndentation.chr != UCHAR_NULL);
+      dst->as.mixedIndentation.chr = src->as.mixedIndentation.chr;
       dst->as.mixedIndentation.loc = src->as.mixedIndentation.loc;
     }; break;
     case EEXPRERR_TRAILING_SPACE: {}; break;
@@ -184,6 +176,11 @@ static
 void drainLineIndex(eexpr_parser* parser) {
   parser->lines.len = parser->impl->st.lineIndex.len;
   parser->lines.offsets = parser->impl->st.lineIndex.offsets;
+  { // transfer ownership of these offsets to the caller of eexpr_parser
+    parser->impl->st.lineIndex.len = 0;
+    parser->impl->st.lineIndex.cap = 0;
+    parser->impl->st.lineIndex.offsets = NULL;
+  }
 }
 
 
