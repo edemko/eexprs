@@ -67,7 +67,7 @@ void fdumpCStr(FILE* fp, char* s) {
   fdumpStr(fp, text);
 }
 
-void fdumpToken(FILE* fp, const token* tok) {
+void fdumpToken(FILE* fp, const eexpr_token* tok) {
   fprintf(fp, "{\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
          , tok->loc.start.line + 1
          , tok->loc.start.col + 1
@@ -173,8 +173,15 @@ void fdumpToken(FILE* fp, const token* tok) {
       fprintf(fp, ",\"type\":\"open-indent\",\"depth\":%zu", tok->as.indent.depth);
     }; break;
     case TOK_UNKNOWN_SPACE: {
-      fprintf(fp, ",\"type\":\"unknown-space\",\"codepoint\":%"PRIi32",\"size\":%zu"
-                , tok->as.unknownSpace.chr
+      char* typeDesc;
+      switch (tok->as.unknownSpace.type) {
+        case EEXPR_WSMIXED: typeDesc = ",\"mixed\":true"; break;
+        case EEXPR_WSSPACES: typeDesc = ",\"char\":\" \""; break;
+        case EEXPR_WSTABS: typeDesc = ",\"char\":\"\\t\""; break;
+        case EEXPR_WSLINECONTINUE: typeDesc = ""; break;
+      }
+      fprintf(fp, ",\"type\":\"unknown-space\"%s,\"size\":%zu"
+                , typeDesc
                 , tok->as.unknownSpace.size
                 );
     }; break;
@@ -463,7 +470,7 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
   fprintf(fp, "}");
 }
 
-void fdumpTokenArray(FILE* fp, const char* indent, size_t n, token** arr) {
+void fdumpTokenArray(FILE* fp, const char* indent, size_t n, eexpr_token** arr) {
   if (n == 0) {
     fprintf(fp, " []");
   }
@@ -506,13 +513,4 @@ void fdumpErrorArray(FILE* fp, const char* indent, size_t n, eexpr_error* arr) {
     }
     fprintf(fp, "\n%s]", indent);
   }
-}
-
-void fdumpLineIndex(FILE* fp, size_t len, size_t* offsets) {
-  char separator = '[';
-  for (size_t i = 0; i < len; ++i) {
-    fprintf(fp, "%c%zu", separator, offsets[i]);
-    separator = ',';
-  }
-  fprintf(fp, "]");
 }

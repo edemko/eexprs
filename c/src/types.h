@@ -83,7 +83,7 @@ typedef enum strSpliceType {
   STRSPLICE_CORRUPT
 } strSpliceType;
 
-typedef struct token {
+struct eexpr_token {
   eexpr_loc loc;
   enum tokenType {
     TOK_NUMBER,
@@ -115,7 +115,7 @@ typedef struct token {
   } type;
   union tokenData {
     struct token_unknownSpace {
-      char32_t chr; // '\0' for mixed spaces, otherwise one of ' ', '\t' // TODO but I should probably make this an enum
+      eexpr_spaceType type;
       size_t size;
     } unknownSpace;
     eexprNumber number;
@@ -136,33 +136,9 @@ typedef struct token {
   // however, for the purposes of outputing colorization data, they should not actually be removed from the token stream.
   // `.transparent` allows these tokens to be flagged so that further lexing/parsing steps ignore them
   bool transparent;
-} token;
+};
 
-void token_deinit(token* tok);
-
-
-//////////////////////////////////// Errors ////////////////////////
-
-
-typedef struct error {
-  eexpr_loc loc;
-  eexpr_errorType type;
-  union errorData {
-    char32_t badChar; // non-null
-    char32_t badEscapeChar; // non-null
-    char32_t badEscapeCode[6]; // if <6 uchars needed fo rthe digits, pad at start with '0'
-    uint32_t unicodeOverflow;
-    char32_t badStringChar; // non-null
-    struct {
-      char32_t chr; // non-null
-      eexpr_loc loc;
-    } mixedIndentation;
-    struct {
-      eexpr_wrapType type; // what close wrap was left open, or WRAP_NULL for start-of-file
-      eexpr_loc loc; // location where the unmatched open wrap is
-    } unbalancedWrap;
-  } as;
-} error;
+void token_deinit(eexpr_token* tok);
 
 
 #endif

@@ -12,12 +12,12 @@ void engine_init(engine* it) {
     it->rest = emptyStr;
     it->loc.line = 0;
     it->loc.col = 0;
+    it->loc.byte = 0;
   }
   {
     dynarr_init_eexpr_p(&it->eexprStream, 64);
-    it->tokStream = dllist_empty_token();
-    it->warnStream = dllist_empty_error();
-    it->errStream = dllist_empty_error();
+    it->tokStream = dllist_empty_eexpr_token();
+    it->errStream = dllist_empty_eexpr_error();
     it->fatal.type = EEXPRERR_NOERROR;
   }
   {
@@ -26,59 +26,30 @@ void engine_init(engine* it) {
     it->indent.knownMixed = false;
     dynarr_init_openWrap(&it->wrapStack, 30);
   }
-  it->allInput = emptyStr;
-  {
-    it->lineIndex.len = 1;
-    it->lineIndex.cap = 256;
-    it->lineIndex.offsets = malloc(sizeof(size_t) * 256);
-    checkOom(it->lineIndex.offsets);
-    it->lineIndex.offsets[0] = 0;
-  }
-}
-
-engine engine_newFromFile(const char* filename) {
-  engine out;
-  engine_init(&out);
-  out.allInput = readFile(filename);
-  out.rest = out.allInput;
-  return out;
 }
 
 engine engine_newFromStrn(size_t n, uint8_t* input) {
   engine out;
   engine_init(&out);
-  out.allInput.len = n;
-  out.allInput.bytes = input;
-  out.rest = out.allInput;
+  out.rest.len = n;
+  out.rest.bytes = input;
   return out;
 }
 
 
 void engine_deinit(engine* it) {
-  if (it->lineIndex.offsets != NULL) {
-    free(it->lineIndex.offsets);
-    it->lineIndex.offsets = NULL;
-    it->lineIndex.cap = 0;
-    it->lineIndex.len = 0;
-  }
-  if (it->allInput.bytes != NULL) {
-    free(it->allInput.bytes);
-    it->allInput.bytes = NULL;
-    it->allInput.len = 0;
-    // .rest should aliased .allInput
-    it->rest.bytes = NULL;
-    it->rest.len = 0;
-  }
+  // .rest should aliased another string anyway
+  it->rest.bytes = NULL;
+  it->rest.len = 0;
   dynarr_deinit_openWrap(&it->wrapStack);
   // WARNING I'm assuming there's no owned pointer data in error
   it->fatal.type = EEXPRERR_NOERROR;
-  dllist_del_error(&it->errStream);
-  dllist_del_error(&it->warnStream);
+  dllist_del_eexpr_error(&it->errStream);
 
-  for (dllistNode_token* node = it->tokStream.start; node != NULL; node = node->next) {
+  for (dllistNode_eexpr_token* node = it->tokStream.start; node != NULL; node = node->next) {
     token_deinit(&node->here);
   }
-  dllist_del_token(&it->tokStream);
+  dllist_del_eexpr_token(&it->tokStream);
 
   for (size_t i = 0; i < it->eexprStream.len; ++i) {
     eexpr_deinit(it->eexprStream.data[i]);

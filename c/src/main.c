@@ -19,7 +19,6 @@ typedef struct options {
   char* inFilename;
   struct {
     char* original;
-    char* lineIndex;
     char* rawTokens;
     char* tokens;
     char* eexprs;
@@ -33,43 +32,12 @@ typedef struct options {
   } levels;
 } options;
 
-void relevelErrors(engine* st, options opts) {
-  for (dllistNode_error* strm = st->errStream.start; strm != NULL; /*increment in body*/) {
-    level l;
-    switch (strm->here.type) {
-      case EEXPRERR_MIXED_SPACE: { l = opts.levels.mixedSpace; } break;
-      case EEXPRERR_MIXED_NEWLINES: { l = opts.levels.mixedNewlines; } break;
-      case EEXPRERR_BAD_DIGIT_SEPARATOR: { l = opts.levels.badDigitSeparator; } break;
-      case EEXPRERR_TRAILING_SPACE: { l = opts.levels.trailingSpace; } break;
-      case EEXPRERR_NO_TRAILING_NEWLINE: { l = opts.levels.noTrailingNewline; } break;
-      default: { l = ERROR; } break;
-    }
-    switch (l) {
-      case ERROR: {}; break;
-      case WARN: {
-        dllistNode_error* next = strm->next;
-        dllist_moveAfter_error(&st->warnStream, NULL, &st->errStream, strm);
-        strm = next; continue;
-      }; break;
-      case IGNORE: {
-        dllistNode_error* next = strm->next;
-        if (strm->prev != NULL) { strm->prev->next = strm->next; }
-        free(strm);
-        strm = next; continue;
-      }; break;
-    }
-    strm = strm->next; continue;
-  }
-}
-
 
 void dumpLexer(char* filename, const eexpr_parser* parser, const options* opts) {
   if (filename == NULL) { return; }
   FILE* fp = fopen(filename, "w");
   fprintf(fp, "{ \"filename\": ");
   fdumpCStr(fp, opts->inFilename);
-  fprintf(fp, "\n, \"lineOffsets\": ");
-  fdumpLineIndex(fp, parser->lines.len, parser->lines.offsets);
   fprintf(fp, "\n, \"tokens\":");
   fdumpTokenArray(fp, "  ", parser->nTokens, parser->tokens);
   fprintf(fp, "\n, \"warnings\":");
@@ -84,8 +52,6 @@ void dumpParser(char* filename, const eexpr_parser* parser, const options* opts)
   FILE* fp = fopen(filename, "w");
   fprintf(fp, "{ \"filename\": ");
   fdumpCStr(fp, opts->inFilename);
-  fprintf(fp, "\n, \"lineOffsets\": ");
-  fdumpLineIndex(fp, parser->lines.len, parser->lines.offsets);
   fprintf(fp, "\n, \"eexprs\":");
   dynarr_eexpr_p fakeArr = {.len = parser->nEexprs, .cap = parser->nEexprs, .data = parser->eexprs};
   fdumpEexprArray(fp, 2, &fakeArr);
@@ -102,7 +68,6 @@ options parseOpts(int argc, char** argv) {
     { .inFilename = NULL
     , .dump =
       { .original = NULL
-      , .lineIndex = NULL
       , .rawTokens = NULL
       , .tokens = NULL
       , .eexprs = NULL
@@ -166,7 +131,6 @@ options parseOpts(int argc, char** argv) {
         char** filename_p = NULL;
         if (false) { assert(false); }
         else if (!strcmp(argv[i], "original")) { filename_p = &opts.dump.original; }
-        else if (!strcmp(argv[i], "dumpLineIndex")) { filename_p = &opts.dump.lineIndex; }
         else if (!strcmp(argv[i], "dumpRawTokens")) { filename_p = &opts.dump.rawTokens; }
         else if (!strcmp(argv[i], "dumpTokens")) { filename_p = &opts.dump.tokens; }
         else if (!strcmp(argv[i], "dumpEexprs")) { filename_p = &opts.dump.eexprs; }
@@ -234,15 +198,6 @@ int main(int argc, char** argv) {
   if (!eexpr_parse(&parser, input.len, input.bytes)) {
     die("out of memory");
   }
-  if (opts.dump.lineIndex != NULL) {
-    FILE* fp = fopen(opts.dump.lineIndex, "w");
-    fprintf(fp, "{ \"filename\":");
-    fdumpCStr(fp, opts.inFilename);
-    fprintf(fp, "\n, \"lineIndex\":");
-    fdumpLineIndex(fp, parser.lines.len, parser.lines.offsets);
-    fprintf(fp, "\n}\n");
-    fclose(fp);
-  }
   dumpLexer(opts.dump.rawTokens, &parser, &opts);
   if (parser.nErrors != 0) { goto finish; }
 
@@ -262,7 +217,6 @@ int main(int argc, char** argv) {
 
   // report warnings and errors, exiting if there are any errors
   finish:
-  if (!parsed) { eexpr_parser_deinit(&parser); }
   if (parsed && parser.nErrors == 0) {
     fprintf(stdout, "{ \"filename\": ");
     fdumpCStr(stdout, opts.inFilename);
@@ -286,6 +240,7 @@ int main(int argc, char** argv) {
     }
     fprintf(stderr, "\n}\n");
   }
+  eexpr_parser_deinit(&parser);
   for (size_t i = 0; i < parser.nEexprs; ++i) {
     eexpr_deinit(parser.eexprs[i]);
     free(parser.eexprs[i]);

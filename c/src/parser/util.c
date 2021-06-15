@@ -6,12 +6,12 @@
 #include "shim/common.h"
 
 
-token* parser_peek(engine* st) {
-  dllistNode_token* node = st->tokStream.start;
+eexpr_token* parser_peek(engine* st) {
+  dllistNode_eexpr_token* node = st->tokStream.start;
   while (node != NULL) {
     if (node->here.transparent) {
       token_deinit(&node->here);
-      dllist_popStart_token(&st->tokStream, NULL);
+      dllist_popStart_eexpr_token(&st->tokStream, NULL);
       node = st->tokStream.start;
     }
     else {
@@ -22,15 +22,15 @@ token* parser_peek(engine* st) {
 }
 
 void parser_pop(engine* st) {
-  dllistNode_token* node = st->tokStream.start;
+  dllistNode_eexpr_token* node = st->tokStream.start;
   while (node != NULL) {
     if (node->here.transparent) {
       token_deinit(&node->here);
-      dllist_popStart_token(&st->tokStream, NULL);
+      dllist_popStart_eexpr_token(&st->tokStream, NULL);
       node = st->tokStream.start;
     }
     else {
-      dllist_popStart_token(&st->tokStream, NULL);
+      dllist_popStart_eexpr_token(&st->tokStream, NULL);
       return;
     }
   }

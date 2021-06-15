@@ -82,6 +82,9 @@ extern const char32_t tabChar;
 bool isSpaceChar(char32_t c);
 bool isNewlineChar(char32_t c);
 
+eexpr_spaceType decodeSpaceChar(char32_t c);
+
+
 typedef enum newlineType {
   NEWLINE_NONE,
   NEWLINE_UNIX,

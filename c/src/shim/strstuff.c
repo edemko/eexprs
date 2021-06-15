@@ -153,7 +153,6 @@ size_t peekUchars(char32_t* out, size_t n, str in) {
 
 
 bool ucharElem(char32_t c, const char32_t* set) {
-  // if (c == UCHAR_NULL) { return false; } // TODO would this help performance?
   for (size_t i = 0; set[i] != UCHAR_NULL; ++i) {
     if (set[i] == c) { return true; }
   }

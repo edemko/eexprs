@@ -9,7 +9,7 @@
 static
 void mkUnbalanceError(engine* st) {
   if (st->fatal.type != EEXPRERR_NOERROR) { return; }
-  token* lookahead = parser_peek(st);
+  eexpr_token* lookahead = parser_peek(st);
   st->fatal.type = EEXPRERR_UNBALANCED_WRAP;
   st->fatal.loc = lookahead->loc;
   if (st->wrapStack.len == 0) {
@@ -39,7 +39,7 @@ wrapExpr
 */
 static
 eexpr* parseWrap(engine* st) {
-  token* open = parser_peek(st);
+  eexpr_token* open = parser_peek(st);
   if ( open->type != TOK_WRAP
     || !open->as.wrap.isOpen
      ) { return NULL; }
@@ -75,7 +75,7 @@ eexpr* parseWrap(engine* st) {
     out->loc.start = open->loc.start;
     parser_pop(st);
     out->as.wrap = parseSemicolon(st);
-    token* close = parser_peek(st);
+    eexpr_token* close = parser_peek(st);
     if ( st->wrapStack.len != 0
       && close->type == TOK_WRAP
       && !close->as.wrap.isOpen
@@ -99,7 +99,7 @@ eexpr* parseWrap(engine* st) {
       if (subexpr != NULL) {
         dynarr_push_eexpr_p(&out->as.list, &subexpr);
       }
-      token* lookahead = parser_peek(st);
+      eexpr_token* lookahead = parser_peek(st);
       if (lookahead->type == TOK_WRAP) {
         if ( st->wrapStack.len != 0
           && !lookahead->as.wrap.isOpen
@@ -118,8 +118,8 @@ eexpr* parseWrap(engine* st) {
         parser_pop(st);
       }
       else {
-        error err = {.loc = lookahead->loc, .type = EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT};
-        dllist_insertAfter_error(&st->errStream, NULL, &err);
+        eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT};
+        dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
         return out;
       }
     }
@@ -135,7 +135,7 @@ stringTemplate
 */
 static
 eexpr* parseTemplate(engine* st) {
-  token* tok = parser_peek(st);
+  eexpr_token* tok = parser_peek(st);
   if (tok->type != TOK_STRING) { return NULL; }
   switch (tok->as.string.splice) {
     case STRSPLICE_PLAIN: {
@@ -169,7 +169,7 @@ eexpr* parseTemplate(engine* st) {
         { // we need an expr before the next part of the template
           // but if the next part comes without an expr, we can do some error recovery later
           // we flag that recovery is needed by setting part.expr to NULL
-          token* lookahead = parser_peek(st);
+          eexpr_token* lookahead = parser_peek(st);
           if ( lookahead->type != TOK_STRING
             || (lookahead->as.string.splice != STRSPLICE_MIDDLE && lookahead->as.string.splice != STRSPLICE_CLOSE)
              ) {
@@ -179,16 +179,16 @@ eexpr* parseTemplate(engine* st) {
             part.expr = NULL;
           }
         }
-        token* lookahead = parser_peek(st);
+        eexpr_token* lookahead = parser_peek(st);
         if (part.expr != NULL) {
           out->loc.end = part.expr->loc.end;
         }
         else {
-          error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_TEMPLATE_EXPR};
+          eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_TEMPLATE_EXPR};
           if ( lookahead->type == TOK_STRING
             && (lookahead->as.string.splice == STRSPLICE_MIDDLE || lookahead->as.string.splice == STRSPLICE_CLOSE)
              ) {
-            dllist_insertAfter_error(&st->errStream, NULL, &err);
+            dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           }
           else {
             st->fatal = err;
@@ -224,8 +224,8 @@ eexpr* parseTemplate(engine* st) {
             part.textAfter.len = 0; part.textAfter.bytes = NULL;
             dynarr_push_strTemplPart(&out->as.string.parts, &part);
           }
-          error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_CLOSE_TEMPLATE};
-          dllist_insertAfter_error(&st->errStream, NULL, &err);
+          eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_CLOSE_TEMPLATE};
+          dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           return out;
         }
       }
@@ -250,7 +250,7 @@ atomicExpr
 */
 static
 eexpr* parseAtomic(engine* st) {
-  token* tok = parser_peek(st);
+  eexpr_token* tok = parser_peek(st);
   switch (tok->type) {
     case TOK_SYMBOL: {
       eexpr* out = malloc(sizeof(eexpr));
@@ -296,7 +296,7 @@ static
 eexpr* parseChain(engine* st) {
   eexpr* predot = NULL;
   { // check if this is a predot expression
-    token* lookahead = parser_peek(st);
+    eexpr_token* lookahead = parser_peek(st);
     if (lookahead->type == TOK_PREDOT) {
       predot = malloc(sizeof(eexpr));
       checkOom(predot);
@@ -312,7 +312,7 @@ eexpr* parseChain(engine* st) {
       if (expr1 == NULL) {
         goto finish;
       }
-      token* lookahead = parser_peek(st);
+      eexpr_token* lookahead = parser_peek(st);
       if ( lookahead->type == TOK_CHAIN
         || (lookahead->type == TOK_WRAP && lookahead->as.wrap.isOpen)
         || ( lookahead->type == TOK_STRING
@@ -339,7 +339,7 @@ eexpr* parseChain(engine* st) {
       eexpr* next = parseAtomic(st);
       if (next == NULL) { goto finish; }
       dynarr_push_eexpr_p(&chain->as.list, &next);
-      token* lookahead = parser_peek(st);
+      eexpr_token* lookahead = parser_peek(st);
       if (lookahead->type == TOK_CHAIN) {
         // continue the chain when there's another chain dot
         chain->loc.end = lookahead->loc.end;
@@ -396,7 +396,7 @@ eexpr* parseSpace(engine* st) {
     dynarr_push_eexpr_p(&out->as.list, &expr1);
   }
   while (true) {
-    token* lookahead = parser_peek(st);
+    eexpr_token* lookahead = parser_peek(st);
     if (lookahead->type == TOK_SPACE) {
       parser_pop(st);
       eexpr* next = parseChain(st);
@@ -428,7 +428,7 @@ eexpr* parseSpace(engine* st) {
 static
 eexpr* parseEllipsis(engine* st) {
   eexpr* expr1 = parseSpace(st);
-  token* lookahead = parser_peek(st);
+  eexpr_token* lookahead = parser_peek(st);
   if (lookahead->type == TOK_ELLIPSIS) {
     eexpr_loc dotsLoc = lookahead->loc;
     parser_pop(st);
@@ -450,7 +450,7 @@ eexpr* parseEllipsis(engine* st) {
 static
 eexpr* parseColon(engine* st) {
   eexpr* expr1 = parseEllipsis(st);
-  token* colon = parser_peek(st);
+  eexpr_token* colon = parser_peek(st);
   if (colon->type != TOK_COLON) {
     return expr1;
   }
@@ -477,7 +477,7 @@ static
 eexpr* parseComma(engine* st) {
   eexpr* out = NULL;
   { // optional initial comma
-    token* maybeComma = parser_peek(st);
+    eexpr_token* maybeComma = parser_peek(st);
     if (maybeComma->type == TOK_COMMA) {
       out = malloc(sizeof(eexpr));
       checkOom(out);
@@ -488,7 +488,7 @@ eexpr* parseComma(engine* st) {
   }
   while (true) {
     eexpr* tmp = parseColon(st);
-    token* lookahead = parser_peek(st);
+    eexpr_token* lookahead = parser_peek(st);
     if (tmp == NULL) { // no further sub-expressions
       if (out != NULL) {
         out->type = EEXPR_COMMA;
@@ -527,7 +527,7 @@ static
 eexpr* parseSemicolon(engine* st) {
   eexpr* out = NULL;
   { // optional initial semicolon
-    token* maybeSemi = parser_peek(st);
+    eexpr_token* maybeSemi = parser_peek(st);
     if (maybeSemi->type == TOK_SEMICOLON) {
       out = malloc(sizeof(eexpr));
       checkOom(out);
@@ -538,7 +538,7 @@ eexpr* parseSemicolon(engine* st) {
   }
   while (true) {
     eexpr* tmp = parseComma(st);
-    token* lookahead = parser_peek(st);
+    eexpr_token* lookahead = parser_peek(st);
     if (tmp == NULL) { // no further sub-expressions
       if (out != NULL) {
         out->type = EEXPR_SEMICOLON;
@@ -594,7 +594,7 @@ void parseLine(engine* st) {
     // this should work well because indents and dedents are generated already matched with each other in the postlexer
     while (true) {
       while (depth != 0) {
-        token* tok = parser_peek(st);
+        eexpr_token* tok = parser_peek(st);
         switch (tok->type) {
           case TOK_EOF: return;
           case TOK_WRAP: {
@@ -608,7 +608,7 @@ void parseLine(engine* st) {
         parser_pop(st);
       }
       while (true) {
-        token* tok = parser_peek(st);
+        eexpr_token* tok = parser_peek(st);
         // consume tokens until next newline/end-of-file,
         if (tok->type == TOK_NEWLINE || tok->type == TOK_EOF) {
           return;
@@ -633,7 +633,7 @@ void parseLine(engine* st) {
 void engine_parse(engine* st) {
   bool atStart = true;
   while (st->fatal.type == EEXPRERR_NOERROR) {
-    token* lookahead = parser_peek(st);
+    eexpr_token* lookahead = parser_peek(st);
     switch (lookahead->type) {
       case TOK_NEWLINE: {
         assert(!atStart);
@@ -652,7 +652,7 @@ void engine_parse(engine* st) {
           mkUnbalanceError(st);
         }
         else {
-          token* tok = parser_peek(st);
+          eexpr_token* tok = parser_peek(st);
           fprintf(stderr, "%zu:%zu--%zu:%zu\n", tok->loc.start.line+1, tok->loc.start.col+1, tok->loc.end.line+1, tok->loc.end.col+1);
           assert(atStart);
         }

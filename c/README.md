@@ -17,10 +17,12 @@ It's going in `include/`, but I have not documented that fact.
 
 - [x] eliminate easy `TODO`/`FIXME`s
 - [ ] create a C interface
+  - [ ] consume eexprs
+  - [ ] consume tokens
   - [ ] implement main.c in terms of only eexpr.h
   - [ ] include version metadata from METADATA.toml
   - [ ] library artifacts
-  - [ ] is it worth the complexity of letting the user pick an allocator?
+  - [x] is it worth the complexity of letting the user pick an allocator? no
 - [ ] decide about isSymbolChar
   - [ ] go through ASCII for the allow/denylist
   - [ ] understand unicode character classes

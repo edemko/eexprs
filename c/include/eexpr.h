@@ -13,18 +13,10 @@
 // functions that extract data from eexprs (which presumably were created by the parser)
 
 
-typedef struct token token; // FIXME I need to expose a good (minimal) token type
+typedef struct eexpr_token eexpr_token; // FIXME I need to expose a good (minimal) token type
 
 typedef struct eexpr eexpr;
 typedef struct eexpr_error eexpr_error;
-
-typedef enum eexpr_wrapType {
-  WRAP_NULL,
-  WRAP_PAREN,
-  WRAP_BRACK,
-  WRAP_BRACE,
-  WRAP_BLOCK
-} eexpr_wrapType;
 
 
 //////////////////////////////////// Producing Eexprs ////////////////////////////////////
@@ -32,22 +24,6 @@ typedef enum eexpr_wrapType {
 //////////// First we have to pay homage to configuration data types. ////////////
 //////////// Proceed to the next section for the juicy bits.
 
-
-// When generating output, the eexpr parser may need to allocate additional memory.
-// This is the type of function passed to configure the allocator.
-typedef void* (*eexpr_userAlloc)
-  // Pointer to additional any data required by the allocator.
-  ( void* closure
-  // Pointer to memory to be reallocated (with the same semantics as `realloc`.
-  // That is, if `NULL`, then new uninitializerd memory will be allocated.
-  // If non-`NULL`, then the amount fo memory will be resized,
-  //   and possibly moved, and any data accessible from the original pointer is not accessible throug hthe returned pointer.
-  // If the (re)allocation fails, then `NULL` is returned.
-  , void* orig_p
-  // The number of bytes allocate.
-  // If zero is passed, `.orig_p` should be released and `NULL` returned.
-  , size_t newNBytes
-  );
 
 // internal data structures maintained by the parser
 typedef struct eexpr_parserInternal eexpr_parserInternal;
@@ -68,7 +44,7 @@ typedef struct eexpr_parser {
   // Output member: An array holding (pointers to) tokens.
   // These pointers are still owned by the parser, and should not be `free`d by the users of this library.
   // This array is `free`d once lexing ends (whether successfully or not).
-  token** tokens;
+  eexpr_token** tokens;
   // On input: the capacity of the `.errors` array in number of errors.
   // On output: The number of errors in the `.errors` array.
   size_t nErrors;
@@ -81,13 +57,6 @@ typedef struct eexpr_parser {
   // On input: An array into which warnings should be stored when generated.
   // On output: An array holding generated warnings.
   eexpr_error* warnings;
-  // On output: an array that holds the byte offsets from start of input of the beginning of each line (zero-indexed)
-  // Initialize `.lines.offsets` to NULL, or memory will leak
-  // Owned by the caller of `expr_parse` has gotten past the rawlex stage.
-  struct eexpr_lineIndex { // TODO if I inlude a byte offset in locPoint, I don't need a line index
-    size_t len;
-    size_t* offsets;
-  } lines;
   // TODO options to reduce some errors to warnings
   struct eexpr_parseErrorLevels {
     bool mixedSpace;
@@ -106,26 +75,19 @@ typedef struct eexpr_parser {
     EEXPR_PAUSE_AFTER_PARSE,
     EEXPR_DO_NOT_PAUSE
   } pauseAt;
-  // Configure an allocator to use when output requires more memory.
-  // Set to `NULL` to use the sytem realloc.
-  eexpr_userAlloc allocator;
-  // Additional data the `.allocator` needs.
-  void* allocClosure;
   // pointer to implementation
   eexpr_parserInternal* impl;
 } eexpr_parser;
 
 // Initialize a `eexpr_parser` with default settings (good enough for most purposes).
 // No memory initially allocated for output.
-// Use the system `realloc`,
 // Emit warnings rather than errors whenever possible.
 void eexpr_parserInitDefault(eexpr_parser* parser);
 
 
 //////////// The juicy bits! ////////////
 
-// Returns false when `parser.allocator` failed to obtain memory.
-// The parser is automatically deinitialized (see `eexpr_parser_deinit`) when it completes without parsing or when it fails to obtain memory.
+// Returns false and is deinitialized (see eexpr_parser_deinit) when `parser.allocator` failed to obtain memory.
 // Calls to resume a paused parser need not supply `nBytes = 0` and `utf8Input = NULL` arguments.
 bool eexpr_parse
   // Input configuration from and output parsed eexprs to this data structure
@@ -139,7 +101,7 @@ bool eexpr_parse
 
 // Deallocate internal data structures used by a `eexpr_parser`.
 // This does not free memory used by `.eexprs`, `.errors`, or `.warnings`.
-// You need only call this when `eexpr_parse` returned true, but is paused.
+// Calling this multiple times is idempotent.
 void eexpr_parser_deinit(eexpr_parser* parser);
 
 
@@ -160,6 +122,8 @@ struct eexpr_locPoint {
   // Columns are counted as unicode codepoints.
   // NOTE This means the `.col` is not necessarily the same as the number of user-percieved characters or grapheme clusters!
   size_t col;
+  // The byte offset from the start of input (zero-indexed again).
+  size_t byte;
 };
 
 typedef struct eexpr_loc {
@@ -224,6 +188,14 @@ typedef enum eexpr_errorType {
   EEXPRERR_MISSING_CLOSE_TEMPLATE
 } eexpr_errorType;
 
+typedef enum eexpr_wrapType {
+  WRAP_NULL,
+  WRAP_PAREN,
+  WRAP_BRACK,
+  WRAP_BRACE,
+  WRAP_BLOCK
+} eexpr_wrapType;
+
 struct eexpr_error {
   eexpr_loc loc;
   eexpr_errorType type;
@@ -234,7 +206,7 @@ struct eexpr_error {
     uint32_t unicodeOverflow;
     char32_t badStringChar;
     struct eexpr_mixedIndentationInfo {
-      char32_t chr;
+      char32_t chr; // FIXME use an indentation type enum
       eexpr_loc loc;
     } mixedIndentation;
     struct eexpr_unbalancedWrapInfo {
@@ -243,6 +215,16 @@ struct eexpr_error {
     } unbalancedWrap;
   } as;
 };
+
+
+//////////////////////////////////// Tokens ////////////////////////////////////
+
+typedef enum eexpr_spaceType {
+  EEXPR_WSMIXED,
+  EEXPR_WSSPACES,
+  EEXPR_WSTABS,
+  EEXPR_WSLINECONTINUE
+} eexpr_spaceType;
 
 
 #endif

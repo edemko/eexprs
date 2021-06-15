@@ -9,35 +9,27 @@ void lexer_advance(engine* st, size_t bytes, size_t cols) {
   st->rest.len -= bytes;
   st->rest.bytes += bytes;
   st->loc.col += cols;
+  st->loc.byte += bytes;
 }
 void lexer_incLine(engine* st, size_t bytes) {
   st->rest.len -= bytes;
   st->rest.bytes += bytes;
-  st->loc.col = 0;
   st->loc.line += 1;
-  {
-    if (st->lineIndex.len >= st->lineIndex.cap) {
-      assert(st->lineIndex.cap != 0);
-      st->lineIndex.cap *= 2;
-      size_t* newBuf = realloc(st->lineIndex.offsets, st->lineIndex.cap);
-      checkOom(newBuf);
-      st->lineIndex.offsets = newBuf;
-    }
-    st->lineIndex.offsets[st->lineIndex.len++] = st->rest.bytes - st->allInput.bytes;
-  }
+  st->loc.col = 0;
+  st->loc.byte += bytes;
 }
 
-void lexer_addTok(engine* st, const token* tok) {
-  dllistNode_token* node = dllist_insertAfter_token(&st->tokStream, NULL, tok);
+void lexer_addTok(engine* st, const eexpr_token* tok) {
+  dllistNode_eexpr_token* node = dllist_insertAfter_eexpr_token(&st->tokStream, NULL, tok);
   node->here.transparent = false;
 }
 
-void lexer_insertBefore(engine* st, const token* t, dllistNode_token* node) {
-  dllistNode_token* new = dllist_insertBefore_token(&st->tokStream, t, node);
+void lexer_insertBefore(engine* st, const eexpr_token* t, dllistNode_eexpr_token* node) {
+  dllistNode_eexpr_token* new = dllist_insertBefore_eexpr_token(&st->tokStream, t, node);
   new->here.transparent = false;
 }
 
 void lexer_delTok(engine* st) {
   if (st->tokStream.end != NULL) { token_deinit(&st->tokStream.end->here); }
-  dllist_popEnd_token(&st->tokStream, NULL);
+  dllist_popEnd_eexpr_token(&st->tokStream, NULL);
 }

@@ -210,12 +210,22 @@ bool isSpaceChar(char32_t c) {
   return (spaceChar == c) | (tabChar == c);
 }
 
+eexpr_spaceType decodeSpaceChar(char32_t c) {
+  switch (c) {
+    case ' ': return EEXPR_WSSPACES;
+    case '\t': return EEXPR_WSTABS;
+    default: assert(false);
+  }
+}
+
 bool isNewlineChar(char32_t c) {
   return ('\n' == c)
        | ('\r' == c)
        | ('\x1E' == c) // FIXME I think accepting \x1E is unnecessary, adds complication, and probly slows the lexer a little
        ;
 }
+
+
 
 newlineType decodeNewline(char32_t c[2]) {
   // taken from the table at https://en.wikipedia.org/wiki/Newline

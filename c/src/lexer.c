@@ -8,6 +8,7 @@
 
 //////////////////////////////////// Helper Consumers ////////////////////////////////////
 
+
 // decode a hex-encoded unicode codepoint into `out`
 // if decoding fails, return false and do not modify `out`
 static
@@ -56,7 +57,7 @@ char32_t takeCharEscape(engine* st) {
     }
   }
   char32_t digits[6] = {'0', '0', '0', '0', '0', '0'};
-  error decodeError = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CODE};
+  eexpr_error decodeError = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CODE};
   if (c == twoHexEscapeLeader) {
     lexer_advance(st, adv, 1);
     adv = peekUchars(&digits[4], 2, st->rest);
@@ -64,7 +65,7 @@ char32_t takeCharEscape(engine* st) {
     if (!decodeUnihex(&c, 2, &digits[4])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; }
-      dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -75,7 +76,7 @@ char32_t takeCharEscape(engine* st) {
     if (!decodeUnihex(&c, 4, &digits[2])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
-      dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -86,7 +87,7 @@ char32_t takeCharEscape(engine* st) {
     if (!decodeUnihex(&c, 6, digits)) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
-      dllist_insertAfter_error(&st->errStream, NULL, &decodeError);
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &decodeError);
     }
     return c;
   }
@@ -122,8 +123,8 @@ bool takeNullEscape(engine* st) {
       lexer_advance(st, adv, 1);
     }
     else {
-      error err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_MISSING_LINE_PICKUP};
-      dllist_insertAfter_error(&st->errStream, NULL, &err);
+      eexpr_error err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_MISSING_LINE_PICKUP};
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }
     return true;
   }
@@ -134,6 +135,24 @@ bool takeNullEscape(engine* st) {
   return false;
 }
 
+static
+void tryBadBytes(engine* st, bool fatal) {
+  char32_t c; size_t adv = peekUchar(&c, st->rest);
+  if (c != UCHAR_NULL || adv == 0) { return; }
+  eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES};
+  while (true) {
+    adv = peekUchar(&c, st->rest);
+    if (c != UCHAR_NULL || adv == 0) { break; }
+    lexer_advance(st, adv, 0);
+  }
+  err.loc.end = st->loc;
+  if (fatal) {
+    st->fatal = err;
+  }
+  else {
+    dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
+  }
+}
 
 //////////////////////////////////// Individual Token Consumers ////////////////////////////////////
 
@@ -149,16 +168,20 @@ bool takeWhitespace(engine* st) {
     peekUchar(&lookahead, st->rest);
     if (!isSpaceChar(lookahead)) { return false; }
   }
-  token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
-  char32_t c0; peekUchar(&c0, st->rest);
-  bool mixed = false;
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
+  {
+    char32_t c0; peekUchar(&c0, st->rest);
+    tok.as.unknownSpace.type = decodeSpaceChar(c0);
+  }
   size_t advChars = 0;
   while (true) {
-    char32_t c;
-    size_t adv = peekUchar(&c, st->rest);
+    char32_t c; size_t adv = peekUchar(&c, st->rest);
     if (isSpaceChar(c)) {
+      eexpr_spaceType newWs = decodeSpaceChar(c);
+      if (newWs != tok.as.unknownSpace.type) {
+        tok.as.unknownSpace.type = EEXPR_WSMIXED;
+      }
       lexer_advance(st, adv, 1);
-      mixed |= c != c0;
       advChars += 1;
     }
     else {
@@ -167,15 +190,11 @@ bool takeWhitespace(engine* st) {
   }
   assert(advChars != 0);
   tok.loc.end = st->loc;
-  tok.as.unknownSpace.chr = mixed ? '\0' : c0;
   tok.as.unknownSpace.size = advChars;
   lexer_addTok(st, &tok);
-  if (mixed) {
-    error err =
-      { .loc = tok.loc
-      , .type = EEXPRERR_MIXED_SPACE
-      };
-    dllist_insertAfter_error(&st->errStream, NULL, &err);
+  if (tok.as.unknownSpace.type == EEXPR_WSMIXED) {
+    eexpr_error err = { .loc = tok.loc, .type = EEXPRERR_MIXED_SPACE };
+    dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
   }
   return true;
 }
@@ -185,17 +204,17 @@ bool takeWhitespace(engine* st) {
 */
 static
 bool takeLineContinue(engine* st) {
-  token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
   {
     char32_t lookahead;
     size_t adv = peekUchar(&lookahead, st->rest);
     if (lookahead != escapeLeader) { return false; }
     lexer_advance(st, adv, 1);
   }
-  tok.as.unknownSpace.chr = escapeLeader;
+  tok.as.unknownSpace.type = EEXPR_WSLINECONTINUE;
   tok.as.unknownSpace.size = 0;
   { // detect trailing whitespace
-    error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
+    eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
     bool trailingSpace = false;
     while (true) {
       char32_t c;
@@ -208,7 +227,7 @@ bool takeLineContinue(engine* st) {
     }
     if (trailingSpace) {
       err.loc.end = st->loc;
-      dllist_insertAfter_error(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }
   }
   if (takeNewline(st)) {
@@ -217,9 +236,9 @@ bool takeLineContinue(engine* st) {
     lexer_addTok(st, &tok);
   }
   else {
-    error err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = EEXPRERR_BAD_CHAR};
+    eexpr_error err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = EEXPRERR_BAD_CHAR};
     err.as.badChar = escapeLeader;
-    dllist_insertAfter_error(&st->errStream, NULL, &err);
+    dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
   }
   return true;
 }
@@ -238,7 +257,7 @@ bool takeNewline(engine* st) {
     type = decodeNewline(lookahead) != 0;
     if (type == NEWLINE_NONE) { return false; }
   }
-  token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_NEWLINE};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_NEWLINE};
   lexer_incLine(st, newlineSize(type));
   tok.loc.end = st->loc;
   lexer_addTok(st, &tok);
@@ -247,11 +266,11 @@ bool takeNewline(engine* st) {
       st->discoveredNewline = type;
     }
     else {
-      error err =
+      eexpr_error err =
       { .loc = tok.loc
       , .type = EEXPRERR_MIXED_NEWLINES
       };
-      dllist_insertAfter_error(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }
   }
   return true;
@@ -267,7 +286,7 @@ bool takeEof(engine* st) {
   if (adv != 0) {
     return false;
   }
-  token tok = {.loc = {.start = st->loc, .end = st->loc}, .type=TOK_EOF};
+  eexpr_token tok = {.loc = {.start = st->loc, .end = st->loc}, .type=TOK_EOF};
   lexer_addTok(st, &tok);
   return true;
 }
@@ -289,21 +308,12 @@ bool takeComment(engine* st) {
     peekUchar(&lookahead, st->rest);
     if (lookahead != commentChar) { return false; }
   }
-  token tok = {.loc = {.start = st->loc}, .type = TOK_COMMENT};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_COMMENT};
   struct untilEol skip = untilEol(st->rest);
   lexer_advance(st, skip.bytes, skip.chars);
   tok.loc.end = st->loc;
   lexer_addTok(st, &tok);
-  {
-    char32_t lookahead;
-    size_t adv = peekUchar(&lookahead, st->rest);
-    if (lookahead == UCHAR_NULL && adv != 0) {
-      error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES};
-      lexer_advance(st, adv, 0);
-      err.loc.end = st->loc;
-      dllist_insertAfter_error(&st->errStream, NULL, &err);
-    }
-  }
+  tryBadBytes(st, true); // since untilEol will also stop at decoding errors
   return true;
 }
 
@@ -319,7 +329,7 @@ bool takeSymbol(engine* st) {
     if (!isSymbolStart(lookahead)) { return false; }
   }
   str text = { .len = 0, .bytes = st->rest.bytes };
-  token tok = {.loc = {.start = st->loc}, .type = TOK_SYMBOL};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_SYMBOL};
   while (true) {
     char32_t c;
     size_t adv = peekUchar(&c, st->rest);
@@ -345,8 +355,8 @@ void checkDigitSepContext(const radixParams* radix, struct eexpr_locPoint start,
   if ( alwaysError
     || (!isDigit(radix, lookahead) && lookahead != digitSep)
      ) {
-    error err = {.loc = {.start = start, .end = st->loc}, .type = EEXPRERR_BAD_DIGIT_SEPARATOR};
-    dllist_insertAfter_error(&st->errStream, NULL, &err);
+    eexpr_error err = {.loc = {.start = start, .end = st->loc}, .type = EEXPRERR_BAD_DIGIT_SEPARATOR};
+    dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
   }
 }
 /*
@@ -364,7 +374,7 @@ Then, if the exponent letter was generic, a radix specificaion may be given (jus
 */
 static
 bool takeNumber(engine* st) {
-  token tok = {.loc = {.start = st->loc}, .type = TOK_NUMBER};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_NUMBER};
   ////// gather sign (or early exit) //////
   bool neg;
   {
@@ -481,10 +491,10 @@ bool takeNumber(engine* st) {
           }
           else {
             expNeg = false;
-            error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_EXPONENT_SIGN};
+            eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_EXPONENT_SIGN};
             lexer_advance(st, adv, 1);
             err.loc.end = st->loc;
-            dllist_insertAfter_error(&st->errStream, NULL, &err);
+            dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           }
         }
         else {
@@ -533,8 +543,8 @@ bool takeNumber(engine* st) {
           tok.type = TOK_NUMBER_ERROR;
           tok.loc.end = st->loc;
           lexer_addTok(st, &tok);
-          error err = {.loc = tok.loc, .type = EEXPRERR_MISSING_EXPONENT};
-          dllist_insertAfter_error(&st->errStream, NULL, &err);
+          eexpr_error err = {.loc = tok.loc, .type = EEXPRERR_MISSING_EXPONENT};
+          dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           return true;
         }
       }
@@ -561,38 +571,27 @@ These parts can end with a backtick (to begin an interpolation), start with a ba
 */
 static
 bool takeString(engine* st) {
-  token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
   char32_t open; {
     size_t adv = peekUchar(&open, st->rest);
     if (!isStringDelim(open)) { return false; }
     lexer_advance(st, adv, 1);
   }
-  size_t cap = 128;
-  size_t len = 0;
-  // FIXME use the string builder
-  uint8_t* buf = malloc(cap);
-  checkOom(buf);
+  strBuilder buf = strBuilder_new(128);
   for (bool more = true; more; ) {
     more = false;
     { // standard characters
-      size_t advLen = 0;
-      uint8_t* start = st->rest.bytes;
+      str tmp = {.len = 0, .bytes = st->rest.bytes};
       while (true) {
         char32_t c;
         size_t adv = peekUchar(&c, st->rest);
         if (!isStringChar(c)) { break; }
         lexer_advance(st, adv, 1);
-        advLen += adv;
+        tmp.len += adv;
       }
-      if (advLen != 0) {
+      if (tmp.len != 0) {
         more = true;
-        if (cap - len < advLen) {
-          while (cap - len < advLen) { cap *= 2; }
-          buf = realloc(buf, cap);
-          checkOom(buf);
-        }
-        memcpy(&buf[len], start, advLen);
-        len += advLen;
+        strBuilder_append(&buf, tmp);
       }
     }
     { // escape sequences
@@ -604,13 +603,8 @@ bool takeString(engine* st) {
         char32_t decoded = takeCharEscape(st);
         if (decoded != UCHAR_NULL) { // found a single-character escape
           utf8Char encoded = encodeUchar(decoded);
-          if (cap - len < encoded.nbytes) {
-            cap *= 2;
-            buf = realloc(buf, cap);
-            checkOom(buf);
-          }
-          memcpy(&buf[len], encoded.codeunits, encoded.nbytes);
-          len += encoded.nbytes;
+          str tmp = {.len = encoded.nbytes, .bytes = encoded.codeunits};
+          strBuilder_append(&buf, tmp);
         }
         else if (takeNullEscape(st)) { // found a null escape
           // do nothing
@@ -622,17 +616,14 @@ bool takeString(engine* st) {
           }
           else if (c == UCHAR_NULL) { // corrupt bytes
             more = true;
-            error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES};
-            lexer_advance(st, adv, 0);
-            err.loc.end = st->loc;
-            dllist_insertAfter_error(&st->errStream, NULL, &err);
+            tryBadBytes(st, false);
           }
           else { // no valid escape sequence found
             more = true;
-            error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR, .as.badEscapeChar = c};
+            eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_ESCAPE_CHAR, .as.badEscapeChar = c};
             lexer_advance(st, adv, 1);
             err.loc.end = st->loc;
-            dllist_insertAfter_error(&st->errStream, NULL, &err);
+            dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           }
         }
       }
@@ -646,10 +637,10 @@ bool takeString(engine* st) {
         || isNewlineChar(c)
         ) { break; }
       else if (!more) { // characters that did not match above are invalid and error recovery should skip them
-        error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_STRING_CHAR, .as.badStringChar = c};
+        eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_STRING_CHAR, .as.badStringChar = c};
         lexer_advance(st, adv, 1);
         err.loc.end = st->loc;
-        dllist_insertAfter_error(&st->errStream, NULL, &err);
+        dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
       }
     }
   }
@@ -659,13 +650,13 @@ bool takeString(engine* st) {
       lexer_advance(st, adv, 1);
     }
     else {
-      error err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_UNCLOSED_STRING};
-      dllist_insertAfter_error(&st->errStream, NULL, &err);
+      eexpr_error err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPRERR_UNCLOSED_STRING};
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }
   }
   tok.loc.end = st->loc;
-  tok.as.string.text.len = len;
-  tok.as.string.text.bytes = realloc(buf, len);
+  tok.as.string.text.len = buf.len;
+  tok.as.string.text.bytes = realloc(buf.bytes, buf.len);
   tok.as.string.splice = spliceType(open, close);
   lexer_addTok(st, &tok);
   return true;
@@ -680,7 +671,7 @@ They are any characters enclosed in single-quotes, where single-quotes can be em
 bool takeSqlString(engine* st) {
   char32_t c; size_t adv = peekUchar(&c, st->rest);
   if (c != sqlStringDelim) { return false; }
-  token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
   lexer_advance(st, adv, 1);
   strBuilder buf = strBuilder_new(128);
   while (true) {
@@ -724,10 +715,7 @@ bool takeSqlString(engine* st) {
       return true;
     }
     else if (c == UCHAR_NULL) {
-      error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES}; // FIXME it really looks like I should make a skipCorruptBytes function
-      lexer_advance(st, adv, 0);
-      err.loc.end = st->loc;
-      dllist_insertAfter_error(&st->errStream, NULL, &err);
+      tryBadBytes(st, false);
     }
     else {
       lexer_advance(st, adv, 1);
@@ -766,7 +754,7 @@ If you want a trailing newline in the string, explicitly include a blank line.
 */
 static
 bool takeHeredoc(engine* st) {
-  token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
   {
     char32_t lookahead[3];
     size_t adv = peekUchars(lookahead, 3, st->rest);
@@ -804,7 +792,7 @@ bool takeHeredoc(engine* st) {
   }
   bool indented = false;
   { // detect indentation flag (skipping whitespace around first backslash)
-    error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
+    eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_TRAILING_SPACE};
     bool trailingSpace = false;
     while (true) {
       char32_t c; size_t adv = peekUchar(&c, st->rest);
@@ -831,7 +819,7 @@ bool takeHeredoc(engine* st) {
     }
     if (trailingSpace) {
       err.loc.end = st->loc;
-      dllist_insertAfter_error(&st->errStream, NULL, &err);
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }
   }
   { // consume a newline, or else it's a fatal error
@@ -898,11 +886,11 @@ bool takeHeredoc(engine* st) {
         st->indent.established.end = st->loc;
       }
       else if (indentChar != st->indent.chr && !st->indent.knownMixed) {
-        error err = {.loc = {.start = indentPosStart, .end = st->loc}, .type = EEXPRERR_MIXED_INDENTATION};
+        eexpr_error err = {.loc = {.start = indentPosStart, .end = st->loc}, .type = EEXPRERR_MIXED_INDENTATION};
         err.as.mixedIndentation.chr = st->indent.chr;
         err.as.mixedIndentation.loc = st->indent.established;
         st->indent.knownMixed = true;
-        dllist_insertAfter_error(&st->errStream, NULL, &err);
+        dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
       }
     }
     else {
@@ -918,19 +906,20 @@ bool takeHeredoc(engine* st) {
         char32_t c; size_t adv = peekUchar(&c, st->rest);
         if ( adv == 0
           || isNewlineChar(c)
-           ) { break; }
+           ) {
+          strBuilder_append(&textBuf, tmp);
+          break;
+        }
         else if (c == UCHAR_NULL) {
-          error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_BYTES};
-          lexer_advance(st, adv, 0);
-          err.loc.end = st->loc;
-          dllist_insertAfter_error(&st->errStream, NULL, &err);
+          strBuilder_append(&textBuf, tmp);
+          tryBadBytes(st, false);
+          tmp.len = 0; tmp.bytes = st->rest.bytes;
         }
         else {
           lexer_advance(st, adv, 1);
           tmp.len += adv;
         }
       }
-      strBuilder_append(&textBuf, tmp);
     }
     str nlText = {.len = 0, .bytes = st->rest.bytes};
     { // consume newline
@@ -949,7 +938,7 @@ bool takeHeredoc(engine* st) {
       }
     }
     { // consume indentation
-      error err = {.loc = {.start = st->loc}, .type = EEXPRERR_HEREDOC_BAD_INDENTATION};
+      eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_HEREDOC_BAD_INDENTATION};
       for (size_t i = 0; i < indentNChars; ++i) {
         char32_t c; size_t adv = peekUchar(&c, st->rest);
         if (c == indentChar) {
@@ -959,13 +948,13 @@ bool takeHeredoc(engine* st) {
           if (i != 0) {
             err.type = EEXPRERR_TRAILING_SPACE;
             err.loc.end = st->loc;
-            dllist_insertAfter_error(&st->errStream, NULL, &err);
+            dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           }
           break;
         }
         else {
           err.loc.end = st->loc;
-          dllist_insertAfter_error(&st->errStream, NULL, &err);
+          dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           break;
         }
       }
@@ -999,7 +988,7 @@ bool takeWrap(engine* st) {
   size_t adv = peekUchar(&lookahead, st->rest);
   eexpr_wrapType type = isWrapChar(lookahead);
   if (type == WRAP_NULL) { return false; }
-  token tok = {.loc = {.start = st->loc}, .type = TOK_WRAP};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_WRAP};
   {
     tok.as.wrap.type = type;
     tok.as.wrap.isOpen = isOpenWrap(lookahead);
@@ -1023,7 +1012,7 @@ bool takeSplitter(engine* st) {
     info = decodeSplitter(lookahead);
     if (info.type == SPLITTER_NONE) { return false; }
   }
-  token tok = {.loc = {.start = st->loc}};
+  eexpr_token tok = {.loc = {.start = st->loc}};
   switch (info.type) {
     case SPLITTER_COLON: tok.type = TOK_UNKNOWN_COLON; break;
     case SPLITTER_ELLIPSIS: tok.type = TOK_ELLIPSIS; break;
@@ -1043,19 +1032,18 @@ static
 bool takeUnexpected(engine* st) {
   char32_t c;
   size_t adv = peekUchar(&c, st->rest);
-  error err = {.loc = {.start = st->loc}};
-  if (c < 0 || c > 0x10FFFF) {
-    err.type = EEXPRERR_BAD_BYTES; // TODO it'd be great to merge adjacent badBytes errors together
-    lexer_advance(st, adv, 0);
+  if (c == UCHAR_NULL && adv != 0) {
+    tryBadBytes(st, false);
+    return true;
   }
   else {
-    err.type = EEXPRERR_BAD_CHAR;
+    eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPRERR_BAD_CHAR};
     err.as.badChar = c;
     lexer_advance(st, adv, 1);
+    err.loc.end = st->loc;
+    dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
+    return true;
   }
-  err.loc.end = st->loc;
-  dllist_insertAfter_error(&st->errStream, NULL, &err);
-  return true;
 }
 
 //////////////////////////////////// Main Lexer Functions ////////////////////////////////////

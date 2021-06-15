@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 
-void token_deinit(token* tok) {
+void token_deinit(eexpr_token* tok) {
   if (tok == NULL) { return; }
   switch (tok->type) {
     case TOK_STRING: {
