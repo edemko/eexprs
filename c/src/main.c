@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lexer/util.h"
 #include "app/json.h"
 
 void die(const char* msg) {
@@ -53,8 +52,7 @@ void dumpParser(char* filename, const eexpr_parser* parser, const options* opts)
   fprintf(fp, "{ \"filename\": ");
   fdumpCStr(fp, opts->inFilename);
   fprintf(fp, "\n, \"eexprs\":");
-  dynarr_eexpr_p fakeArr = {.len = parser->nEexprs, .cap = parser->nEexprs, .data = parser->eexprs};
-  fdumpEexprArray(fp, 2, &fakeArr);
+  fdumpEexprArray(fp, 2, parser->nEexprs, parser->eexprs);
   fprintf(fp, "\n, \"warnings\":");
   fdumpErrorArray(fp, "  ", parser->nWarnings, parser->warnings);
   fprintf(fp, "\n, \"errors\":");
@@ -195,23 +193,17 @@ int main(int argc, char** argv) {
   eexpr_parser parser; eexpr_parserInitDefault(&parser);
 
   parser.pauseAt = EEXPR_PAUSE_AFTER_RAWLEX;
-  if (!eexpr_parse(&parser, input.len, input.bytes)) {
-    die("out of memory");
-  }
+  eexpr_parse(&parser, input.len, input.bytes);
   dumpLexer(opts.dump.rawTokens, &parser, &opts);
   if (parser.nErrors != 0) { goto finish; }
 
   parser.pauseAt = EEXPR_PAUSE_AFTER_COOKLEX;
-  if (!eexpr_parse(&parser, 0, NULL)) {
-    die("out of memory");
-  }
+  eexpr_parse(&parser, 0, NULL);
   dumpLexer(opts.dump.tokens, &parser, &opts);
   if (parser.nErrors != 0) { goto finish; }
 
   parser.pauseAt = EEXPR_DO_NOT_PAUSE;
-  if (!eexpr_parse(&parser, 0, NULL)) {
-    die("out of memory");
-  }
+  eexpr_parse(&parser, 0, NULL);
   parsed = true;
   dumpParser(opts.dump.eexprs, &parser, &opts);
 
@@ -221,8 +213,7 @@ int main(int argc, char** argv) {
     fprintf(stdout, "{ \"filename\": ");
     fdumpCStr(stdout, opts.inFilename);
     fprintf(stdout, "\n, \"eexprs\":");
-    dynarr_eexpr_p fakeArr = {.len = parser.nEexprs, .cap = parser.nEexprs, .data = parser.eexprs};
-    fdumpEexprArray(stdout, 2, &fakeArr);
+    fdumpEexprArray(stdout, 2, parser.nEexprs, parser.eexprs);
     if (parser.nWarnings != 0) {
       fprintf(stdout, "\n, \"warnings\":");
       fdumpErrorArray(stdout, "  ", parser.nWarnings, parser.warnings);
@@ -246,5 +237,6 @@ int main(int argc, char** argv) {
     free(parser.eexprs[i]);
   }
   free(parser.eexprs);
+  free(input.bytes);
   return parser.nErrors == 0 ? 0 : 1;
 }

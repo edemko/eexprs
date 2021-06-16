@@ -149,16 +149,16 @@ bool isStringDelim(char32_t c) {
   return (c == '\"') | (c == '`');
 }
 
-strSpliceType spliceType(char32_t open, char32_t close) {
+eexpr_stringType spliceType(char32_t open, char32_t close) {
   if (open == '\"') {
-    if (close == '\"') { return STRSPLICE_PLAIN; }
-    else if (close == '`') { return STRSPLICE_OPEN; }
+    if (close == '\"') { return EEXPR_STRPLAIN; }
+    else if (close == '`') { return EEXPR_STROPEN; }
   }
   else if (open == '`') {
-    if (close == '\"') { return STRSPLICE_CLOSE; }
-    else if (close == '`') { return STRSPLICE_MIDDLE; }
+    if (close == '\"') { return EEXPR_STRCLOSE; }
+    else if (close == '`') { return EEXPR_STRMIDDLE; }
   }
-  return STRSPLICE_CORRUPT;
+  return EEXPR_STRCORRUPT;
 }
 char32_t plainStringDelim = '\"';
 char32_t sqlStringDelim = '\'';

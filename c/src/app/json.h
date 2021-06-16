@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "engine.h"
+#include "eexpr.h"
+#include "shim/strstuff.h"
 
 
 void fdumpStr(FILE* fp, str text);
@@ -14,7 +15,7 @@ void fdumpToken(FILE* fp, const eexpr_token* tok);
 void fdumpError(FILE* fp, const eexpr_error* err);
 
 void fdumpTokenArray(FILE* fp, const char* indent, size_t n, eexpr_token** arr);
-void fdumpEexprArray(FILE* fp, int indent, const dynarr_eexpr_p* eexprs);
+void fdumpEexprArray(FILE* fp, int indent, size_t n, eexpr** xs);
 void fdumpErrorArray(FILE* fp, const char* indent, size_t n, eexpr_error* arr);
 
 

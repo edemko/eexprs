@@ -4,8 +4,6 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
-#include "lexer/util.h"
-#include "parser/util.h"
 #include "shim/bigint.h"
 
 
@@ -62,41 +60,49 @@ void fdumpStr(FILE* fp, str text) {
   }
   fprintf(fp, "\"");
 }
+void fdumpStrn(FILE* fp, size_t nBytes, uint8_t* utf8str) {
+  str s = {.len = nBytes, .bytes = utf8str};
+  fdumpStr(fp, s);
+}
 void fdumpCStr(FILE* fp, char* s) {
   str text = {.len = strlen(s), .bytes = (uint8_t*)s};
   fdumpStr(fp, text);
 }
 
 void fdumpToken(FILE* fp, const eexpr_token* tok) {
+  eexpr_loc loc = eexpr_tokenLocate(tok);
   fprintf(fp, "{\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
-         , tok->loc.start.line + 1
-         , tok->loc.start.col + 1
-         , tok->loc.end.line + 1
-         , tok->loc.end.col + 1
+         , loc.start.line + 1
+         , loc.start.col + 1
+         , loc.end.line + 1
+         , loc.end.col + 1
          );
-  if (tok->transparent) {
+  if (eexpr_tokenIsTransparent(tok)) {
     fprintf(fp, ",\"ignore\":true");
   }
-  switch (tok->type) {
-    case TOK_NUMBER: {
+  switch (eexpr_getTokenType(tok)) {
+    case EEXPR_TOK_NUMBER: {
+      eexpr_number num; eexpr_tokenAsNumber(tok, &num);
       {
-        str tmp = bigint_toDecimal(tok->as.number.mantissa);
-        fprintf(fp, ",\"type\":\"number\",\"%s\":", tok->as.number.fractionalDigits ? "value" : "mantissa");
+        bigint mantissa = {.pos = num.isPositive, .len = num.nbigDigits, .buf = num.bigDigits};
+        str tmp = bigint_toDecimal(mantissa);
+        fprintf(fp, ",\"type\":\"number\",\"%s\":", num.nfracDigits ? "value" : "mantissa");
         fdumpStr(fp, tmp);
         free(tmp.bytes);
       }
-      if (tok->as.number.radix != 10) {
-        fprintf(fp, ",\"radix\":%d", tok->as.number.radix);
+      if (num.radix != 10) {
+        fprintf(fp, ",\"radix\":%d", num.radix);
       }
-      if (tok->as.number.fractionalDigits != 0 || tok->as.number.exponent.len != 0) {
+      if (num.nfracDigits != 0 || num.nbigDigits_exp != 0) {
         fprintf(fp, ",\"exponent\":{");
         bool needsComma = false;
-        if (tok->as.number.fractionalDigits != 0) {
-          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", tok->as.number.fractionalDigits);
+        if (num.nfracDigits != 0) {
+          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", num.nfracDigits);
           needsComma = true;
         }
-        if (tok->as.number.exponent.len != 0) {
-          str tmp = bigint_toDecimal(tok->as.number.exponent);
+        if (num.nbigDigits_exp != 0) {
+          bigint exponent = {.pos = num.isPositive_exp, .len = num.nbigDigits_exp, .buf = num.bigDigits_exp};
+          str tmp = bigint_toDecimal(exponent);
           fprintf(fp, "%s\"explicit\":", needsComma ? "," : "");
           fdumpStr(fp, tmp);
           free(tmp.bytes);
@@ -104,77 +110,87 @@ void fdumpToken(FILE* fp, const eexpr_token* tok) {
         fprintf(fp, "}");
       }
     }; break;
-    case TOK_STRING: {
+    case EEXPR_TOK_STRING: {
+      eexpr_stringType type; size_t nBytes; uint8_t* utf8str;
+      eexpr_tokenAsString(tok, &type, &nBytes, &utf8str);
       fprintf(fp, ",\"type\":\"string\",\"text\":");
-      fdumpStr(fp, tok->as.string.text);
-      switch (tok->as.string.splice) {
-        case STRSPLICE_PLAIN: break;
-        case STRSPLICE_OPEN: {
+      fdumpStrn(fp, nBytes, utf8str);
+      switch (type) {
+        case EEXPR_STRPLAIN: break;
+        case EEXPR_STROPEN: {
           fprintf(fp, ",\"splice\":\"open\"");
         }; break;
-        case STRSPLICE_MIDDLE: {
+        case EEXPR_STRMIDDLE: {
           fprintf(fp, ",\"splice\":\"middle\"");
         }; break;
-        case STRSPLICE_CLOSE: {
+        case EEXPR_STRCLOSE: {
           fprintf(fp, ",\"splice\":\"close\"");
         }; break;
-        case STRSPLICE_CORRUPT: {
+        case EEXPR_STRCORRUPT: {
           fprintf(fp, ",\"splice\":\"corrupt\"");
         }; break;
       }
     }; break;
-    case TOK_SYMBOL: {
+    case EEXPR_TOK_SYMBOL: {
+      size_t nBytes; uint8_t* utf8str;
+      eexpr_tokenAsSymbol(tok, &nBytes, &utf8str);
       fprintf(fp, ",\"type\":\"symbol\",\"text\":");
-      fdumpStr(fp, tok->as.symbol.text);
+      fdumpStrn(fp, nBytes, utf8str);
     }; break;
-    case TOK_WRAP: {
+    case EEXPR_TOK_WRAP: {
+      eexpr_wrapType type; bool isOpen;
+      eexpr_tokenAsWrap(tok, &type, &isOpen);
       const char* family;
-      switch (tok->as.wrap.type) {
+      switch (type) {
         case WRAP_PAREN: family = "paren"; break;
         case WRAP_BRACE: family = "brace"; break;
         case WRAP_BRACK: family = "bracket"; break;
         case WRAP_BLOCK: family = "indent"; break;
         case WRAP_NULL: assert(false);
       }
-      const char* open = tok->as.wrap.isOpen ? "true" : "false";
+      const char* open = isOpen ? "true" : "false";
       fprintf(fp, ",\"type\":\"wrap\",\"family\":\"%s\",\"open\":%s", family, open);
     }; break;
-    case TOK_COLON: {
+    case EEXPR_TOK_COLON: {
       fprintf(fp, ",\"type\":\"colon\"");
     }; break;
-    case TOK_ELLIPSIS: {
+    case EEXPR_TOK_ELLIPSIS: {
       fprintf(fp, ",\"type\":\"ellipsis\"");
     }; break;
-    case TOK_CHAIN: {
+    case EEXPR_TOK_CHAIN: {
       fprintf(fp, ",\"type\":\"chain\"");
     }; break;
-    case TOK_PREDOT: {
+    case EEXPR_TOK_PREDOT: {
       fprintf(fp, ",\"type\":\"predot\"");
     }; break;
-    case TOK_SEMICOLON: {
+    case EEXPR_TOK_SEMICOLON: {
       fprintf(fp, ",\"type\":\"semicolon\"");
     }; break;
-    case TOK_COMMA: {
+    case EEXPR_TOK_COMMA: {
       fprintf(fp, ",\"type\":\"comma\"");
     }; break;
-    case TOK_NEWLINE: {
+    case EEXPR_TOK_NEWLINE: {
       fprintf(fp, ",\"type\":\"newline\"");
     }; break;
-    case TOK_SPACE: {
+    case EEXPR_TOK_SPACE: {
       fprintf(fp, ",\"type\":\"space\"");
     }; break;
-    case TOK_EOF: {
+    case EEXPR_TOK_EOF: {
       fprintf(fp, ",\"type\":\"end-of-file\"");
     }; break;
-    case TOK_COMMENT: {
+    case EEXPR_TOK_COMMENT: {
       fprintf(fp, ",\"type\":\"comment\"");
     }; break;
-    case TOK_OPEN_INDENT: {
-      fprintf(fp, ",\"type\":\"open-indent\",\"depth\":%zu", tok->as.indent.depth);
+    case EEXPR_TOK_INDENT: {
+      size_t depth;
+      eexpr_tokenAsIndent(tok, &depth);
+      fprintf(fp, ",\"type\":\"indent\",\"depth\":%zu", depth);
     }; break;
-    case TOK_UNKNOWN_SPACE: {
+    case EEXPR_TOK_UNKNOWN_SPACE: {
+      eexpr_spaceType type; size_t nChars;
+      eexpr_tokenAsSpace(tok, &type, &nChars);
       char* typeDesc;
-      switch (tok->as.unknownSpace.type) {
+      switch (type) {
         case EEXPR_WSMIXED: typeDesc = ",\"mixed\":true"; break;
         case EEXPR_WSSPACES: typeDesc = ",\"char\":\" \""; break;
         case EEXPR_WSTABS: typeDesc = ",\"char\":\"\\t\""; break;
@@ -182,62 +198,68 @@ void fdumpToken(FILE* fp, const eexpr_token* tok) {
       }
       fprintf(fp, ",\"type\":\"unknown-space\"%s,\"size\":%zu"
                 , typeDesc
-                , tok->as.unknownSpace.size
+                , nChars
                 );
     }; break;
-    case TOK_UNKNOWN_NEWLINE: {
+    case EEXPR_TOK_UNKNOWN_NEWLINE: {
       fprintf(fp, ",\"type\":\"unknown-newline\"");
     }; break;
-    case TOK_UNKNOWN_COLON: {
+    case EEXPR_TOK_UNKNOWN_COLON: {
       fprintf(fp, ",\"type\":\"unknown-colon\"");
     }; break;
-    case TOK_UNKNOWN_DOT: {
+    case EEXPR_TOK_UNKNOWN_DOT: {
       fprintf(fp, ",\"type\":\"unknown-dot\"");
     }; break;
-    case TOK_NUMBER_ERROR: {
+    case EEXPR_TOK_NUMBER_ERROR: {
       fprintf(fp, ",\"type\":\"error-number\"");
     }; break;
-    case TOK_STRING_ERROR: {
+    case EEXPR_TOK_STRING_ERROR: {
       fprintf(fp, ",\"type\":\"error-string\"");
     }; break;
-    case TOK_NONE: { assert(false); }; break;
+    case EEXPR_TOK_NONE: { assert(false); }; break;
   }
   fprintf(fp, "}");
 }
 
-void fdumpEexpr(FILE* fp, int indent, const eexpr* expr) {
+void fdumpEexpr(FILE* fp, int indent, const eexpr* x) {
+  eexpr_loc loc = eexpr_locate(x);
   fprintf(fp, "{ \"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
-         , expr->loc.start.line + 1
-         , expr->loc.start.col + 1
-         , expr->loc.end.line + 1
-         , expr->loc.end.col + 1
+         , loc.start.line + 1
+         , loc.start.col + 1
+         , loc.end.line + 1
+         , loc.end.col + 1
          );
-  switch (expr->type) {
+  eexpr_type type = eexpr_getType(x);
+  switch (type) {
     case EEXPR_SYMBOL: {
+      size_t n; uint8_t* s; eexpr_asSymbol(x, &n, &s);
       fprintf(fp, "\n%*s, \"type\":\"symbol\",\"text\":", indent, "");
-      fdumpStr(fp, expr->as.symbol.text);
+      fdumpStrn(fp, n, s);
     }; break;
     case EEXPR_NUMBER: {
+      eexpr_number num; eexpr_asNumber(x, &num);
       {
-        str tmp = bigint_toDecimal(expr->as.number.mantissa);
+        bigint mantissa = {.pos = num.isPositive, .len = num.nbigDigits, .buf = num.bigDigits};
+        str tmp = bigint_toDecimal(mantissa);
         fprintf( fp, "\n%*s, \"type\":\"number\",\"%s\":"
                , indent, ""
-               , expr->as.number.fractionalDigits == 0 ? "value" : "mantissa");
+               , num.nfracDigits == 0 ? "value" : "mantissa");
         fdumpStr(fp, tmp);
         free(tmp.bytes);
       }
-      if (expr->as.number.radix != 10) {
-        fprintf(fp, ",\"radix\":%d", expr->as.number.radix);
+      if (num.radix != 10) {
+        fprintf(fp, ",\"radix\":%d", num.radix);
       }
-      if (expr->as.number.fractionalDigits != 0 || expr->as.number.exponent.len != 0) {
+      if (num.nfracDigits != 0 || num.nbigDigits_exp != 0) {
         fprintf(fp, ",\"exponent\":{");
         bool needsComma = false;
-        if (expr->as.number.fractionalDigits != 0) {
-          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", expr->as.number.fractionalDigits);
+        if (num.nfracDigits != 0) {
+          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", num.nfracDigits);
           needsComma = true;
         }
-        if (expr->as.number.exponent.len != 0) {
-          str tmp = bigint_toDecimal(expr->as.number.exponent);
+        if (num.nbigDigits_exp != 0) {
+          bigint exponent = {.pos = num.isPositive_exp, .len = num.nbigDigits_exp, .buf = num.bigDigits_exp};
+          str tmp = bigint_toDecimal(exponent);
           fprintf(fp, "%s\"explicit\":", needsComma ? "," : "");
           fdumpStr(fp, tmp);
           free(tmp.bytes);
@@ -246,102 +268,115 @@ void fdumpEexpr(FILE* fp, int indent, const eexpr* expr) {
       }
     }; break;
     case EEXPR_STRING: {
+      eexpr_string s; eexpr_asString(x, &s);
       fprintf(fp, "\n%*s, \"type\":\"string\"", indent, "");
-      if (expr->as.string.parts.len == 0) {
+      if (s.nsubexprs == 0) {
         fprintf(fp, ",\"text\":");
-        fdumpStr(fp, expr->as.string.text1);
+        fdumpStrn(fp, s.head.nBytes, s.head.utf8str);
       }
       else {
         fprintf(fp, ",\"template\":\n%*s[ ", indent+2, "");
-        fdumpStr(fp, expr->as.string.text1);
-        for (size_t i = 0; i < expr->as.string.parts.len; ++i) {
+        fdumpStrn(fp, s.head.nBytes, s.head.utf8str);
+        for (size_t i = 0; i < s.nsubexprs; ++i) {
           fprintf(fp, "\n%*s, ", indent+2, "");
-          fdumpEexpr(fp, indent+4, expr->as.string.parts.data[i].expr);
+          fdumpEexpr(fp, indent+4, s.tail[i].subexpr);
           fprintf(fp, "\n%*s, ", indent+2, "");
-          fdumpStr(fp, expr->as.string.parts.data[i].textAfter);
+          fdumpStrn(fp, s.tail[i].nBytes, s.tail[i].utf8str);
         }
         fprintf(fp, "\n%*s]", indent+2, "");
       }
     }; break;
     case EEXPR_PAREN: {
+      eexpr* y; eexpr_asParen(x, &y);
       fprintf(fp, "\n%*s, \"type\":\"paren\"", indent, "");
-      if (expr->as.wrap == NULL) {
+      if (y == NULL) {
         fprintf(fp, ",\"subexpr\":null");
       }
       else {
         fprintf(fp, ",\"subexpr\":\n%*s  ", indent, "");
-        fdumpEexpr(fp, indent+2, expr->as.wrap);
+        fdumpEexpr(fp, indent+2, y);
       }
     }; break;
     case EEXPR_BRACK: {
+      eexpr* y; eexpr_asBrack(x, &y);
       fprintf(fp, "\n%*s, \"type\":\"bracket\"", indent, "");
-      if (expr->as.wrap == NULL) {
+      if (y == NULL) {
         fprintf(fp, ",\"subexpr\":null");
       }
       else {
         fprintf(fp, ",\"subexpr\":\n%*s  ", indent, "");
-        fdumpEexpr(fp, indent+2, expr->as.wrap);
+        fdumpEexpr(fp, indent+2, y);
       }
     }; break;
     case EEXPR_BRACE: {
+      eexpr* y; eexpr_asBrace(x, &y);
       fprintf(fp, "\n%*s, \"type\":\"brace\"", indent, "");
-      if (expr->as.wrap == NULL) {
+      if (y == NULL) {
         fprintf(fp, ",\"subexpr\":null");
       }
       else {
         fprintf(fp, ",\"subexpr\":\n%*s  ", indent, "");
-        fdumpEexpr(fp, indent+2, expr->as.wrap);
+        fdumpEexpr(fp, indent+2, y);
       }
     }; break;
     case EEXPR_BLOCK: {
+      size_t n; eexpr** ys; eexpr_asBlock(x, &n, &ys);
       fprintf(fp, "\n%*s, \"type\":\"block\",\"subexprs\":", indent, "");
-      fdumpEexprArray(fp, indent+2, &expr->as.list);
+      fdumpEexprArray(fp, indent+2, n, ys);
     }; break;
     case EEXPR_PREDOT: {
+      eexpr* y; eexpr_asPredot(x, &y);
       fprintf(fp, "\n%*s, \"type\":\"predot\",\"subexpr\":", indent, "");
-      fdumpEexpr(fp, indent+2, expr->as.wrap);
+      fdumpEexpr(fp, indent+2, y);
     }; break;
     case EEXPR_CHAIN: {
+      size_t n; eexpr** ys; eexpr_asChain(x, &n, &ys);
       fprintf(fp, "\n%*s, \"type\":\"chain\",\"subexprs\":", indent, "");
-      fdumpEexprArray(fp, indent+2, &expr->as.list);
+      fdumpEexprArray(fp, indent+2, n, ys);
     }; break;
     case EEXPR_SPACE: {
+      size_t n; eexpr** ys; eexpr_asSpace(x, &n, &ys);
       fprintf(fp, "\n%*s, \"type\":\"space\",\"subexprs\":", indent, "");
-      fdumpEexprArray(fp, indent+2, &expr->as.list);
+      fdumpEexprArray(fp, indent+2, n, ys);
     }; break;
     case EEXPR_ELLIPSIS: {
+      eexpr* before, *after; eexpr_asEllipsis(x, &before, &after);
       fprintf(fp, "\n%*s, \"type\":\"ellipsis\"", indent, "");
       fprintf(fp, "\n%*s, \"before\":", indent, "");
-      if (expr->as.ellipsis[0] == NULL) {
+      if (before == NULL) {
         fprintf(fp, "null");
       }
       else {
         fprintf(fp, "\n%*s", indent+2, "");
-        fdumpEexpr(fp, indent+2, expr->as.ellipsis[0]);
+        fdumpEexpr(fp, indent+2, before);
       }
       fprintf(fp, "\n%*s, \"after\":", indent, "");
-      if (expr->as.ellipsis[1] == NULL) {
+      if (after == NULL) {
         fprintf(fp, "null");
       }
       else {
         fprintf(fp, "\n%*s", indent+2, "");
-        fdumpEexpr(fp, indent+2, expr->as.ellipsis[1]);
+        fdumpEexpr(fp, indent+2, after);
       }
     }; break;
     case EEXPR_COLON: {
+      eexpr* before, *after; eexpr_asColon(x, &before, &after);
       fprintf(fp, "\n%*s, \"type\":\"colon\",\"subexprs\":\n%*s[ ", indent, "", indent+2, "");
-      fdumpEexpr(fp, indent+4, expr->as.pair[0]);
+      fdumpEexpr(fp, indent+4, before);
       fprintf(fp, "\n%*s, ", indent+2, "");
-      fdumpEexpr(fp, indent+4, expr->as.pair[1]);
+      fdumpEexpr(fp, indent+4, after);
       fprintf(fp, "\n%*s]", indent+2, "");
     }; break;
     case EEXPR_COMMA: {
+      size_t n; eexpr** ys; eexpr_asComma(x, &n, &ys);
       fprintf(fp, "\n%*s, \"type\":\"comma\",\"subexprs\":", indent, "");
-      fdumpEexprArray(fp, indent+2, &expr->as.list);
+      fdumpEexprArray(fp, indent+2, n, ys);
     }; break;
     case EEXPR_SEMICOLON: {
+      size_t n; eexpr** ys; eexpr_asSemicolon(x, &n, &ys);
       fprintf(fp, "\n%*s, \"type\":\"semicolon\",\"subexprs\":", indent, "");
-      fdumpEexprArray(fp, indent+2, &expr->as.list);}; break;
+      fdumpEexprArray(fp, indent+2, n, ys);
+    }; break;
   }
   fprintf(fp, "\n%*s}", indent, "");
 }
@@ -485,15 +520,15 @@ void fdumpTokenArray(FILE* fp, const char* indent, size_t n, eexpr_token** arr) 
   }
 }
 
-void fdumpEexprArray(FILE* fp, int indent, const dynarr_eexpr_p* arr) {
-  if (arr->len == 0) {
+void fdumpEexprArray(FILE* fp, int indent, size_t n, eexpr** xs) {
+  if (n == 0) {
     fprintf(fp, "[]");
   }
   else {
     char* separator = "[ ";
-    for (size_t i = 0; i < arr->len; ++i) {
+    for (size_t i = 0; i < n; ++i) {
       fprintf(fp, "\n%*s%s", indent, "", separator);
-      fdumpEexpr(fp, indent + 2, arr->data[i]);
+      fdumpEexpr(fp, indent + 2, xs[i]);
       separator = ", ";
     }
     fprintf(fp, "\n%*s]", indent, "");

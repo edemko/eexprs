@@ -168,7 +168,7 @@ bool takeWhitespace(engine* st) {
     peekUchar(&lookahead, st->rest);
     if (!isSpaceChar(lookahead)) { return false; }
   }
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_UNKNOWN_SPACE};
   {
     char32_t c0; peekUchar(&c0, st->rest);
     tok.as.unknownSpace.type = decodeSpaceChar(c0);
@@ -204,7 +204,7 @@ bool takeWhitespace(engine* st) {
 */
 static
 bool takeLineContinue(engine* st) {
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_SPACE};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_UNKNOWN_SPACE};
   {
     char32_t lookahead;
     size_t adv = peekUchar(&lookahead, st->rest);
@@ -257,7 +257,7 @@ bool takeNewline(engine* st) {
     type = decodeNewline(lookahead) != 0;
     if (type == NEWLINE_NONE) { return false; }
   }
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_UNKNOWN_NEWLINE};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_UNKNOWN_NEWLINE};
   lexer_incLine(st, newlineSize(type));
   tok.loc.end = st->loc;
   lexer_addTok(st, &tok);
@@ -286,7 +286,7 @@ bool takeEof(engine* st) {
   if (adv != 0) {
     return false;
   }
-  eexpr_token tok = {.loc = {.start = st->loc, .end = st->loc}, .type=TOK_EOF};
+  eexpr_token tok = {.loc = {.start = st->loc, .end = st->loc}, .type=EEXPR_TOK_EOF};
   lexer_addTok(st, &tok);
   return true;
 }
@@ -308,7 +308,7 @@ bool takeComment(engine* st) {
     peekUchar(&lookahead, st->rest);
     if (lookahead != commentChar) { return false; }
   }
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_COMMENT};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_COMMENT};
   struct untilEol skip = untilEol(st->rest);
   lexer_advance(st, skip.bytes, skip.chars);
   tok.loc.end = st->loc;
@@ -329,7 +329,7 @@ bool takeSymbol(engine* st) {
     if (!isSymbolStart(lookahead)) { return false; }
   }
   str text = { .len = 0, .bytes = st->rest.bytes };
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_SYMBOL};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_SYMBOL};
   while (true) {
     char32_t c;
     size_t adv = peekUchar(&c, st->rest);
@@ -374,7 +374,7 @@ Then, if the exponent letter was generic, a radix specificaion may be given (jus
 */
 static
 bool takeNumber(engine* st) {
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_NUMBER};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_NUMBER};
   ////// gather sign (or early exit) //////
   bool neg;
   {
@@ -540,7 +540,7 @@ bool takeNumber(engine* st) {
           else { break; }
         }
         if (expDigits == 0) {
-          tok.type = TOK_NUMBER_ERROR;
+          tok.type = EEXPR_TOK_NUMBER_ERROR;
           tok.loc.end = st->loc;
           lexer_addTok(st, &tok);
           eexpr_error err = {.loc = tok.loc, .type = EEXPRERR_MISSING_EXPONENT};
@@ -571,7 +571,7 @@ These parts can end with a backtick (to begin an interpolation), start with a ba
 */
 static
 bool takeString(engine* st) {
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_STRING};
   char32_t open; {
     size_t adv = peekUchar(&open, st->rest);
     if (!isStringDelim(open)) { return false; }
@@ -671,7 +671,7 @@ They are any characters enclosed in single-quotes, where single-quotes can be em
 bool takeSqlString(engine* st) {
   char32_t c; size_t adv = peekUchar(&c, st->rest);
   if (c != sqlStringDelim) { return false; }
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_STRING};
   lexer_advance(st, adv, 1);
   strBuilder buf = strBuilder_new(128);
   while (true) {
@@ -702,7 +702,7 @@ bool takeSqlString(engine* st) {
         tok.loc.end = st->loc;
         tok.as.string.text.len = buf.len;
         tok.as.string.text.bytes = realloc(buf.bytes, buf.len);
-        tok.as.string.splice = STRSPLICE_PLAIN;
+        tok.as.string.splice = EEXPR_STRPLAIN;
         lexer_addTok(st, &tok);
         return true;
       }
@@ -754,7 +754,7 @@ If you want a trailing newline in the string, explicitly include a blank line.
 */
 static
 bool takeHeredoc(engine* st) {
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_STRING};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_STRING};
   {
     char32_t lookahead[3];
     size_t adv = peekUchars(lookahead, 3, st->rest);
@@ -763,7 +763,7 @@ bool takeHeredoc(engine* st) {
       || lookahead[2] != plainStringDelim
        ) { return false; }
     lexer_advance(st, adv, 3);
-    tok.as.string.splice = STRSPLICE_PLAIN;
+    tok.as.string.splice = EEXPR_STRPLAIN;
   }
   str ender;
   size_t enderNChars = 0;
@@ -870,7 +870,7 @@ bool takeHeredoc(engine* st) {
           break;
         }
         else badIndentDef: {
-          tok.type = TOK_STRING_ERROR;
+          tok.type = EEXPR_TOK_STRING_ERROR;
           tok.loc.end = st->loc;
           lexer_addTok(st, &tok);
           st->fatal.type = EEXPRERR_HEREDOC_BAD_INDENT_DEFINITION;
@@ -929,7 +929,7 @@ bool takeHeredoc(engine* st) {
       }
       else {
         free(ender.bytes);
-        tok.type = TOK_STRING_ERROR;
+        tok.type = EEXPR_TOK_STRING_ERROR;
         tok.loc.end = st->loc;
         lexer_addTok(st, &tok);
         st->fatal.type = EEXPRERR_UNCLOSED_MULTILINE_STRING;
@@ -988,7 +988,7 @@ bool takeWrap(engine* st) {
   size_t adv = peekUchar(&lookahead, st->rest);
   eexpr_wrapType type = isWrapChar(lookahead);
   if (type == WRAP_NULL) { return false; }
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = TOK_WRAP};
+  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_WRAP};
   {
     tok.as.wrap.type = type;
     tok.as.wrap.isOpen = isOpenWrap(lookahead);
@@ -1014,11 +1014,11 @@ bool takeSplitter(engine* st) {
   }
   eexpr_token tok = {.loc = {.start = st->loc}};
   switch (info.type) {
-    case SPLITTER_COLON: tok.type = TOK_UNKNOWN_COLON; break;
-    case SPLITTER_ELLIPSIS: tok.type = TOK_ELLIPSIS; break;
-    case SPLITTER_DOT: tok.type = TOK_UNKNOWN_DOT; break;
-    case SPLITTER_SEMICOLON: tok.type = TOK_SEMICOLON; break;
-    case SPLITTER_COMMA: tok.type = TOK_COMMA; break;
+    case SPLITTER_COLON: tok.type = EEXPR_TOK_UNKNOWN_COLON; break;
+    case SPLITTER_ELLIPSIS: tok.type = EEXPR_TOK_ELLIPSIS; break;
+    case SPLITTER_DOT: tok.type = EEXPR_TOK_UNKNOWN_DOT; break;
+    case SPLITTER_SEMICOLON: tok.type = EEXPR_TOK_SEMICOLON; break;
+    case SPLITTER_COMMA: tok.type = EEXPR_TOK_COMMA; break;
     default: assert(false);
   }
   lexer_advance(st, info.bytes, info.chars);

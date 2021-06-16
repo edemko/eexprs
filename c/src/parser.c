@@ -40,7 +40,7 @@ wrapExpr
 static
 eexpr* parseWrap(engine* st) {
   eexpr_token* open = parser_peek(st);
-  if ( open->type != TOK_WRAP
+  if ( open->type != EEXPR_TOK_WRAP
     || !open->as.wrap.isOpen
      ) { return NULL; }
   eexpr* out = malloc(sizeof(eexpr));
@@ -77,7 +77,7 @@ eexpr* parseWrap(engine* st) {
     out->as.wrap = parseSemicolon(st);
     eexpr_token* close = parser_peek(st);
     if ( st->wrapStack.len != 0
-      && close->type == TOK_WRAP
+      && close->type == EEXPR_TOK_WRAP
       && !close->as.wrap.isOpen
       && close->as.wrap.type == dynarr_peek_openWrap(&st->wrapStack)->type
        ) {
@@ -100,7 +100,7 @@ eexpr* parseWrap(engine* st) {
         dynarr_push_eexpr_p(&out->as.list, &subexpr);
       }
       eexpr_token* lookahead = parser_peek(st);
-      if (lookahead->type == TOK_WRAP) {
+      if (lookahead->type == EEXPR_TOK_WRAP) {
         if ( st->wrapStack.len != 0
           && !lookahead->as.wrap.isOpen
           && lookahead->as.wrap.type == dynarr_peek_openWrap(&st->wrapStack)->type
@@ -114,7 +114,7 @@ eexpr* parseWrap(engine* st) {
         }
         return out;
       }
-      else if (lookahead->type == TOK_NEWLINE) {
+      else if (lookahead->type == EEXPR_TOK_NEWLINE) {
         parser_pop(st);
       }
       else {
@@ -136,9 +136,9 @@ stringTemplate
 static
 eexpr* parseTemplate(engine* st) {
   eexpr_token* tok = parser_peek(st);
-  if (tok->type != TOK_STRING) { return NULL; }
+  if (tok->type != EEXPR_TOK_STRING) { return NULL; }
   switch (tok->as.string.splice) {
-    case STRSPLICE_PLAIN: {
+    case EEXPR_STRPLAIN: {
       eexpr* out = malloc(sizeof(eexpr));
       checkOom(out);
       out->loc = tok->loc;
@@ -150,7 +150,7 @@ eexpr* parseTemplate(engine* st) {
       parser_pop(st);
       return out;
     }; break;
-    case STRSPLICE_OPEN: {
+    case EEXPR_STROPEN: {
       eexpr* out = malloc(sizeof(eexpr));
       checkOom(out);
       { // initialize output buffer
@@ -170,23 +170,23 @@ eexpr* parseTemplate(engine* st) {
           // but if the next part comes without an expr, we can do some error recovery later
           // we flag that recovery is needed by setting part.expr to NULL
           eexpr_token* lookahead = parser_peek(st);
-          if ( lookahead->type != TOK_STRING
-            || (lookahead->as.string.splice != STRSPLICE_MIDDLE && lookahead->as.string.splice != STRSPLICE_CLOSE)
+          if ( lookahead->type != EEXPR_TOK_STRING
+            || (lookahead->as.string.splice != EEXPR_STRMIDDLE && lookahead->as.string.splice != EEXPR_STRCLOSE)
              ) {
-            part.expr = parseSpace(st);
+            part.subexpr = parseSpace(st);
           }
           else {
-            part.expr = NULL;
+            part.subexpr = NULL;
           }
         }
         eexpr_token* lookahead = parser_peek(st);
-        if (part.expr != NULL) {
-          out->loc.end = part.expr->loc.end;
+        if (part.subexpr != NULL) {
+          out->loc.end = part.subexpr->loc.end;
         }
         else {
           eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_TEMPLATE_EXPR};
-          if ( lookahead->type == TOK_STRING
-            && (lookahead->as.string.splice == STRSPLICE_MIDDLE || lookahead->as.string.splice == STRSPLICE_CLOSE)
+          if ( lookahead->type == EEXPR_TOK_STRING
+            && (lookahead->as.string.splice == EEXPR_STRMIDDLE || lookahead->as.string.splice == EEXPR_STRCLOSE)
              ) {
             dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           }
@@ -195,10 +195,11 @@ eexpr* parseTemplate(engine* st) {
             return out;
           }
         }
-        if (lookahead->type == TOK_STRING) {
+        if (lookahead->type == EEXPR_TOK_STRING) {
           { // append last template part
-            part.textAfter = lookahead->as.string.text;
-            if (part.expr != NULL) {
+            part.nBytes = lookahead->as.string.text.len;
+            part.utf8str = lookahead->as.string.text.bytes;
+            if (part.subexpr != NULL) {
               dynarr_push_strTemplPart(&out->as.string.parts, &part);
             }
             out->loc.end = lookahead->loc.end;
@@ -208,20 +209,20 @@ eexpr* parseTemplate(engine* st) {
             mkUnbalanceError(st);
           }
           else { // ensure the splice type makes sense
-            if (lookahead->as.string.splice == STRSPLICE_CLOSE) {
+            if (lookahead->as.string.splice == EEXPR_STRCLOSE) {
               dynarr_pop_openWrap(&st->wrapStack);
               parser_pop(st);
               return out;
             }
-            else if (lookahead->as.string.splice == STRSPLICE_MIDDLE) {
+            else if (lookahead->as.string.splice == EEXPR_STRMIDDLE) {
               parser_pop(st);
             }
             else { assert(false); }
           }
         }
         else {
-          if (part.expr != NULL) {
-            part.textAfter.len = 0; part.textAfter.bytes = NULL;
+          if (part.subexpr != NULL) {
+            part.nBytes = 0; part.utf8str = NULL;
             dynarr_push_strTemplPart(&out->as.string.parts, &part);
           }
           eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_CLOSE_TEMPLATE};
@@ -252,7 +253,7 @@ static
 eexpr* parseAtomic(engine* st) {
   eexpr_token* tok = parser_peek(st);
   switch (tok->type) {
-    case TOK_SYMBOL: {
+    case EEXPR_TOK_SYMBOL: {
       eexpr* out = malloc(sizeof(eexpr));
       checkOom(out);
       out->loc = tok->loc;
@@ -261,7 +262,7 @@ eexpr* parseAtomic(engine* st) {
       parser_pop(st);
       return out;
     }; break;
-    case TOK_NUMBER: {
+    case EEXPR_TOK_NUMBER: {
       eexpr* out = malloc(sizeof(eexpr));
       checkOom(out);
       out->loc = tok->loc;
@@ -270,10 +271,10 @@ eexpr* parseAtomic(engine* st) {
       parser_pop(st);
       return out;
     }; break;
-    case TOK_STRING: {
+    case EEXPR_TOK_STRING: {
       return parseTemplate(st);
     }; break;
-    case TOK_WRAP: {
+    case EEXPR_TOK_WRAP: {
       return parseWrap(st);
     }; break;
     default: {
@@ -297,7 +298,7 @@ eexpr* parseChain(engine* st) {
   eexpr* predot = NULL;
   { // check if this is a predot expression
     eexpr_token* lookahead = parser_peek(st);
-    if (lookahead->type == TOK_PREDOT) {
+    if (lookahead->type == EEXPR_TOK_PREDOT) {
       predot = malloc(sizeof(eexpr));
       checkOom(predot);
       predot->type = EEXPR_PREDOT;
@@ -313,17 +314,17 @@ eexpr* parseChain(engine* st) {
         goto finish;
       }
       eexpr_token* lookahead = parser_peek(st);
-      if ( lookahead->type == TOK_CHAIN
-        || (lookahead->type == TOK_WRAP && lookahead->as.wrap.isOpen)
-        || ( lookahead->type == TOK_STRING
-          && (lookahead->as.string.splice == STRSPLICE_PLAIN || lookahead->as.string.splice == STRSPLICE_OPEN)
+      if ( lookahead->type == EEXPR_TOK_CHAIN
+        || (lookahead->type == EEXPR_TOK_WRAP && lookahead->as.wrap.isOpen)
+        || ( lookahead->type == EEXPR_TOK_STRING
+          && (lookahead->as.string.splice == EEXPR_STRPLAIN || lookahead->as.string.splice == EEXPR_STROPEN)
            )
          ) {
         chain = malloc(sizeof(eexpr));
         checkOom(chain);
         chain->type = EEXPR_CHAIN;
         chain->loc = expr1->loc;
-        if (lookahead->type == TOK_CHAIN) {
+        if (lookahead->type == EEXPR_TOK_CHAIN) {
           chain->loc.end = lookahead->loc.end;
           parser_pop(st);
         }
@@ -340,17 +341,17 @@ eexpr* parseChain(engine* st) {
       if (next == NULL) { goto finish; }
       dynarr_push_eexpr_p(&chain->as.list, &next);
       eexpr_token* lookahead = parser_peek(st);
-      if (lookahead->type == TOK_CHAIN) {
+      if (lookahead->type == EEXPR_TOK_CHAIN) {
         // continue the chain when there's another chain dot
         chain->loc.end = lookahead->loc.end;
         parser_pop(st);
       }
-      else if (lookahead->type == TOK_WRAP && lookahead->as.wrap.isOpen) {
+      else if (lookahead->type == EEXPR_TOK_WRAP && lookahead->as.wrap.isOpen) {
         // continue the chain when there's an open paren/brace/brack/indent
         chain->loc.end = next->loc.end;
       }
-      else if ( lookahead->type == TOK_STRING
-             && (lookahead->as.string.splice == STRSPLICE_PLAIN || lookahead->as.string.splice == STRSPLICE_OPEN)
+      else if ( lookahead->type == EEXPR_TOK_STRING
+             && (lookahead->as.string.splice == EEXPR_STRPLAIN || lookahead->as.string.splice == EEXPR_STROPEN)
               ) {
         // continue the chain when there's the start of a string
         chain->loc.end = next->loc.end;
@@ -381,7 +382,7 @@ spaceExpr ::= chainExpr (whitespace chainExpr)*
 */
 static
 eexpr* parseSpace(engine* st) {
-  if (parser_peek(st)->type == TOK_SPACE) {
+  if (parser_peek(st)->type == EEXPR_TOK_SPACE) {
     parser_pop(st);
   }
   eexpr* expr1 = parseChain(st);
@@ -397,7 +398,7 @@ eexpr* parseSpace(engine* st) {
   }
   while (true) {
     eexpr_token* lookahead = parser_peek(st);
-    if (lookahead->type == TOK_SPACE) {
+    if (lookahead->type == EEXPR_TOK_SPACE) {
       parser_pop(st);
       eexpr* next = parseChain(st);
       if (next != NULL) {
@@ -429,7 +430,7 @@ static
 eexpr* parseEllipsis(engine* st) {
   eexpr* expr1 = parseSpace(st);
   eexpr_token* lookahead = parser_peek(st);
-  if (lookahead->type == TOK_ELLIPSIS) {
+  if (lookahead->type == EEXPR_TOK_ELLIPSIS) {
     eexpr_loc dotsLoc = lookahead->loc;
     parser_pop(st);
     eexpr* expr2 = parseSpace(st);
@@ -451,7 +452,7 @@ static
 eexpr* parseColon(engine* st) {
   eexpr* expr1 = parseEllipsis(st);
   eexpr_token* colon = parser_peek(st);
-  if (colon->type != TOK_COLON) {
+  if (colon->type != EEXPR_TOK_COLON) {
     return expr1;
   }
   else {
@@ -478,7 +479,7 @@ eexpr* parseComma(engine* st) {
   eexpr* out = NULL;
   { // optional initial comma
     eexpr_token* maybeComma = parser_peek(st);
-    if (maybeComma->type == TOK_COMMA) {
+    if (maybeComma->type == EEXPR_TOK_COMMA) {
       out = malloc(sizeof(eexpr));
       checkOom(out);
       dynarr_init_eexpr_p(&out->as.list, 4);
@@ -500,7 +501,7 @@ eexpr* parseComma(engine* st) {
     }
     else if (out != NULL) { // found a sub-expression, and we already have evidence of a comma
       dynarr_push_eexpr_p(&out->as.list, &tmp);
-      if (lookahead->type == TOK_COMMA) { // there's also comma afterwards to be consumed
+      if (lookahead->type == EEXPR_TOK_COMMA) { // there's also comma afterwards to be consumed
         out->loc.end = lookahead->loc.end;
         parser_pop(st);
       }
@@ -508,7 +509,7 @@ eexpr* parseComma(engine* st) {
         out->loc.end = tmp->loc.end;
       }
     }
-    else if (lookahead->type == TOK_COMMA) { // found a sub-expression, and the first evidence of a comma
+    else if (lookahead->type == EEXPR_TOK_COMMA) { // found a sub-expression, and the first evidence of a comma
       out = malloc(sizeof(eexpr));
       checkOom(out);
       dynarr_init_eexpr_p(&out->as.list, 4);
@@ -528,7 +529,7 @@ eexpr* parseSemicolon(engine* st) {
   eexpr* out = NULL;
   { // optional initial semicolon
     eexpr_token* maybeSemi = parser_peek(st);
-    if (maybeSemi->type == TOK_SEMICOLON) {
+    if (maybeSemi->type == EEXPR_TOK_SEMICOLON) {
       out = malloc(sizeof(eexpr));
       checkOom(out);
       dynarr_init_eexpr_p(&out->as.list, 4);
@@ -550,7 +551,7 @@ eexpr* parseSemicolon(engine* st) {
     }
     else if (out != NULL) { // found a sub-expression, and we already have evidence of a semicolon
       dynarr_push_eexpr_p(&out->as.list, &tmp);
-      if (lookahead->type == TOK_SEMICOLON) { // there's also semicolon afterwards to be consumed
+      if (lookahead->type == EEXPR_TOK_SEMICOLON) { // there's also semicolon afterwards to be consumed
         out->loc.end = lookahead->loc.end;
         parser_pop(st);
       }
@@ -558,7 +559,7 @@ eexpr* parseSemicolon(engine* st) {
         out->loc.end = tmp->loc.end;
       }
     }
-    else if (lookahead->type == TOK_SEMICOLON) { // found a sub-expression, and the first evidence of a semicolon
+    else if (lookahead->type == EEXPR_TOK_SEMICOLON) { // found a sub-expression, and the first evidence of a semicolon
       out = malloc(sizeof(eexpr));
       checkOom(out);
       dynarr_init_eexpr_p(&out->as.list, 4);
@@ -596,8 +597,8 @@ void parseLine(engine* st) {
       while (depth != 0) {
         eexpr_token* tok = parser_peek(st);
         switch (tok->type) {
-          case TOK_EOF: return;
-          case TOK_WRAP: {
+          case EEXPR_TOK_EOF: return;
+          case EEXPR_TOK_WRAP: {
             if (tok->as.wrap.type == WRAP_BLOCK) {
               if (tok->as.wrap.isOpen) { depth += 1; }
               else { depth -= 1; }
@@ -610,11 +611,11 @@ void parseLine(engine* st) {
       while (true) {
         eexpr_token* tok = parser_peek(st);
         // consume tokens until next newline/end-of-file,
-        if (tok->type == TOK_NEWLINE || tok->type == TOK_EOF) {
+        if (tok->type == EEXPR_TOK_NEWLINE || tok->type == EEXPR_TOK_EOF) {
           return;
         }
         // but if there's an indent, we'll need to go through matching depths again
-        else if ( tok->type == TOK_WRAP
+        else if ( tok->type == EEXPR_TOK_WRAP
                && tok->as.wrap.type == WRAP_BLOCK
                && tok->as.wrap.isOpen
                 ) {
@@ -635,18 +636,18 @@ void engine_parse(engine* st) {
   while (st->fatal.type == EEXPRERR_NOERROR) {
     eexpr_token* lookahead = parser_peek(st);
     switch (lookahead->type) {
-      case TOK_NEWLINE: {
+      case EEXPR_TOK_NEWLINE: {
         assert(!atStart);
         parser_pop(st);
         parseLine(st);
       }; break;
-      case TOK_EOF: return;
+      case EEXPR_TOK_EOF: return;
       default: {
         if (atStart) {
           atStart = false;
           parseLine(st);
         }
-        else if ( lookahead->type == TOK_WRAP
+        else if ( lookahead->type == EEXPR_TOK_WRAP
                && !lookahead->as.wrap.isOpen
                 ) {
           mkUnbalanceError(st);

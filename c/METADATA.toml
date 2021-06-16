@@ -1,5 +1,5 @@
 [grammar]
-version = 0.2.0a
+version = "0.2.0a"
 
 # TODO build object files
 # [api]

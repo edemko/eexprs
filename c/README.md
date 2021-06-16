@@ -17,9 +17,9 @@ It's going in `include/`, but I have not documented that fact.
 
 - [x] eliminate easy `TODO`/`FIXME`s
 - [ ] create a C interface
-  - [ ] consume eexprs
-  - [ ] consume tokens
-  - [ ] implement main.c in terms of only eexpr.h
+  - [x] consume eexprs
+  - [x] consume tokens
+  - [x] implement main.c in terms of only eexpr.h
   - [ ] include version metadata from METADATA.toml
   - [ ] library artifacts
   - [x] is it worth the complexity of letting the user pick an allocator? no
@@ -35,6 +35,7 @@ It's going in `include/`, but I have not documented that fact.
   - [ ] fuzz it
   - [ ] sanitize (at least for undefined behavior)
 - [ ] check `TODO`/`FIXME` again
+- [ ] perhaps I should allow "fat colon" `::` in the grammar
 
 ## Building
 
