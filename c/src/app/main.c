@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "app/json.h"
+#include "json.h"
 
 void die(const char* msg) {
   fprintf(stderr, "%s\n", msg);

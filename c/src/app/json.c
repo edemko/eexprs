@@ -1,10 +1,10 @@
-#include "app/json.h"
+#include "json.h"
 
 #include <assert.h>
 #include <inttypes.h>
 #include <stdlib.h>
 
-#include "shim/bigint.h"
+#include "bigint.h"
 
 
 bool needsJsonEscape(char32_t c) {
@@ -13,7 +13,7 @@ bool needsJsonEscape(char32_t c) {
        ;
 }
 void fjsonEscapeChar(FILE* fp, char32_t c) {
-  if (c < 0 || 0x10FFFF < c) { return; }
+  if (0x10FFFF < c) { return; }
   if (c == '\"') {
     fprintf(fp, "\\\"");
   }

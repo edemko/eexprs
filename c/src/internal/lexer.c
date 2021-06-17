@@ -1,9 +1,10 @@
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "lexer/util.h"
+#include "common.h"
+#include "engine.h"
 #include "parameters.h"
-#include "shim/common.h"
 
 
 //////////////////////////////////// Helper Consumers ////////////////////////////////////
@@ -14,7 +15,7 @@
 static
 bool decodeUnihex(char32_t* out, size_t nDigits, char32_t* digits) {
   char32_t accum = 0;
-  for (int i = 0; i < nDigits; ++i) {
+  for (size_t i = 0; i < nDigits; ++i) {
     accum = accum << 4;
     if ('0' <= digits[i] && digits[i] <= '9') {
       accum |= digits[i] - '0';
@@ -456,7 +457,7 @@ bool takeNumber(engine* st) {
     }
   }
   ////// gather exponent //////
-  bool expNeg;
+  bool expNeg = false;
   bigint exponent = bigint_new();
   {
     ////// determine presence and type of exponent //////

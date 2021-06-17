@@ -1,9 +1,10 @@
-#include "shim/dllist.h"
+#include "dllist.h"
 
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "shim/common.h"
+#include "common.h"
 
 static
 _dllistNode* newNode(const void* elem, size_t elemSize) {

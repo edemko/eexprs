@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "shim/common.h"
-#include "shim/strstuff.h"
+#include "common.h"
+#include "strstuff.h"
 
 
 str readFile(const char* filename) {

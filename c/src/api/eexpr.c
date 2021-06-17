@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#include "shim/common.h"
+#include "common.h"
 #include "engine.h"
 
 

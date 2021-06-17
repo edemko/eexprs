@@ -1,10 +1,10 @@
-#include "shim/bigint.h"
+#include "bigint.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "shim/common.h"
+#include "common.h"
 
 
 bigint bigint_new() {

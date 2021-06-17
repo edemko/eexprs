@@ -1,5 +1,6 @@
-#include "shim/dynarr.h"
+#include "dynarr.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "common.h"

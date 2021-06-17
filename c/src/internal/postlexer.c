@@ -1,9 +1,11 @@
 #include <assert.h>
 
-#include "lexer/util.h"
+#include "common.h"
+#include "engine.h"
 #include "parameters.h"
-#include "shim/common.h"
 
+#define TYPE size_t
+#include "dynarr.h"
 
 static
 dllistNode_eexpr_token* getPrev(dllistNode_eexpr_token* tok) {
@@ -179,8 +181,6 @@ void disambiguateColons(engine* st) {
   }
 }
 
-#define TYPE size_t
-#include "shim/dynarr.h"
 static
 size_t indentState_peek(const dynarr_size_t* st) {
   return st->len == 0 ? 0 : st->data[st->len-1];

@@ -1,10 +1,10 @@
-#ifndef PARAMETERS_H
-#define PARAMETERS_H
+#ifndef INTERNAL_PARAMETERS_H
+#define INTERNAL_PARAMETERS_H
 
 #include <stdbool.h>
 
 #include "types.h"
-#include "shim/strstuff.h"
+#include "strstuff.h"
 
 
 //////////////////////////////////// Numbers ////////////////////////

@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "shim/strstuff.h"
+#include "strstuff.h"
 
 
 typedef struct bigint {

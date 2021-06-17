@@ -1,10 +1,10 @@
-#ifndef TYPES_H
-#define TYPES_H
+#ifndef INTERNAL_TYPES_H
+#define INTERNAL_TYPES_H
 
 #include "eexpr.h"
 
-#include "shim/bigint.h"
-#include "shim/strstuff.h"
+#include "bigint.h"
+#include "strstuff.h"
 
 
 //////////////////////////////////// Payloads ////////////////////////
@@ -22,7 +22,7 @@ typedef struct eexprNumber {
 
 typedef struct eexpr_strTemplate strTemplPart;
 #define TYPE strTemplPart
-#include "shim/dynarr.h"
+#include "dynarr.h"
 typedef struct eexprStrTempl {
   str text1;
   dynarr_strTemplPart parts;
@@ -31,7 +31,7 @@ typedef struct eexprStrTempl {
 // eexpr_p is just so dynarr can be given a type identifier
 typedef eexpr* eexpr_p;
 #define TYPE eexpr_p
-#include "shim/dynarr.h"
+#include "dynarr.h"
 
 
 //////////////////////////////////// Eexprs ////////////////////////

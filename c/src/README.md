@@ -1,21 +1,15 @@
 # EExpr Source Tree
 
-The most important files for understanding the grammar are `lexer.c`, `postlexer.c`, and `parser.c`.
-Each contains the core algorithms for their respective stages of overall parsing.
+The source is segregated into several sub-trees, in order of importance:
 
-Any specific choices of characters/strings I have made about the language go into `parameters.c`.
-This is so that it is easy to alter the lexer as I learn more about what semantics are available in Unicode, and as Unicode itself changes.
-
-The `types.h` file defines the shapes of tokens and eexprs.
-Because tokens, eexprs, and errors might might contain owned pointers, `types.c` defines de-initializers which free this data should it exist.
-
-The `engine.*` files define the main support data structure which organizes all the information needed during parsing.
-The files under the `lexer/` and `parser/` directories hold files that support data structures used during lexing/parsing respectively.
-
-There's also a `main.c` file which is purely responsible for hooking up the algorithm to the command-line.
-The program it defines reads a file, then produces a json representation of the parse tree (and warnings/errors) on stdout.
-In addition, it can be configured to dump json representations of relevant state to files at various points.
-The `app/` directory holds files only relevant for compiling `main.c`.
-
-The `shim/` directory holds (small, straightforward) implementations of "missing" features of C.
-I've decided not to rely on external dependencies (even widespread ones like GNU MP or ICU), since I need very little from those libraries (in terms of both performance and functionality), and external C dependencies are often a pain for users.
+  * `api/`: The public-facing interface and its implementation.
+    Since it consists of a single header file/translation unit pair, documentation was embedded directly into the header rather than a readme.
+  * `internal/`: The core implementation of the lexer, postlexer, and parser.
+    It is not to be exposed to consumers of the library.
+  * `shim/`: Contains "missing" features of C that you wouldn't normally have to think about in most other high-level languages.
+    It is used by `internal/` and `app/`, but isn't meant for you to use directly
+      (mostly because it's only just enough to do what I need, and better options are available).
+  * `app/`: Code used only for the `eexpr2json` executable.
+    It is an example of how to write `eexpr`-based applications, since it does not depend on `internal/`.
+    It's dependency on `shim/` is only because that was the fastest way for me to get access to bignum and utf8 implementation;
+      if you are writing a binding to eexpr in your favorite language, odds are you have a far more complete bignum/utf8 implementation available already.

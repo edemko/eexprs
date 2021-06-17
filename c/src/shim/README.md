@@ -1,10 +1,10 @@
-# EExpr Shim Directory
+# Fundamental Data Types and Algorithms
 
 The `common.*` files include utility functions.
 At the moment it only holds `checkOom`, which I use to check the results of memory allocation, and die if the system is out of memory.
 
 I need a very limited ability to perform arbitrary-size integer arithmetic.
-Namely, I need only add/sub small numbers, multiply by a small number, and format bigints as decimal strings.
+Namely, I need only take a large number and add/sub small numbers, multiply by a small number, and format it as a decimal string.
 Rather than pull in `libgmp` (or learn how to use it), I just implemented these algorithms myself.
 
 `NUL`-terminated strings have probably caused even more damage than null pointers.

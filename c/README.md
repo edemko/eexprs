@@ -16,13 +16,7 @@ I'm currently working on defining a solid C interface.
 It's going in `include/`, but I have not documented that fact.
 
 - [x] eliminate easy `TODO`/`FIXME`s
-- [ ] create a C interface
-  - [x] consume eexprs
-  - [x] consume tokens
-  - [x] implement main.c in terms of only eexpr.h
-  - [ ] include version metadata from METADATA.toml
-  - [ ] library artifacts
-  - [x] is it worth the complexity of letting the user pick an allocator? no
+- [x] create a C interface
 - [ ] decide about isSymbolChar
   - [ ] go through ASCII for the allow/denylist
   - [ ] understand unicode character classes
@@ -39,16 +33,28 @@ It's going in `include/`, but I have not documented that fact.
 
 ## Building
 
+The simplest route is:
+
 ```
 ./build.sh
 ```
 
+which builds a statically-linked executable (and library).
+You can pass arguments to enable or disable other artifacts and configurations.
+The build script documents what arguments are available.
+
 The source is standard C11, but the build script uses `gcc` because that's what I personally use.
 It's not hard to edit the script as-needed.
 
-The only build artifact is `bin/eexpr2json`, which takes an input file,
-  parses it as a file of eexprs,
-  and produces a json representation of those eexprs to stdout.
+The current build artifacts are:
+
+  * static library `bin/static/libeexpr.a`
+  * statically-linked executable `bin/static/eexpr2json`
+    which parses an eexpr file and produces a json description on stdout
+  * shared library `bin/shared/libeexpr.a`
+  * dynamically-linked executable `bin/static/eexpr2json`
+    which acts just like the static one, but I have no idea why you'd want a dynamically-linked version
+
 
 After building, test with `./test/run.sh` or `./test/run.sh run <case name>`.
 Once the actual output is satisfactory, it can easily be made the expected output with `./test/run.sh commit <case name>`.
@@ -56,10 +62,10 @@ Once the actual output is satisfactory, it can easily be made the expected outpu
 ### Dependencies
 
 There are none (okay, fine, just a C99 or newer compiler).
-I've decided not to depend in stuff like GNU MP or ICU, since I really need only a fragment of their functionality (and performance).
+I've decided not to depend on stuff like GNU MP or ICU, since I really need only a fragment of their functionality (and performance).
 Managing dependencies in C is a pain, so I prefer not to if I can get away with it, and I expect users will be the same.
 
-It's entirely possible that it might not compile with gcc.
+It's entirely possible that it might not compile on a non-gcc compiler.
 If so, that's unintentional, and should be [reported as a bug](issue-tracker).
 
 
@@ -72,4 +78,4 @@ I really don't care if it's a minimal example, I'll take as many test cases as I
 If you've got some code to contribute, submit a pull request.
 Be aware that this project is BSD-3 licensed, so do not open a pull request unless you consent to have your code also under this same license.
 
-The source tree contains `README.md` files that explain the structure of each directory.
+The `src` tree contains `README.md` files that explain the structure of each directory.

@@ -133,14 +133,16 @@ dllist(TYPE) dllist_empty(TYPE)() {
 
 static inline
 dllist(TYPE) dllist_singleton(TYPE)(const TYPE* elem) {
-  _dllist it = _dllist_singleton((const void*)elem, sizeof(TYPE));
-  return *(dllist(TYPE)*)&it;
+  _dllist inner = _dllist_singleton((const void*)elem, sizeof(TYPE));
+  dllist(TYPE) outer = {.start = (dllistNode(TYPE)*)inner.start, .end = (dllistNode(TYPE)*)inner.end};
+  return outer;
 }
 
 static inline
 dllist(TYPE) dllist_cat(TYPE)(dllist(TYPE)* l1, dllist(TYPE)* l2) {
-  _dllist it = _dllist_cat((_dllist*)l1, (_dllist*)l2);
-  return *(dllist(TYPE)*)&it;
+  _dllist inner = _dllist_cat((_dllist*)l1, (_dllist*)l2);
+  dllist(TYPE) outer = {.start = (dllistNode(TYPE)*)inner.start, .end = (dllistNode(TYPE)*)inner.end};
+  return outer;
 }
 
 static inline

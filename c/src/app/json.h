@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "eexpr.h"
-#include "shim/strstuff.h"
+#include "strstuff.h"
 
 
 void fdumpStr(FILE* fp, str text);

@@ -27,9 +27,9 @@ Every identifier in this interface begins with either `eexpr_` or `EXPR_` (with 
 #include <uchar.h>
 
 
-#define EEXPR_VERSION_MAJOR
-#define EEXPR_VERSION_MINOR
-#define EEXPR_VERSION_PATCH
+#define EEXPR_VERSION_MAJOR 0
+#define EEXPR_VERSION_MINOR 1
+#define EEXPR_VERSION_PATCH 0
 
 
 typedef struct eexpr_token eexpr_token; // FIXME I need to expose a good (minimal) token type

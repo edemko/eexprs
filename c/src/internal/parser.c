@@ -1,7 +1,8 @@
 #include <assert.h>
+#include <stdlib.h>
 
-#include "parser/util.h"
-#include "shim/common.h"
+#include "common.h"
+#include "engine.h"
 
 
 //////////////////////////////////// Helper Procedures ////////////////////////////////////
@@ -653,8 +654,8 @@ void engine_parse(engine* st) {
           mkUnbalanceError(st);
         }
         else {
-          eexpr_token* tok = parser_peek(st);
-          fprintf(stderr, "%zu:%zu--%zu:%zu\n", tok->loc.start.line+1, tok->loc.start.col+1, tok->loc.end.line+1, tok->loc.end.col+1);
+          // eexpr_token* tok = parser_peek(st);
+          // fprintf(stderr, "%zu:%zu--%zu:%zu\n", tok->loc.start.line+1, tok->loc.start.col+1, tok->loc.end.line+1, tok->loc.end.col+1);
           assert(atStart);
         }
       } break;

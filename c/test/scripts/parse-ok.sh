@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cmd=../../../bin/eexpr2json
+cmd=../../../bin/static/eexpr2json
 
 set +e
 "$cmd" \
