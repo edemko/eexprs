@@ -47,11 +47,11 @@ void drainErrors(eexpr_parser* parser) {
   for (dllistNode_eexpr_error* err = parser->impl->st.errStream.start; err != NULL; err = err->next) {
     bool isError;
     switch (err->here.type) {
-      case EEXPRERR_MIXED_SPACE: { isError = parser->isError.mixedSpace; } break;
-      case EEXPRERR_MIXED_NEWLINES: { isError = parser->isError.mixedNewlines; } break;
-      case EEXPRERR_BAD_DIGIT_SEPARATOR: { isError = parser->isError.badDigitSeparator; } break;
-      case EEXPRERR_TRAILING_SPACE: { isError = parser->isError.trailingSpace; } break;
-      case EEXPRERR_NO_TRAILING_NEWLINE: { isError = parser->isError.noTrailingNewline; } break;
+      case EEXPR_ERR_MIXED_SPACE: { isError = parser->isError.mixedSpace; } break;
+      case EEXPR_ERR_MIXED_NEWLINES: { isError = parser->isError.mixedNewlines; } break;
+      case EEXPR_ERR_BAD_DIGIT_SEPARATOR: { isError = parser->isError.badDigitSeparator; } break;
+      case EEXPR_ERR_TRAILING_SPACE: { isError = parser->isError.trailingSpace; } break;
+      case EEXPR_ERR_NO_TRAILING_NEWLINE: { isError = parser->isError.noTrailingNewline; } break;
       default: { isError = true; } break;
     }
     if (isError) {
@@ -62,7 +62,7 @@ void drainErrors(eexpr_parser* parser) {
     }
   }
   dllist_del_eexpr_error(&parser->impl->st.errStream);
-  if (parser->impl->st.fatal.type != EEXPRERR_NOERROR) {
+  if (parser->impl->st.fatal.type != EEXPR_ERR_NOERROR) {
     appendError(parser, &parser->impl->st.fatal);
   }
 }
@@ -308,15 +308,15 @@ bool eexpr_asSymbol(const eexpr* self, size_t* nBytes, uint8_t** utf8str) {
 bool eexpr_asNumber(const eexpr* self, eexpr_number* value) {
   if (self->type != EEXPR_NUMBER) { return false; }
   value->isPositive = self->as.number.mantissa.pos;
-  value->nbigDigits = self->as.number.mantissa.len;
+  value->nBigDigits = self->as.number.mantissa.len;
   value->bigDigits = self->as.number.mantissa.buf;
   value->radix = self->as.number.radix;
-  value->nfracDigits = self->as.number.fractionalDigits;
+  value->nFracDigits = self->as.number.fractionalDigits;
   value->isPositive_exp = self->as.number.exponent.pos;
-  value->nbigDigits_exp = self->as.number.exponent.len;
+  value->nBigDigits_exp = self->as.number.exponent.len;
   value->bigDigits_exp = self->as.number.exponent.buf;
-  assert(value->nbigDigits == 0 ? (value->bigDigits == NULL && !value->isPositive) : true);
-  assert(value->nbigDigits_exp == 0 ? (value->bigDigits_exp == NULL && !value->isPositive_exp) : true);
+  assert(value->nBigDigits == 0 ? (value->bigDigits == NULL && !value->isPositive) : true);
+  assert(value->nBigDigits_exp == 0 ? (value->bigDigits_exp == NULL && !value->isPositive_exp) : true);
   return true;
 }
 
@@ -325,7 +325,7 @@ bool eexpr_asString(const eexpr* self, eexpr_string* value) {
   if (value != NULL) {
     value->head.nBytes = self->as.string.text1.len;
     value->head.utf8str = self->as.string.text1.bytes;
-    value->nsubexprs = self->as.string.parts.len;
+    value->nSubexprs = self->as.string.parts.len;
     value->tail = self->as.string.parts.data;
   }
   return true;
@@ -349,9 +349,9 @@ bool eexpr_asBrace(const eexpr* self, eexpr** subexpr) {
   return true;
 }
 
-bool eexpr_asBlock(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs) {
+bool eexpr_asBlock(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs) {
   if (self->type != EEXPR_BLOCK) { return false; }
-  if (nsubexprs != NULL) { *nsubexprs = self->as.list.len; }
+  if (nSubexprs != NULL) { *nSubexprs = self->as.list.len; }
   if (subexprs != NULL) { *subexprs = self->as.list.data; }
   return true;
 }
@@ -362,16 +362,16 @@ bool eexpr_asPredot(const eexpr* self, eexpr** subexpr) {
   return true;
 }
 
-bool eexpr_asChain(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs) {
+bool eexpr_asChain(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs) {
   if (self->type != EEXPR_CHAIN) { return false; }
-  if (nsubexprs != NULL) { *nsubexprs = self->as.list.len; }
+  if (nSubexprs != NULL) { *nSubexprs = self->as.list.len; }
   if (subexprs != NULL) { *subexprs = self->as.list.data; }
   return true;
 }
 
-bool eexpr_asSpace(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs) {
+bool eexpr_asSpace(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs) {
   if (self->type != EEXPR_SPACE) { return false; }
-  if (nsubexprs != NULL) { *nsubexprs = self->as.list.len; }
+  if (nSubexprs != NULL) { *nSubexprs = self->as.list.len; }
   if (subexprs != NULL) { *subexprs = self->as.list.data; }
   return true;
 }
@@ -392,16 +392,16 @@ bool eexpr_asColon(const eexpr* self, eexpr** before, eexpr** after) {
   return true;
 }
 
-bool eexpr_asComma(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs) {
+bool eexpr_asComma(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs) {
   if (self->type != EEXPR_COMMA) { return false; }
-  if (nsubexprs != NULL) { *nsubexprs = self->as.list.len; }
+  if (nSubexprs != NULL) { *nSubexprs = self->as.list.len; }
   if (subexprs != NULL) { *subexprs = self->as.list.data; }
   return true;
 }
 
-bool eexpr_asSemicolon(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs) {
+bool eexpr_asSemicolon(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs) {
   if (self->type != EEXPR_SEMICOLON) { return false; }
-  if (nsubexprs != NULL) { *nsubexprs = self->as.list.len; }
+  if (nSubexprs != NULL) { *nSubexprs = self->as.list.len; }
   if (subexprs != NULL) { *subexprs = self->as.list.data; }
   return true;
 }
@@ -439,12 +439,12 @@ bool eexpr_tokenAsNumber(const eexpr_token* self, eexpr_number* value) {
           ? (self->as.number.exponent.buf == NULL && !self->as.number.exponent.pos)
           : true);
     value->isPositive = self->as.number.mantissa.pos;
-    value->nbigDigits = self->as.number.mantissa.len;
+    value->nBigDigits = self->as.number.mantissa.len;
     value->bigDigits = self->as.number.mantissa.buf;
     value->radix = self->as.number.radix;
-    value->nfracDigits = self->as.number.fractionalDigits;
+    value->nFracDigits = self->as.number.fractionalDigits;
     value->isPositive_exp = self->as.number.exponent.pos;
-    value->nbigDigits_exp = self->as.number.exponent.len;
+    value->nBigDigits_exp = self->as.number.exponent.len;
     value->bigDigits_exp = self->as.number.exponent.buf;
   }
   return true;

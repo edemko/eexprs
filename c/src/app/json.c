@@ -84,24 +84,24 @@ void fdumpToken(FILE* fp, const eexpr_token* tok) {
     case EEXPR_TOK_NUMBER: {
       eexpr_number num; eexpr_tokenAsNumber(tok, &num);
       {
-        bigint mantissa = {.pos = num.isPositive, .len = num.nbigDigits, .buf = num.bigDigits};
+        bigint mantissa = {.pos = num.isPositive, .len = num.nBigDigits, .buf = num.bigDigits};
         str tmp = bigint_toDecimal(mantissa);
-        fprintf(fp, ",\"type\":\"number\",\"%s\":", num.nfracDigits ? "value" : "mantissa");
+        fprintf(fp, ",\"type\":\"number\",\"%s\":", num.nFracDigits ? "value" : "mantissa");
         fdumpStr(fp, tmp);
         free(tmp.bytes);
       }
       if (num.radix != 10) {
         fprintf(fp, ",\"radix\":%d", num.radix);
       }
-      if (num.nfracDigits != 0 || num.nbigDigits_exp != 0) {
+      if (num.nFracDigits != 0 || num.nBigDigits_exp != 0) {
         fprintf(fp, ",\"exponent\":{");
         bool needsComma = false;
-        if (num.nfracDigits != 0) {
-          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", num.nfracDigits);
+        if (num.nFracDigits != 0) {
+          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", num.nFracDigits);
           needsComma = true;
         }
-        if (num.nbigDigits_exp != 0) {
-          bigint exponent = {.pos = num.isPositive_exp, .len = num.nbigDigits_exp, .buf = num.bigDigits_exp};
+        if (num.nBigDigits_exp != 0) {
+          bigint exponent = {.pos = num.isPositive_exp, .len = num.nBigDigits_exp, .buf = num.bigDigits_exp};
           str tmp = bigint_toDecimal(exponent);
           fprintf(fp, "%s\"explicit\":", needsComma ? "," : "");
           fdumpStr(fp, tmp);
@@ -142,11 +142,11 @@ void fdumpToken(FILE* fp, const eexpr_token* tok) {
       eexpr_tokenAsWrap(tok, &type, &isOpen);
       const char* family;
       switch (type) {
-        case WRAP_PAREN: family = "paren"; break;
-        case WRAP_BRACE: family = "brace"; break;
-        case WRAP_BRACK: family = "bracket"; break;
-        case WRAP_BLOCK: family = "indent"; break;
-        case WRAP_NULL: assert(false);
+        case EEXPR_WRAP_PAREN: family = "paren"; break;
+        case EEXPR_WRAP_BRACE: family = "brace"; break;
+        case EEXPR_WRAP_BRACK: family = "bracket"; break;
+        case EEXPR_WRAP_BLOCK: family = "indent"; break;
+        case EEXPR_WRAP_NULL: assert(false);
       }
       const char* open = isOpen ? "true" : "false";
       fprintf(fp, ",\"type\":\"wrap\",\"family\":\"%s\",\"open\":%s", family, open);
@@ -239,26 +239,26 @@ void fdumpEexpr(FILE* fp, int indent, const eexpr* x) {
     case EEXPR_NUMBER: {
       eexpr_number num; eexpr_asNumber(x, &num);
       {
-        bigint mantissa = {.pos = num.isPositive, .len = num.nbigDigits, .buf = num.bigDigits};
+        bigint mantissa = {.pos = num.isPositive, .len = num.nBigDigits, .buf = num.bigDigits};
         str tmp = bigint_toDecimal(mantissa);
         fprintf( fp, "\n%*s, \"type\":\"number\",\"%s\":"
                , indent, ""
-               , num.nfracDigits == 0 ? "value" : "mantissa");
+               , num.nFracDigits == 0 ? "value" : "mantissa");
         fdumpStr(fp, tmp);
         free(tmp.bytes);
       }
       if (num.radix != 10) {
         fprintf(fp, ",\"radix\":%d", num.radix);
       }
-      if (num.nfracDigits != 0 || num.nbigDigits_exp != 0) {
+      if (num.nFracDigits != 0 || num.nBigDigits_exp != 0) {
         fprintf(fp, ",\"exponent\":{");
         bool needsComma = false;
-        if (num.nfracDigits != 0) {
-          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", num.nfracDigits);
+        if (num.nFracDigits != 0) {
+          fprintf(fp, "%s\"fractional\":-%"PRIu32, needsComma ? "," : "", num.nFracDigits);
           needsComma = true;
         }
-        if (num.nbigDigits_exp != 0) {
-          bigint exponent = {.pos = num.isPositive_exp, .len = num.nbigDigits_exp, .buf = num.bigDigits_exp};
+        if (num.nBigDigits_exp != 0) {
+          bigint exponent = {.pos = num.isPositive_exp, .len = num.nBigDigits_exp, .buf = num.bigDigits_exp};
           str tmp = bigint_toDecimal(exponent);
           fprintf(fp, "%s\"explicit\":", needsComma ? "," : "");
           fdumpStr(fp, tmp);
@@ -270,14 +270,14 @@ void fdumpEexpr(FILE* fp, int indent, const eexpr* x) {
     case EEXPR_STRING: {
       eexpr_string s; eexpr_asString(x, &s);
       fprintf(fp, "\n%*s, \"type\":\"string\"", indent, "");
-      if (s.nsubexprs == 0) {
+      if (s.nSubexprs == 0) {
         fprintf(fp, ",\"text\":");
         fdumpStrn(fp, s.head.nBytes, s.head.utf8str);
       }
       else {
         fprintf(fp, ",\"template\":\n%*s[ ", indent+2, "");
         fdumpStrn(fp, s.head.nBytes, s.head.utf8str);
-        for (size_t i = 0; i < s.nsubexprs; ++i) {
+        for (size_t i = 0; i < s.nSubexprs; ++i) {
           fprintf(fp, "\n%*s, ", indent+2, "");
           fdumpEexpr(fp, indent+4, s.tail[i].subexpr);
           fprintf(fp, "\n%*s, ", indent+2, "");
@@ -389,96 +389,102 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
          , err->loc.end.col + 1
          );
   switch (err->type) {
-    case EEXPRERR_NOERROR: { assert(false); }; break;
-    case EEXPRERR_BAD_BYTES: {
+    case EEXPR_ERR_NOERROR: { assert(false); }; break;
+    case EEXPR_ERR_BAD_BYTES: {
       fprintf(fp, ",\"type\":\"bad-bytes\"");
     }; break;
-    case EEXPRERR_BAD_CHAR: {
+    case EEXPR_ERR_BAD_CHAR: {
       fprintf(fp, ",\"type\":\"bad-char\",\"input\":");
       fdumpChar(fp, err->as.badChar);
     }; break;
-    case EEXPRERR_MIXED_SPACE: {
+    case EEXPR_ERR_MIXED_SPACE: {
       fprintf(fp, ",\"type\":\"mixed-space\"");
     }; break;
-    case EEXPRERR_MIXED_NEWLINES: {
+    case EEXPR_ERR_MIXED_NEWLINES: {
       fprintf(fp, ",\"type\":\"mixed-newlines\"");
     }; break;
-    case EEXPRERR_BAD_DIGIT_SEPARATOR: {
+    case EEXPR_ERR_BAD_DIGIT_SEPARATOR: {
       fprintf(fp, ",\"type\":\"bad-digit-separator\"");
     }; break;
-    case EEXPRERR_MISSING_EXPONENT: {
+    case EEXPR_ERR_MISSING_EXPONENT: {
       fprintf(fp, ",\"type\":\"missing-exponent\"");
     }; break;
-    case EEXPRERR_BAD_EXPONENT_SIGN: {
+    case EEXPR_ERR_BAD_EXPONENT_SIGN: {
       fprintf(fp, ",\"type\":\"bad-exponent-sign\"");
     }; break;
-    case EEXPRERR_BAD_ESCAPE_CHAR: {
+    case EEXPR_ERR_BAD_ESCAPE_CHAR: {
       fprintf(fp, ",\"type\":\"bad-escape-char\",\"input\":");
       fdumpChar(fp, err->as.badEscapeChar);
     }; break;
-    case EEXPRERR_BAD_ESCAPE_CODE: {
+    case EEXPR_ERR_BAD_ESCAPE_CODE: {
       fprintf(fp, ",\"type\":\"bad-escape-code\",\"input\":\"");
       for (size_t i = 0; i < 6; ++i) {
         fjsonEscapeChar(fp, err->as.badEscapeCode[i]);
       }
       fprintf(fp, "\"");
     }; break;
-    case EEXPRERR_UNICODE_OVERFLOW: {
+    case EEXPR_ERR_UNICODE_OVERFLOW: {
       fprintf(fp, ",\"type\":\"unicode-overflow\",\"value\":%"PRIi32, err->as.unicodeOverflow);
     }; break;
-    case EEXPRERR_BAD_STRING_CHAR: {
+    case EEXPR_ERR_BAD_STRING_CHAR: {
       fprintf(fp, ",\"type\":\"bad-string-char\",\"input\":");
       fdumpChar(fp, err->as.badStringChar);
     }; break;
-    case EEXPRERR_MISSING_LINE_PICKUP: {
+    case EEXPR_ERR_MISSING_LINE_PICKUP: {
       fprintf(fp, ",\"type\":\"missing-line-pickup\"");
     }; break;
-    case EEXPRERR_UNCLOSED_STRING: {
+    case EEXPR_ERR_UNCLOSED_STRING: {
       fprintf(fp, ",\"type\":\"unclosed-string\"");
     }; break;
-    case EEXPRERR_UNCLOSED_MULTILINE_STRING: {
+    case EEXPR_ERR_UNCLOSED_MULTILINE_STRING: {
       fprintf(fp, ",\"type\":\"unclosed-multiline-string\"");
     }; break;
-    case EEXPRERR_MIXED_INDENTATION: {
-    case EEXPRERR_HEREDOC_BAD_OPEN: {
+    case EEXPR_ERR_MIXED_INDENTATION: {
+    case EEXPR_ERR_HEREDOC_BAD_OPEN: {
       fprintf(fp, ",\"type\":\"heredoc-bad-open\"");
     }; break;
-    case EEXPRERR_HEREDOC_BAD_INDENT_DEFINITION: {
+    case EEXPR_ERR_HEREDOC_BAD_INDENT_DEFINITION: {
       fprintf(fp, ",\"type\":\"heredoc-bad-indent-definition\"");
     }; break;
-    case EEXPRERR_HEREDOC_BAD_INDENTATION: {
+    case EEXPR_ERR_HEREDOC_BAD_INDENTATION: {
       fprintf(fp, ",\"type\":\"heredoc-bad-indentation\"");
     }; break;
-      fprintf(fp, ",\"type\":\"mixed-indentation\",\"established\":{\"codepoint\":");
-      fdumpChar(fp, err->as.mixedIndentation.chr);
+      fprintf(fp, ",\"type\":\"mixed-indentation\",\"established\":{\"type\":");
+      char32_t c;
+      switch (err->as.mixedIndentation.establishedType) {
+        case EEXPR_INDENT_SPACES: c = ' '; break;
+        case EEXPR_INDENT_TABS: c = '\t'; break;
+        case EEXPR_INDENT_NULL: assert(false); break;
+      }
+      fdumpChar(fp, c);
       fprintf(fp, ",\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}}"
-         , err->as.mixedIndentation.loc.start.line + 1
-         , err->as.mixedIndentation.loc.start.col + 1
-         , err->as.mixedIndentation.loc.end.line + 1
-         , err->as.mixedIndentation.loc.end.col + 1
+         , err->as.mixedIndentation.establishedAt.start.line + 1
+         , err->as.mixedIndentation.establishedAt.start.col + 1
+         , err->as.mixedIndentation.establishedAt.end.line + 1
+         , err->as.mixedIndentation.establishedAt.end.col + 1
          );
     }; break;
-    case EEXPRERR_TRAILING_SPACE: {
+    case EEXPR_ERR_TRAILING_SPACE: {
       fprintf(fp, ",\"type\":\"trailing-space\"");
     }; break;
-    case EEXPRERR_NO_TRAILING_NEWLINE: {
+    case EEXPR_ERR_NO_TRAILING_NEWLINE: {
       fprintf(fp, ",\"type\":\"no-trailing-newline\"");
     }; break;
-    case EEXPRERR_SHALLOW_INDENT: {
+    case EEXPR_ERR_SHALLOW_INDENT: {
       fprintf(fp, ",\"type\":\"shallow-indent\"");
     }; break;
-    case EEXPRERR_OFFSIDES: {
+    case EEXPR_ERR_OFFSIDES: {
       fprintf(fp, ",\"type\":\"offsides\"");
     }; break;
-    case EEXPRERR_BAD_DOT: {
+    case EEXPR_ERR_BAD_DOT: {
       fprintf(fp, ",\"type\":\"bad-dot\"");
     }; break;
-    case EEXPRERR_CRAMMED_TOKENS: {
+    case EEXPR_ERR_CRAMMED_TOKENS: {
       fprintf(fp, ",\"type\":\"crammed-tokens\"");
     }; break;
-    case EEXPRERR_UNBALANCED_WRAP: {
+    case EEXPR_ERR_UNBALANCED_WRAP: {
       fprintf(fp, ",\"type\":\"unbalanced-wrap\"");
-      if (err->as.unbalancedWrap.type != WRAP_NULL) {
+      if (err->as.unbalancedWrap.type != EEXPR_WRAP_NULL) {
         fprintf(fp, ",\"unclosed\":{\"open\":");
         fdumpChar(fp, err->as.unbalancedWrap.type);
         fprintf(fp, ",\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}}"
@@ -492,13 +498,13 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
         fprintf(fp, ",\"unopened\":true}");
       }
     }; break;
-    case EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT: {
+    case EEXPR_ERR_EXPECTING_NEWLINE_OR_DEDENT: {
       fprintf(fp, ",\"type\":\"expect-newline-or-dedent\"");
     }; break;
-    case EEXPRERR_MISSING_TEMPLATE_EXPR: {
+    case EEXPR_ERR_MISSING_TEMPLATE_EXPR: {
       fprintf(fp, ",\"type\":\"missing-template-expr\"");
     }; break;
-    case EEXPRERR_MISSING_CLOSE_TEMPLATE: {
+    case EEXPR_ERR_MISSING_CLOSE_TEMPLATE: {
       fprintf(fp, ",\"type\":\"missing-close-template\"");
     }; break;
   }

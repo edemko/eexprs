@@ -37,7 +37,7 @@ void ensureTrailingNewline(engine* st) {
   if ( penultimate != NULL
     && penultimate->here.type != EEXPR_TOK_UNKNOWN_NEWLINE
      ) {
-    eexpr_error err = {.loc = ultimate->here.loc, .type = EEXPRERR_NO_TRAILING_NEWLINE};
+    eexpr_error err = {.loc = ultimate->here.loc, .type = EEXPR_ERR_NO_TRAILING_NEWLINE};
     dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
   }
 }
@@ -58,7 +58,7 @@ void ignoreTrailingStuff(engine* st) {
         || strm->next->here.type == EEXPR_TOK_EOF
          ) {
         strm->here.transparent = true;
-        eexpr_error err = {.loc = strm->here.loc, .type = EEXPRERR_TRAILING_SPACE};
+        eexpr_error err = {.loc = strm->here.loc, .type = EEXPR_ERR_TRAILING_SPACE};
         dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
       }
       else if (strm->here.as.unknownSpace.type == EEXPR_WSLINECONTINUE) {
@@ -131,7 +131,7 @@ void disambiguateDots(engine* st) {
         strm->here.type = EEXPR_TOK_PREDOT;
       }
       else {
-        eexpr_error err = {.loc = strm->here.loc, .type = EEXPRERR_BAD_DOT};
+        eexpr_error err = {.loc = strm->here.loc, .type = EEXPR_ERR_BAD_DOT};
         dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
       }
     }
@@ -225,7 +225,7 @@ bool insertDedents(engine* st, dynarr_size_t* depths, dllistNode_eexpr_token* en
   while (true) {
     size_t depth = indentState_peek(depths);
     if (newDepth < depth) {
-      eexpr_token tok = {.loc = loc, .type = EEXPR_TOK_WRAP, .as.wrap = {.type = WRAP_BLOCK, .isOpen = false}};
+      eexpr_token tok = {.loc = loc, .type = EEXPR_TOK_WRAP, .as.wrap = {.type = EEXPR_WRAP_BLOCK, .isOpen = false}};
       lexer_insertBefore(st, &tok, insertPoint);
       indentState_pop(depths);
     }
@@ -243,7 +243,7 @@ bool insertDedents(engine* st, dynarr_size_t* depths, dllistNode_eexpr_token* en
       return true;
     }
     else {
-      eexpr_error err = {.loc = loc, .type = EEXPRERR_OFFSIDES};
+      eexpr_error err = {.loc = loc, .type = EEXPR_ERR_OFFSIDES};
       dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
       return false;
     }
@@ -284,13 +284,13 @@ bool detectIndentation(engine* st) {
       size_t depth0 = indentState_peek(&depths);
       if (depth > depth0) {
         dynarr_push_size_t(&depths, &depth);
-        eexpr_token tok = {.loc = loc, .type = EEXPR_TOK_WRAP, .as.wrap = {.type = WRAP_BLOCK, .isOpen = true}};
+        eexpr_token tok = {.loc = loc, .type = EEXPR_TOK_WRAP, .as.wrap = {.type = EEXPR_WRAP_BLOCK, .isOpen = true}};
         lexer_insertBefore(st, &tok, next);
         strm->here.transparent = true;
         success = true;
       }
       else {
-        eexpr_error err = {.loc = loc, .type = EEXPRERR_SHALLOW_INDENT};
+        eexpr_error err = {.loc = loc, .type = EEXPR_ERR_SHALLOW_INDENT};
         dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
         success = false;
       }
@@ -353,7 +353,7 @@ void detectCramming(engine* st) {
     eexpr_tokenType nextType = next->here.type;
     bool nextIsDotLike = nextType == EEXPR_TOK_ELLIPSIS || nextType == EEXPR_TOK_CHAIN || nextType == EEXPR_TOK_PREDOT;
     eexpr_loc loc = {.start = strm->here.loc.start, .end = next->here.loc.end};
-    eexpr_error err = {.loc = loc, .type = EEXPRERR_CRAMMED_TOKENS};
+    eexpr_error err = {.loc = loc, .type = EEXPR_ERR_CRAMMED_TOKENS};
     if (hereIsDotLike && nextIsDotLike) {
       dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }

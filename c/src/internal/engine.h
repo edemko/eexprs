@@ -31,7 +31,7 @@ typedef struct engine {
   newlineType discoveredNewline; // NEWLINE_NONE if not set
   struct lexer_indent {
     bool knownMixed;
-    char32_t chr; // UCHAR_NULL when indentation is not yet established
+    eexpr_indentType type;
     eexpr_loc established;
   } indent;
   dynarr_openWrap wrapStack;

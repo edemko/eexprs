@@ -29,7 +29,18 @@ It's going in `include/`, but I have not documented that fact.
   - [ ] fuzz it
   - [ ] sanitize (at least for undefined behavior)
 - [ ] check `TODO`/`FIXME` again
-- [ ] perhaps I should allow "fat colon" `::` in the grammar
+- [ ] perhaps I should allow "fat colon" `::` in the grammar (perhaps similar to dot: fat chain vs. fat colon)
+- [ ] write a "standards document" for the eexpr grammar
+
+I should consider the next technical step.
+I'd like to expose the C API into Haskell and write a wrapper around it.
+I think I'd also like to include support for mixfixes, maybe even directly in this library., but probably a prototype in Haskell first.
+I do thin kit's important to have mixfixes implemented before I start building programming languages, though I could likely write some markup langs (better html, xcompose database, and importantly, a mixfix specification language).
+I think that settles it:
+
+> Create haskell bindings, then implement mixfix rewriting and a mixfix specification language and mixfix compiler.
+
+A related transformation I'd like to do is switching between variants of symbols, esp. ascii vs. unicode.
 
 ## Building
 

@@ -83,6 +83,7 @@ bool isSpaceChar(char32_t c);
 bool isNewlineChar(char32_t c);
 
 eexpr_spaceType decodeSpaceChar(char32_t c);
+eexpr_indentType decodeIndentChar(char32_t c);
 
 
 typedef enum newlineType {

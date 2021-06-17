@@ -217,6 +217,13 @@ eexpr_spaceType decodeSpaceChar(char32_t c) {
     default: assert(false);
   }
 }
+eexpr_indentType decodeIndentChar(char32_t c) {
+  switch (c) {
+    case ' ': return EEXPR_INDENT_SPACES;
+    case '\t': return EEXPR_INDENT_TABS;
+    default: assert(false);
+  }
+}
 
 bool isNewlineChar(char32_t c) {
   return ('\n' == c)
@@ -291,13 +298,13 @@ struct untilEol untilEol(str in) {
 
 eexpr_wrapType isWrapChar(char32_t c) {
   switch(c) {
-    case '(': return WRAP_PAREN;
-    case ')': return WRAP_PAREN;
-    case '[': return WRAP_BRACK;
-    case ']': return WRAP_BRACK;
-    case '{': return WRAP_BRACE;
-    case '}': return WRAP_BRACE;
-    default: return WRAP_NULL;
+    case '(': return EEXPR_WRAP_PAREN;
+    case ')': return EEXPR_WRAP_PAREN;
+    case '[': return EEXPR_WRAP_BRACK;
+    case ']': return EEXPR_WRAP_BRACK;
+    case '{': return EEXPR_WRAP_BRACE;
+    case '}': return EEXPR_WRAP_BRACE;
+    default: return EEXPR_WRAP_NULL;
   }
 }
 bool isOpenWrap(char32_t c) {

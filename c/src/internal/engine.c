@@ -21,11 +21,11 @@ void engine_init(engine* it) {
     dynarr_init_eexpr_p(&it->eexprStream, 64);
     it->tokStream = dllist_empty_eexpr_token();
     it->errStream = dllist_empty_eexpr_error();
-    it->fatal.type = EEXPRERR_NOERROR;
+    it->fatal.type = EEXPR_ERR_NOERROR;
   }
   {
     it->discoveredNewline = NEWLINE_NONE;
-    it->indent.chr = UCHAR_NULL;
+    it->indent.type = EEXPR_INDENT_NULL;
     it->indent.knownMixed = false;
     dynarr_init_openWrap(&it->wrapStack, 30);
   }
@@ -46,7 +46,7 @@ void engine_deinit(engine* it) {
   it->rest.len = 0;
   dynarr_deinit_openWrap(&it->wrapStack);
   // WARNING I'm assuming there's no owned pointer data in error
-  it->fatal.type = EEXPRERR_NOERROR;
+  it->fatal.type = EEXPR_ERR_NOERROR;
   dllist_del_eexpr_error(&it->errStream);
 
   for (dllistNode_eexpr_token* node = it->tokStream.start; node != NULL; node = node->next) {

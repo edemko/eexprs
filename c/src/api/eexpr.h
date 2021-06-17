@@ -32,7 +32,7 @@ Every identifier in this interface begins with either `eexpr_` or `EXPR_` (with 
 #define EEXPR_VERSION_PATCH 0
 
 
-typedef struct eexpr_token eexpr_token; // FIXME I need to expose a good (minimal) token type
+typedef struct eexpr_token eexpr_token;
 
 typedef struct eexpr eexpr;
 typedef struct eexpr_error eexpr_error;
@@ -206,13 +206,11 @@ Only *you* have the power to prevent forest fires^W^W^W alias these pointers.
 Unless otherwise noted, the pointers input to or output from these functions are non-null.
 */
 
-// FIXME look for any nblahBlah and change to nBlahBlah
-
 bool eexpr_asSymbol(const eexpr* self, size_t* nBytes, uint8_t** utf8str);
 
 // Since numerical eexprs can easily outstrip the representational power of fixed-size machine formats,
 //   eexprs have to represent these numbers as bignums.
-// The numerical value is given by `significand * radix^(exp - nfracDigits)`;
+// The numerical value is given by `significand * radix^(exp - nFracDigits)`;
 //   see the individual members for calulating each of these parts.
 // I've chosen `uint32_t` as the building block here because it makes it easy to perform carrying arithmetic:
 //   operations between `uint32_t`s can fit in the standard-required `uint64_t`.
@@ -220,11 +218,11 @@ typedef struct eexpr_number {
   ////// Significand/Mantissa Information //////
   bool isPositive;
   // The number of base-2^32 digits needed to represent the significand (non-exponent part) of this number.
-  size_t nbigDigits;
+  size_t nBigDigits;
   // Array of base-2^32 digits representing the significand of this number, little-endian.
-  // E.g. if `.nbigDigits == 2`, then the magnitude of the significand is represented is `2^32 * .bigDigits[1] + .bigDigits[0]`.
-  // The smallest possible number of big digits is used. I.e. `.bigDigits[.nbigDigits - 1] != 0`.
-  // If `.nbigDigits` is zero, then `.bigDigits` is `NULL`.
+  // E.g. if `.nBigDigits == 2`, then the magnitude of the significand is represented is `2^32 * .bigDigits[1] + .bigDigits[0]`.
+  // The smallest possible number of big digits is used. I.e. `.bigDigits[.nBigDigits - 1] != 0`.
+  // If `.nBigDigits` is zero, then `.bigDigits` is `NULL`.
   uint32_t* bigDigits;
   // The base that the significand was represented with in the source code.
   // If there is no fractional or exponential part, then this field has only aesthetic value.
@@ -235,14 +233,14 @@ typedef struct eexpr_number {
   //   (e.g. so that downstream can decide to use integral/fractional representations).
   // If an eexpr source includes a number with over 4GiB of fractional digits, something has very likely gone wrong.
   // Well, if you really need it, it woudl be possible to make this a bignum too, it just complicates determining the effective exponent.
-  uint32_t nfracDigits;
+  uint32_t nFracDigits;
   ////// Exponent information //////
   bool isPositive_exp;
   // The number of base-2^32 digits needed to represent the exponent of this number.
-  size_t nbigDigits_exp;
+  size_t nBigDigits_exp;
   // Array of base-32 digits needed to represent the exponent of this number, ni exactly the same format as `bigDigits`.
   // By exponent, I am referring only to the explicitly-written exponential part;
-  //   the number of digits after the decimal point is not included here, but instead represented by `nfracDigits`.
+  //   the number of digits after the decimal point is not included here, but instead represented by `nFracDigits`.
   uint32_t* bigDigits_exp;
 } eexpr_number;
 
@@ -255,7 +253,7 @@ typedef struct eexpr_string {
     uint8_t* utf8str;
   } head;
   // Length of the `tail` array in number of elements.
-  size_t nsubexprs;
+  size_t nSubexprs;
   // Array cnotaining additional subexpressions and text parts of the template.
   struct eexpr_strTemplate {
     // The subexpression to be spliced between the previous text part and `.utf8str`.
@@ -280,15 +278,15 @@ bool eexpr_asBrace(const eexpr* self, eexpr** subexpr);
 // Oof… three-star programming?
 // It's okay, subexpr is an out parameter (star three) which will hold an array (star two) of boxed (star one) eexprs.
 // So: `size_t n; eexpr** arr; eexpr_asBrace(e, n, arr);`
-bool eexpr_asBlock(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs);
+bool eexpr_asBlock(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs);
 
 bool eexpr_asPredot(const eexpr* self, eexpr** subexpr);
 
 // Oof… three-star programming? Same explanation as for `eexpr_asBlock`.
-bool eexpr_asChain(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs);
+bool eexpr_asChain(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs);
 
 // Oof… three-star programming? Same explanation as for `eexpr_asBlock`.
-bool eexpr_asSpace(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs);
+bool eexpr_asSpace(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs);
 
 // Either (or both) of the before and after outputs could be `NULL`.
 bool eexpr_asEllipsis(const eexpr* self, eexpr** before, eexpr** after);
@@ -296,10 +294,10 @@ bool eexpr_asEllipsis(const eexpr* self, eexpr** before, eexpr** after);
 bool eexpr_asColon(const eexpr* self, eexpr** before, eexpr** after);
 
 // Oof… three-star programming? Same explanation as for `eexpr_asBlock`.
-bool eexpr_asComma(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs);
+bool eexpr_asComma(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs);
 
 // Oof… three-star programming? Same explanation as for `eexpr_asBlock`.
-bool eexpr_asSemicolon(const eexpr* self, size_t* nsubexprs, eexpr*** subexprs);
+bool eexpr_asSemicolon(const eexpr* self, size_t* nSubexprs, eexpr*** subexprs);
 
 
 
@@ -334,47 +332,53 @@ eexpr_loc eexpr_locate(const eexpr* self);
 //////////////////////////////////// Parse Errors ////////////////////////////////////
 
 typedef enum eexpr_errorType {
-  EEXPRERR_NOERROR, // only for use as a sentinel; an error of this type this should never be exposed
+  EEXPR_ERR_NOERROR, // only for use as a sentinel; an error of this type this should never be exposed
   // raw lexing errors
-  EEXPRERR_BAD_BYTES,
-  EEXPRERR_BAD_CHAR,
-  EEXPRERR_MIXED_SPACE,
-  EEXPRERR_MIXED_NEWLINES,
-  EEXPRERR_BAD_DIGIT_SEPARATOR,
-  EEXPRERR_MISSING_EXPONENT,
-  EEXPRERR_BAD_EXPONENT_SIGN,
-  EEXPRERR_BAD_ESCAPE_CHAR,
-  EEXPRERR_BAD_ESCAPE_CODE,
-  EEXPRERR_UNICODE_OVERFLOW,
-  EEXPRERR_BAD_STRING_CHAR,
-  EEXPRERR_MISSING_LINE_PICKUP,
-  EEXPRERR_UNCLOSED_STRING,
-  EEXPRERR_UNCLOSED_MULTILINE_STRING,
-  EEXPRERR_HEREDOC_BAD_OPEN,
-  EEXPRERR_HEREDOC_BAD_INDENT_DEFINITION,
-  EEXPRERR_HEREDOC_BAD_INDENTATION,
-  EEXPRERR_MIXED_INDENTATION,
+  EEXPR_ERR_BAD_BYTES,
+  EEXPR_ERR_BAD_CHAR,
+  EEXPR_ERR_MIXED_SPACE,
+  EEXPR_ERR_MIXED_NEWLINES,
+  EEXPR_ERR_BAD_DIGIT_SEPARATOR,
+  EEXPR_ERR_MISSING_EXPONENT,
+  EEXPR_ERR_BAD_EXPONENT_SIGN,
+  EEXPR_ERR_BAD_ESCAPE_CHAR,
+  EEXPR_ERR_BAD_ESCAPE_CODE,
+  EEXPR_ERR_UNICODE_OVERFLOW,
+  EEXPR_ERR_BAD_STRING_CHAR,
+  EEXPR_ERR_MISSING_LINE_PICKUP,
+  EEXPR_ERR_UNCLOSED_STRING,
+  EEXPR_ERR_UNCLOSED_MULTILINE_STRING,
+  EEXPR_ERR_HEREDOC_BAD_OPEN,
+  EEXPR_ERR_HEREDOC_BAD_INDENT_DEFINITION,
+  EEXPR_ERR_HEREDOC_BAD_INDENTATION,
+  EEXPR_ERR_MIXED_INDENTATION,
   // cooking errors
-  EEXPRERR_TRAILING_SPACE,
-  EEXPRERR_NO_TRAILING_NEWLINE,
-  EEXPRERR_SHALLOW_INDENT,
-  EEXPRERR_OFFSIDES,
-  EEXPRERR_BAD_DOT,
-  EEXPRERR_CRAMMED_TOKENS,
+  EEXPR_ERR_TRAILING_SPACE,
+  EEXPR_ERR_NO_TRAILING_NEWLINE,
+  EEXPR_ERR_SHALLOW_INDENT,
+  EEXPR_ERR_OFFSIDES,
+  EEXPR_ERR_BAD_DOT,
+  EEXPR_ERR_CRAMMED_TOKENS,
   // parser errors
-  EEXPRERR_UNBALANCED_WRAP,
-  EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT,
-  EEXPRERR_MISSING_TEMPLATE_EXPR,
-  EEXPRERR_MISSING_CLOSE_TEMPLATE
+  EEXPR_ERR_UNBALANCED_WRAP,
+  EEXPR_ERR_EXPECTING_NEWLINE_OR_DEDENT,
+  EEXPR_ERR_MISSING_TEMPLATE_EXPR,
+  EEXPR_ERR_MISSING_CLOSE_TEMPLATE
 } eexpr_errorType;
 
 typedef enum eexpr_wrapType {
-  WRAP_NULL,
-  WRAP_PAREN,
-  WRAP_BRACK,
-  WRAP_BRACE,
-  WRAP_BLOCK
+  EEXPR_WRAP_NULL, // only used internally
+  EEXPR_WRAP_PAREN,
+  EEXPR_WRAP_BRACK,
+  EEXPR_WRAP_BRACE,
+  EEXPR_WRAP_BLOCK
 } eexpr_wrapType;
+
+typedef enum eexpr_indentType {
+  EEXPR_INDENT_NULL, // only used internally
+  EEXPR_INDENT_SPACES,
+  EEXPR_INDENT_TABS
+} eexpr_indentType;
 
 struct eexpr_error {
   eexpr_loc loc;
@@ -386,8 +390,8 @@ struct eexpr_error {
     uint32_t unicodeOverflow;
     char32_t badStringChar;
     struct eexpr_mixedIndentationInfo {
-      char32_t chr; // FIXME use an indentation type enum
-      eexpr_loc loc;
+      eexpr_indentType establishedType;
+      eexpr_loc establishedAt;
     } mixedIndentation;
     struct eexpr_unbalancedWrapInfo {
       eexpr_wrapType type; // what close wrap was left open, or WRAP_NULL for start-of-file

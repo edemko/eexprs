@@ -85,7 +85,7 @@ function mkSharedApp() {
     -I src/app -I src/shim \
     src/shim/*.c src/app/*.c \
     -I src/api -L bin/shared -l eexpr \
-    -o bin/eexpr2json-shared
+    -o bin/shared/eexpr2json
 }
 
 function mkStaticLibrary() {

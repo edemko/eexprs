@@ -9,12 +9,12 @@
 
 static
 void mkUnbalanceError(engine* st) {
-  if (st->fatal.type != EEXPRERR_NOERROR) { return; }
+  if (st->fatal.type != EEXPR_ERR_NOERROR) { return; }
   eexpr_token* lookahead = parser_peek(st);
-  st->fatal.type = EEXPRERR_UNBALANCED_WRAP;
+  st->fatal.type = EEXPR_ERR_UNBALANCED_WRAP;
   st->fatal.loc = lookahead->loc;
   if (st->wrapStack.len == 0) {
-    st->fatal.as.unbalancedWrap.type = WRAP_NULL;
+    st->fatal.as.unbalancedWrap.type = EEXPR_WRAP_NULL;
   }
   else {
     const openWrap* match = dynarr_peek_openWrap(&st->wrapStack);
@@ -49,23 +49,23 @@ eexpr* parseWrap(engine* st) {
   {
     openWrap openInfo = {.loc = open->loc, .type = open->as.wrap.type};
     switch (open->as.wrap.type) {
-      case WRAP_NULL: assert(false);
-      case WRAP_PAREN: {
+      case EEXPR_WRAP_NULL: assert(false);
+      case EEXPR_WRAP_PAREN: {
         dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_PAREN;
         goto nonIndent;
       }; break;
-      case WRAP_BRACK: {
+      case EEXPR_WRAP_BRACK: {
         dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_BRACK;
         goto nonIndent;
       }; break;
-      case WRAP_BRACE: {
+      case EEXPR_WRAP_BRACE: {
         dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_BRACE;
         goto nonIndent;
       }; break;
-      case WRAP_BLOCK: {
+      case EEXPR_WRAP_BLOCK: {
         dynarr_push_openWrap(&st->wrapStack, &openInfo);
         out->type = EEXPR_BLOCK;
         goto indent;
@@ -119,7 +119,7 @@ eexpr* parseWrap(engine* st) {
         parser_pop(st);
       }
       else {
-        eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_EXPECTING_NEWLINE_OR_DEDENT};
+        eexpr_error err = {.loc = lookahead->loc, .type = EEXPR_ERR_EXPECTING_NEWLINE_OR_DEDENT};
         dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
         return out;
       }
@@ -185,7 +185,7 @@ eexpr* parseTemplate(engine* st) {
           out->loc.end = part.subexpr->loc.end;
         }
         else {
-          eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_TEMPLATE_EXPR};
+          eexpr_error err = {.loc = lookahead->loc, .type = EEXPR_ERR_MISSING_TEMPLATE_EXPR};
           if ( lookahead->type == EEXPR_TOK_STRING
             && (lookahead->as.string.splice == EEXPR_STRMIDDLE || lookahead->as.string.splice == EEXPR_STRCLOSE)
              ) {
@@ -226,7 +226,7 @@ eexpr* parseTemplate(engine* st) {
             part.nBytes = 0; part.utf8str = NULL;
             dynarr_push_strTemplPart(&out->as.string.parts, &part);
           }
-          eexpr_error err = {.loc = lookahead->loc, .type = EEXPRERR_MISSING_CLOSE_TEMPLATE};
+          eexpr_error err = {.loc = lookahead->loc, .type = EEXPR_ERR_MISSING_CLOSE_TEMPLATE};
           dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           return out;
         }
@@ -600,7 +600,7 @@ void parseLine(engine* st) {
         switch (tok->type) {
           case EEXPR_TOK_EOF: return;
           case EEXPR_TOK_WRAP: {
-            if (tok->as.wrap.type == WRAP_BLOCK) {
+            if (tok->as.wrap.type == EEXPR_WRAP_BLOCK) {
               if (tok->as.wrap.isOpen) { depth += 1; }
               else { depth -= 1; }
             }
@@ -617,7 +617,7 @@ void parseLine(engine* st) {
         }
         // but if there's an indent, we'll need to go through matching depths again
         else if ( tok->type == EEXPR_TOK_WRAP
-               && tok->as.wrap.type == WRAP_BLOCK
+               && tok->as.wrap.type == EEXPR_WRAP_BLOCK
                && tok->as.wrap.isOpen
                 ) {
           depth += 1;
@@ -634,7 +634,7 @@ void parseLine(engine* st) {
 
 void engine_parse(engine* st) {
   bool atStart = true;
-  while (st->fatal.type == EEXPRERR_NOERROR) {
+  while (st->fatal.type == EEXPR_ERR_NOERROR) {
     eexpr_token* lookahead = parser_peek(st);
     switch (lookahead->type) {
       case EEXPR_TOK_NEWLINE: {
