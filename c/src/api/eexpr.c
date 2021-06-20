@@ -182,6 +182,7 @@ void eexpr_parserInitDefault(eexpr_parser* parser) {
   parser->nWarnings = 0; parser->warnings = NULL;
   struct eexpr_parseErrorLevels opts = { false, false, false, false, false };
   parser->isError = opts;
+  parser->pauseAt = EEXPR_DO_NOT_PAUSE;
   parser->impl = NULL;
 }
 

@@ -69,6 +69,17 @@ void fdumpCStr(FILE* fp, char* s) {
   fdumpStr(fp, text);
 }
 
+const char* wrapName(eexpr_wrapType type) {
+  switch (type) {
+    case EEXPR_WRAP_PAREN: return "paren";
+    case EEXPR_WRAP_BRACE: return "brace";
+    case EEXPR_WRAP_BRACK: return "bracket";
+    case EEXPR_WRAP_BLOCK: return "indent";
+    case EEXPR_WRAP_NULL: assert(false);
+  }
+  return "";
+}
+
 void fdumpToken(FILE* fp, const eexpr_token* tok) {
   eexpr_loc loc = eexpr_tokenLocate(tok);
   fprintf(fp, "{\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}"
@@ -140,14 +151,7 @@ void fdumpToken(FILE* fp, const eexpr_token* tok) {
     case EEXPR_TOK_WRAP: {
       eexpr_wrapType type; bool isOpen;
       eexpr_tokenAsWrap(tok, &type, &isOpen);
-      const char* family;
-      switch (type) {
-        case EEXPR_WRAP_PAREN: family = "paren"; break;
-        case EEXPR_WRAP_BRACE: family = "brace"; break;
-        case EEXPR_WRAP_BRACK: family = "bracket"; break;
-        case EEXPR_WRAP_BLOCK: family = "indent"; break;
-        case EEXPR_WRAP_NULL: assert(false);
-      }
+      const char* family = wrapName(type);
       const char* open = isOpen ? "true" : "false";
       fprintf(fp, ",\"type\":\"wrap\",\"family\":\"%s\",\"open\":%s", family, open);
     }; break;
@@ -485,8 +489,7 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
     case EEXPR_ERR_UNBALANCED_WRAP: {
       fprintf(fp, ",\"type\":\"unbalanced-wrap\"");
       if (err->as.unbalancedWrap.type != EEXPR_WRAP_NULL) {
-        fprintf(fp, ",\"unclosed\":{\"open\":");
-        fdumpChar(fp, err->as.unbalancedWrap.type);
+        fprintf(fp, ",\"unclosed\":{\"open\":\"%s\"", wrapName(err->as.unbalancedWrap.type));
         fprintf(fp, ",\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}}"
            , err->as.unbalancedWrap.loc.start.line + 1
            , err->as.unbalancedWrap.loc.start.col + 1

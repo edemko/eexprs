@@ -38,6 +38,7 @@ I think I'd also like to include support for mixfixes, maybe even directly in th
 I do thin kit's important to have mixfixes implemented before I start building programming languages, though I could likely write some markup langs (better html, xcompose database, and importantly, a mixfix specification language).
 I think that settles it:
 
+> First, test (w/ valgrind) that errors do not crash the parser.
 > Create haskell bindings, then implement mixfix rewriting and a mixfix specification language and mixfix compiler.
 
 A related transformation I'd like to do is switching between variants of symbols, esp. ascii vs. unicode.

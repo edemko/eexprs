@@ -29,7 +29,7 @@ Every identifier in this interface begins with either `eexpr_` or `EXPR_` (with 
 
 #define EEXPR_VERSION_MAJOR 0
 #define EEXPR_VERSION_MINOR 1
-#define EEXPR_VERSION_PATCH 0
+#define EEXPR_VERSION_PATCH 1
 
 
 typedef struct eexpr_token eexpr_token;
@@ -78,7 +78,7 @@ typedef struct eexpr_parser {
   // Like `.errors`, this array and its contents are owned by the owner of this struct.
   eexpr_error* warnings;
   // Some conditions can be treated as either errors or warnings.
-  // When members of this struct are true, they are retained as errors, but when false (default) are demoted to errors.
+  // When members of this struct are true, they are retained as errors, but when false (default) are demoted to warnings.
   // `eexpr_parser` refuses to continue parsing if there are any errors, but does not stop for warnings.
   struct eexpr_parseErrorLevels {
     bool mixedSpace;

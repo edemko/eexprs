@@ -1,0 +1,8 @@
+{ "filename": "input.eexpr"
+, "warnings": []
+, "errors":
+  [ {"loc":{"from":{"line":1,"col":4},"to":{"line":1,"col":5}},"type":"bad-char","input":"\u0014"}
+  , {"loc":{"from":{"line":1,"col":6},"to":{"line":1,"col":6}},"type":"bad-bytes"}
+  , {"loc":{"from":{"line":1,"col":7},"to":{"line":1,"col":7}},"type":"bad-bytes"}
+  ]
+}

@@ -14,16 +14,14 @@ function runCase() {
   local case="$1"
   local oldWD="$PWD"
   cd "cases/$case/"
-  echo >&2 "running test: $case"
+  echo >&2 "$(tput bold)running test: $case$(tput sgr0)"
   if [ ! -f "README.md" ]; then
-    echo >&2 "$(tput setaf 5)[ERROR]$(tput sgr0) no description (README.md) for case $case"
-    cd "$oldWD"
-    return 255
+    echo >&2 "$(tput bold)$(tput setaf 3)[WARNING]$(tput sgr0) no description (README.md) for case $case"
   fi
   if [ ! -x "./run.sh" ]; then
-    echo >&2 "$(tput setaf 5)[ERROR]$(tput sgr0) no test (run.sh) for case $case"
+    echo >&2 "$(tput setaf 6)[SKIP]$(tput sgr0) no test (run.sh) for case $case"
     cd "$oldWD"
-    return 255
+    return 0
   fi
   for f in ./*.output; do if [ -f "$f" ]; then rm "$f"; fi; done
   ./run.sh 1>stdout.output 2>stderr.output

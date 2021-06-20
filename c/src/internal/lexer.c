@@ -42,11 +42,11 @@ bool decodeUnihex(char32_t* out, size_t nDigits, char32_t* digits) {
   `\\U[:hexDigit:]{6}`
 */
 // helper for takeCodepoint and takeString
-// returns a single char32_t, or UCHAR_NULL if no valid escape sequence is found
-// input is consumed and errors are emitted (escpe no error is emitted if no valid escape is found; allows chaining with takeStrEscape)
+// returns whether decoding advanced the parser
+// places the decoded character in `out`, or UCHAR_NULL if no valid escape sequence is found
 // call only after detecting an escapeLeader
 static
-char32_t takeCharEscape(engine* st) {
+bool takeCharEscape(engine* st, char32_t* out) {
   char32_t c;
   size_t adv;
   adv = peekUchar(&c, st->rest);
@@ -54,46 +54,62 @@ char32_t takeCharEscape(engine* st) {
   for (size_t i = 0; commonEscapes[i].source != UCHAR_NULL; ++i) {
     if (c == commonEscapes[i].source) {
       lexer_advance(st, adv, 1);
-      return commonEscapes[i].decode;
+      *out = commonEscapes[i].decode;
+      return true;
     }
   }
   char32_t digits[6] = {'0', '0', '0', '0', '0', '0'};
-  eexpr_error decodeError = {.loc = {.start = st->loc}, .type = EEXPR_ERR_BAD_ESCAPE_CODE};
+  eexpr_error decodeError = {.type = EEXPR_ERR_BAD_ESCAPE_CODE};
   if (c == twoHexEscapeLeader) {
     lexer_advance(st, adv, 1);
+    decodeError.loc.start = st->loc;
     adv = peekUchars(&digits[4], 2, st->rest);
     lexer_advance(st, adv, 2);
     if (!decodeUnihex(&c, 2, &digits[4])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; }
       dllist_insertAfter_eexpr_error(&st->errStream, NULL, &decodeError);
+      *out = UCHAR_NULL;
     }
-    return c;
+    else {
+      *out = c;
+    }
+    return true;
   }
   else if (c == fourHexEscapeLeader) {
     lexer_advance(st, adv, 1);
+    decodeError.loc.start = st->loc;
     adv = peekUchars(&digits[2], 4, st->rest);
     lexer_advance(st, adv, 4);
     if (!decodeUnihex(&c, 4, &digits[2])) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
       dllist_insertAfter_eexpr_error(&st->errStream, NULL, &decodeError);
+      *out = UCHAR_NULL;
     }
-    return c;
+    else {
+      *out = c;
+    }
+    return true;
   }
   else if (c == sixHexEscapeLeader) {
     lexer_advance(st, adv, 1);
+    decodeError.loc.start = st->loc;
     adv = peekUchars(digits, 6, st->rest);
     lexer_advance(st, adv, 6);
     if (!decodeUnihex(&c, 6, digits)) {
       decodeError.loc.end = st->loc;
       for (int i = 0; i < 6; ++i) { decodeError.as.badEscapeCode[i] = digits[i]; };
       dllist_insertAfter_eexpr_error(&st->errStream, NULL, &decodeError);
+      *out = UCHAR_NULL;
     }
-    return c;
+    else {
+      *out = c;
+    }
+    return true;
   }
   else {
-    return UCHAR_NULL;
+    return false;
   }
 }
 
@@ -205,12 +221,17 @@ bool takeWhitespace(engine* st) {
 */
 static
 bool takeLineContinue(engine* st) {
-  eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_UNKNOWN_SPACE};
+  eexpr_token tok =
+    { .loc = {.start = st->loc}
+    , .type = EEXPR_TOK_UNKNOWN_SPACE
+    , .as.unknownSpace = {.type = EEXPR_WSLINECONTINUE, .size = 0}
+    };
   {
     char32_t lookahead;
     size_t adv = peekUchar(&lookahead, st->rest);
     if (lookahead != escapeLeader) { return false; }
     lexer_advance(st, adv, 1);
+    tok.loc.end = st->loc;
   }
   tok.as.unknownSpace.type = EEXPR_WSLINECONTINUE;
   tok.as.unknownSpace.size = 0;
@@ -224,11 +245,20 @@ bool takeLineContinue(engine* st) {
         lexer_advance(st, adv, 1);
         trailingSpace = true;
       }
-      else { break; }
-    }
-    if (trailingSpace) {
-      err.loc.end = st->loc;
-      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
+      else if (isNewlineChar(c)) {
+        if (trailingSpace) {
+          err.loc.end = st->loc;
+          dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
+        }
+        break;
+      }
+      else {
+        eexpr_error err = {.loc = tok.loc, .type = EEXPR_ERR_BAD_CHAR, .as.badChar = escapeLeader};
+        dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
+        tok.loc.end = st->loc;
+        lexer_addTok(st, &tok);
+        return true;
+      }
     }
   }
   if (takeNewline(st)) {
@@ -237,9 +267,7 @@ bool takeLineContinue(engine* st) {
     lexer_addTok(st, &tok);
   }
   else {
-    eexpr_error err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = EEXPR_ERR_BAD_CHAR};
-    err.as.badChar = escapeLeader;
-    dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
+    assert(false);
   }
   return true;
 }
@@ -255,7 +283,7 @@ bool takeNewline(engine* st) {
   {
     char32_t lookahead[2];
     peekUchars(lookahead, 2, st->rest);
-    type = decodeNewline(lookahead) != 0;
+    type = decodeNewline(lookahead);
     if (type == NEWLINE_NONE) { return false; }
   }
   eexpr_token tok = {.loc = {.start = st->loc}, .type = EEXPR_TOK_UNKNOWN_NEWLINE};
@@ -268,9 +296,9 @@ bool takeNewline(engine* st) {
     }
     else {
       eexpr_error err =
-      { .loc = tok.loc
-      , .type = EEXPR_ERR_MIXED_NEWLINES
-      };
+        { .loc = tok.loc
+        , .type = EEXPR_ERR_MIXED_NEWLINES
+        };
       dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }
   }
@@ -601,11 +629,13 @@ bool takeString(engine* st) {
       if (c == escapeLeader) {
         lexer_advance(st, adv, 1);
         more = true;
-        char32_t decoded = takeCharEscape(st);
-        if (decoded != UCHAR_NULL) { // found a single-character escape
-          utf8Char encoded = encodeUchar(decoded);
-          str tmp = {.len = encoded.nbytes, .bytes = encoded.codeunits};
-          strBuilder_append(&buf, tmp);
+        char32_t decoded;
+        if (takeCharEscape(st, &decoded)) { // found a single-character escape
+          if (decoded != UCHAR_NULL) {
+            utf8Char encoded = encodeUchar(decoded);
+            str tmp = {.len = encoded.nbytes, .bytes = encoded.codeunits};
+            strBuilder_append(&buf, tmp);
+          }
         }
         else if (takeNullEscape(st)) { // found a null escape
           // do nothing

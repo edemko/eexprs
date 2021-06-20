@@ -224,10 +224,10 @@ int main(int argc, char** argv) {
     fprintf(stderr, "{ \"filename\": ");
     fdumpCStr(stderr, opts.inFilename);
     fprintf(stderr, "\n, \"warnings\":");
-    fdumpErrorArray(stdout, "  ", parser.nWarnings, parser.warnings);
+    fdumpErrorArray(stderr, "  ", parser.nWarnings, parser.warnings);
     if (parser.nErrors != 0) {
       fprintf(stderr, "\n, \"errors\":");
-      fdumpErrorArray(stdout, "  ", parser.nErrors, parser.errors);
+      fdumpErrorArray(stderr, "  ", parser.nErrors, parser.errors);
     }
     fprintf(stderr, "\n}\n");
   }

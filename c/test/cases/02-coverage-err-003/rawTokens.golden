@@ -1,0 +1,22 @@
+{ "filename": "input.eexpr"
+, "tokens":
+  [ {"loc":{"from":{"line":1,"col":1},"to":{"line":1,"col":2}},"type":"symbol","text":"a"}
+  , {"loc":{"from":{"line":1,"col":2},"to":{"line":1,"col":5}},"type":"unknown-space","mixed":true,"size":3}
+  , {"loc":{"from":{"line":1,"col":5},"to":{"line":1,"col":6}},"type":"symbol","text":"a"}
+  , {"loc":{"from":{"line":1,"col":6},"to":{"line":2,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":2,"col":1},"to":{"line":3,"col":1}},"type":"unknown-space","size":0}
+  , {"loc":{"from":{"line":3,"col":1},"to":{"line":4,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":4,"col":1},"to":{"line":4,"col":3}},"type":"unknown-space","size":0}
+  , {"loc":{"from":{"line":4,"col":3},"to":{"line":4,"col":5}},"type":"symbol","text":"hi"}
+  , {"loc":{"from":{"line":4,"col":5},"to":{"line":5,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":5,"col":1},"to":{"line":5,"col":1}},"type":"end-of-file"}
+  ]
+, "warnings":
+  [ {"loc":{"from":{"line":1,"col":2},"to":{"line":1,"col":5}},"type":"mixed-space"}
+  , {"loc":{"from":{"line":2,"col":2},"to":{"line":2,"col":4}},"type":"trailing-space"}
+  , {"loc":{"from":{"line":4,"col":5},"to":{"line":5,"col":1}},"type":"mixed-newlines"}
+  ]
+, "errors":
+  [ {"loc":{"from":{"line":4,"col":1},"to":{"line":4,"col":2}},"type":"bad-char","input":"\\"}
+  ]
+}
