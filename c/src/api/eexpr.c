@@ -99,6 +99,9 @@ static
 void drainEexprs(eexpr_parser* parser) {
   parser->nEexprs = parser->impl->st.eexprStream.len;
   parser->eexprs = parser->impl->st.eexprStream.data;
+  parser->impl->st.eexprStream.len = 0;
+  parser->impl->st.eexprStream.cap = 0;
+  parser->impl->st.eexprStream.data = NULL;
 }
 
 bool eexpr_parse(eexpr_parser* parser, size_t nBytes, uint8_t* utf8Input) {
@@ -199,6 +202,7 @@ void eexpr_parser_deinit(eexpr_parser* parser) {
   free(parser->impl); // free the internal state
   parser->impl = NULL;
 }
+
 
 //////////////////////////////////// `eexpr_as*` Functions ////////////////////////////////////
 

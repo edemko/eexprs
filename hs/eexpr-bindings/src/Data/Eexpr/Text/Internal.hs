@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -10,11 +11,11 @@ module Data.Eexpr.Text.Internal
   ( ParserObj
   , newDefaultParser
   , parse
+  , deinitParser
   , drainEexprs
-  -- TODO drainErrors
-  -- TODO drainWarnings
+  , drainErrors
+  , drainWarnings
   -- TODO drainTokens
-  , nErrors -- TODO deleteme
   ) where
 
 import Data.Eexpr.Types
@@ -24,8 +25,9 @@ import Control.Monad (forM_,foldM)
 import Control.Monad.Primitive (PrimMonad, PrimState, unsafeIOToPrim)
 import Data.Bits (shiftL, (.|.))
 import Data.ByteString (ByteString)
-import Data.Eexpr.Text.Ffi (CEexpr,CLocation)
+import Data.Eexpr.Text.Ffi (CEexpr,CError,CLocation)
 import Data.Foldable (toList)
+import Data.Functor ((<&>))
 import Data.Primitive.Array (Array,newArray,writeArray,unsafeFreezeArray,arrayFromListN)
 import Data.Primitive.ByteArray (ByteArray(..),newByteArray,writeByteArray,unsafeFreezeByteArray)
 import Data.Text.Short (ShortText)
@@ -76,6 +78,16 @@ parse st = unsafeIOToPrim $
   BS.unsafeUseAsCStringLen (input st) $ \(bytes, nBytes) ->
     Ffi.parse (parserPtr st) (fromIntegral nBytes) bytes
 
+deinitParser :: (PrimMonad m) => ParserObj (PrimState m) -> m ()
+{-# NOINLINE deinitParser #-}
+deinitParser st = unsafeIOToPrim $ do
+  Ffi.deinitParser (parserPtr st)
+  Ffi.delEexprs (parserPtr st)
+  -- deleting tokens handled by deinitParser
+  Ffi.delErrors (parserPtr st)
+  Ffi.delWarnings (parserPtr st)
+
+
 drainEexprs :: (PrimMonad m) => ParserObj (PrimState m) -> m (Array (Eexpr Location))
 {-# NOINLINE drainEexprs #-}
 drainEexprs st = unsafeIOToPrim $ do
@@ -93,16 +105,10 @@ drainEexprs st = unsafeIOToPrim $ do
     unsafeFreezeArray arr
 
 
-nErrors :: (PrimMonad m) => ParserObj (PrimState m) -> m CSize
-{-# NOINLINE nErrors #-}
-nErrors st = unsafeIOToPrim $
-  Ffi.nErrors (parserPtr st)
-
-
 ------------ Eexprs ------------
 
 
-fromC :: (PrimMonad m) => Ptr CEexpr -> m (Eexpr Location)
+fromC :: Ptr CEexpr -> IO (Eexpr Location)
 fromC eexpr_p = do
   location <- unsafeIOToPrim $ do
     loc_fp <- mallocForeignPtrBytes (fromIntegral Ffi.sizeofLoc)
@@ -289,6 +295,71 @@ copyEexprNullable subexpr_p
     !e <- fromC subexpr_p
     pure $ Just e
 
+
+------------ Errors and Warnings ------------
+
+drainErrors :: (PrimMonad m) => ParserObj (PrimState m) -> m (Array Error)
+{-# NOINLINE drainErrors #-}
+drainErrors st = unsafeIOToPrim $ do
+  n <- Ffi.nErrors (parserPtr st)
+  if n == 0
+  then pure emptyArray
+  else do
+    arr <- newArray (fromIntegral n) (error "uninitialized eexpr error")
+    forM_ [0 .. n-1] $ \i -> do
+      Ffi.errorAt (parserPtr st) i >>= copyError >>=
+        writeArray arr (fromIntegral i)
+    Ffi.delErrors (parserPtr st)
+    unsafeFreezeArray arr
+
+drainWarnings :: (PrimMonad m) => ParserObj (PrimState m) -> m (Array Error)
+{-# NOINLINE drainWarnings #-}
+drainWarnings st = unsafeIOToPrim $ do
+  n <- Ffi.nWarnings (parserPtr st)
+  if n == 0
+  then pure emptyArray
+  else do
+    arr <- newArray (fromIntegral n) (error "uninitialized eexpr warning")
+    forM_ [0 .. n-1] $ \i -> do
+      Ffi.warningAt (parserPtr st) i >>= copyError >>=
+        writeArray arr (fromIntegral i)
+    Ffi.delWarnings (parserPtr st)
+    unsafeFreezeArray arr
+
+copyError :: Ptr CError -> IO Error
+copyError err_p = do
+  loc <- copyCLoc =<< Ffi.errLocation err_p
+  ctor <- Ffi.errType err_p <&> \typ -> if
+    | typ == Ffi.errTypeBadBytes -> BadBytes
+    | typ == Ffi.errTypeBadChar -> BadChar
+    | typ == Ffi.errTypeMixedSpace -> MixedSpace
+    | typ == Ffi.errTypeMixedNewlines -> MixedNewlines
+    | typ == Ffi.errTypeBadDigitSeparator -> BadDigitSeparator
+    | typ == Ffi.errTypeMissingExponent -> MissingExponent
+    | typ == Ffi.errTypeBadExponentSign -> BadExponentSign
+    | typ == Ffi.errTypeBadEscapeChar -> BadEscapeChar
+    | typ == Ffi.errTypeBadEscapeCode -> BadEscapeCode
+    | typ == Ffi.errTypeUnicodeOverflow -> UnicodeOverflow
+    | typ == Ffi.errTypeBadStringChar -> BadStringChar
+    | typ == Ffi.errTypeMissingLinePickup -> MissingLinePickup
+    | typ == Ffi.errTypeUnclosedString -> UnclosedString
+    | typ == Ffi.errTypeUnclosedMultilineString -> UnclosedMultilineString
+    | typ == Ffi.errTypeHeredocBadOpen -> HeredocBadOpen
+    | typ == Ffi.errTypeHeredocBadIndentDefinition -> HeredocBadIndentDefinition
+    | typ == Ffi.errTypeHeredocBadIndentation -> HeredocBadIndentation
+    | typ == Ffi.errTypeMixedIndentation -> MixedIndentation
+    | typ == Ffi.errTypeTrailingSpace -> TrailingSpace
+    | typ == Ffi.errTypeNoTrailingNewline -> NoTrailingNewline
+    | typ == Ffi.errTypeShallowIndent -> ShallowIndent
+    | typ == Ffi.errTypeOffsides -> Offsides
+    | typ == Ffi.errTypeBadDot -> BadDot
+    | typ == Ffi.errTypeCrammedTokens -> CrammedTokens
+    | typ == Ffi.errTypeUnbalancedWrap -> UnbalancedWrap
+    | typ == Ffi.errTypeExpectingNewlineOrDedent -> ExpectingNewlineOrDedent
+    | typ == Ffi.errTypeMissingTemplateExpr -> MissingTemplateExpr
+    | typ == Ffi.errTypeMissingCloseTemplate -> MissingCloseTemplate
+    | otherwise -> error "unrecognized C `eexpr_errorType` from C `eexpr_error*`"
+  pure $ ctor loc
 
 ------------ Utility ------------
 

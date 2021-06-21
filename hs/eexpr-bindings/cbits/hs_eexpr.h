@@ -12,10 +12,11 @@
 
 #define parser_nEexprs(x) (((eexpr_parser*)x)->nEexprs)
 #define parser_eexprAt(x, i) (((eexpr_parser*)x)->eexprs[i])
-#define parser_delEexprs(p) do { \
-    free(((eexpr_parser*)p)->eexprs); \
-    ((eexpr_parser*)p)->nEexprs = 0; \
-    ((eexpr_parser*)p)->eexprs = NULL; \
+#define parser_delEexprs(x) do { \
+    eexpr_parser* p = (eexpr_parser*)(x); \
+    if (p->eexprs != NULL) { free(p->eexprs); } \
+    p->nEexprs = 0; \
+    p->eexprs = NULL; \
   } while(false)
 
 #define parser_nTokens(x) (((eexpr_parser*)x)->nTokens)
@@ -23,9 +24,27 @@
 
 #define parser_nErrors(x) (((eexpr_parser*)x)->nErrors)
 #define parser_errorAt(x, i) (&((eexpr_parser*)x)->errors[i])
+#define parser_delErrors(x) do { \
+    eexpr_parser* p = (eexpr_parser*)(x); \
+    if (p->errors != NULL) { free(p->errors); } \
+    p->nErrors = 0; \
+    p->errors = NULL; \
+  } while(false)
 
 #define parser_nWarnings(x) (((eexpr_parser*)x)->nWarnings)
 #define parser_warningAt(x, i) (&((eexpr_parser*)x)->warnings[i])
+#define parser_delWarnings(x) do { \
+    eexpr_parser* p = (eexpr_parser*)(x); \
+    if (p->warnings != NULL) { free(p->warnings); } \
+    p->nWarnings = 0; \
+    p->warnings = NULL; \
+  } while(false)
+
+
+//////////// Errors and Warnings ////////////
+
+#define errLocation(e) (&((eexpr_error*)e)->loc)
+#define errType(e) (((eexpr_error*)e)->type)
 
 
 //////////// Location ////////////

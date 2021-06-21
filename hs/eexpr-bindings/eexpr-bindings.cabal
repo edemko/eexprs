@@ -18,6 +18,7 @@ library
   include-dirs: cbits
   extra-libraries: eexpr
   exposed-modules:
+    Data.Eexpr.Text
     Data.Eexpr.Text.Ffi
     Data.Eexpr.Text.Internal
   -- other-modules:

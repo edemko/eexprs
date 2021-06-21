@@ -387,7 +387,7 @@ struct eexpr_error {
   union eexpr_errorInfo {
     char32_t badChar;
     char32_t badEscapeChar;
-    char32_t badEscapeCode[6]; // if <6 `char32_t`s, then pad at start with U+0000
+    char32_t badEscapeCode[6]; // if <6 `char32_t`s, then pad at start with `0`
     uint32_t unicodeOverflow;
     char32_t badStringChar;
     struct eexpr_mixedIndentationInfo {

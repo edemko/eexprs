@@ -21,17 +21,20 @@ module Data.Eexpr.Text.Ffi
   , setPauseAt
   -- ** Perform Parsing
   , parse
+  , deinitParser
   -- ** Extract Results
   , nEexprs
   , eexprAt
   , delEexprs
   , nErrors
+  , delErrors
   , nTokens
   , tokenAt
   , errorAt
   , nWarnings
   , warningAt
-  -- ** Pausing Durnig Parsing
+  , delWarnings
+  -- ** Pausing During Parsing
   , pauseAfterStart
   , pauseAfterRawlex
   , pauseAfterCooklex
@@ -88,6 +91,39 @@ module Data.Eexpr.Text.Ffi
   , tailAt_subexpr
   , tailAt_nBytes
   , tailAt_utf8str
+  -- * Errors and Warnings
+  , CError
+  , errLocation
+  , errType
+  , errTypeBadBytes
+  , errTypeBadChar
+  , errTypeMixedSpace
+  , errTypeMixedNewlines
+  , errTypeBadDigitSeparator
+  , errTypeMissingExponent
+  , errTypeBadExponentSign
+  , errTypeBadEscapeChar
+  , errTypeBadEscapeCode
+  , errTypeUnicodeOverflow
+  , errTypeBadStringChar
+  , errTypeMissingLinePickup
+  , errTypeUnclosedString
+  , errTypeUnclosedMultilineString
+  , errTypeHeredocBadOpen
+  , errTypeHeredocBadIndentDefinition
+  , errTypeHeredocBadIndentation
+  , errTypeMixedIndentation
+  , errTypeTrailingSpace
+  , errTypeNoTrailingNewline
+  , errTypeShallowIndent
+  , errTypeOffsides
+  , errTypeBadDot
+  , errTypeCrammedTokens
+  , errTypeUnbalancedWrap
+  , errTypeExpectingNewlineOrDedent
+  , errTypeMissingTemplateExpr
+  , errTypeMissingCloseTemplate
+  -- TODO more error info, as needed
   -- * Locations
   , CLocation
   , sizeofLoc
@@ -141,7 +177,8 @@ foreign import capi "eexpr.h value EEXPR_DO_NOT_PAUSE" doNotPause :: CInt
 foreign import capi "hs_eexpr.h setPauseAt" setPauseAt
   :: Ptr CParserObj -> CInt -> IO ()
 
--- eexpr_parser_deinit -- TODO
+foreign import ccall unsafe "eexpr_parser_deinit" deinitParser :: Ptr CParserObj -> IO ()
+
 
 ------------ Parsing and Obtaining Results ------------
 
@@ -178,6 +215,9 @@ foreign import capi "hs_eexpr.h parser_errorAt" errorAt
   :: Ptr CParserObj
   -> CSize
   -> IO (Ptr CError)
+foreign import capi "hs_eexpr.h parser_delErrors" delErrors
+  :: Ptr CParserObj
+  -> IO ()
 
 foreign import capi "hs_eexpr.h parser_nWarnings" nWarnings
   :: Ptr CParserObj
@@ -186,6 +226,9 @@ foreign import capi "hs_eexpr.h parser_warningAt" warningAt
   :: Ptr CParserObj
   -> CSize
   -> IO (Ptr CError)
+foreign import capi "hs_eexpr.h parser_delWarnings" delWarnings
+  :: Ptr CParserObj
+  -> IO ()
 
 
 ------------ Extracting Data About Eexprs ------------
@@ -273,6 +316,38 @@ data CToken
 
 data CError
 
+foreign import capi "hs_eexpr.h errLocation" errLocation :: Ptr CError -> IO (Ptr CLocation)
+
+foreign import capi "hs_eexpr.h errType" errType :: Ptr CError -> IO CInt
+
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_BYTES" errTypeBadBytes :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_CHAR" errTypeBadChar :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_MIXED_SPACE" errTypeMixedSpace :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_MIXED_NEWLINES" errTypeMixedNewlines :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_DIGIT_SEPARATOR" errTypeBadDigitSeparator :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_MISSING_EXPONENT" errTypeMissingExponent :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_EXPONENT_SIGN" errTypeBadExponentSign :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_ESCAPE_CHAR" errTypeBadEscapeChar :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_ESCAPE_CODE" errTypeBadEscapeCode :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_UNICODE_OVERFLOW" errTypeUnicodeOverflow :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_STRING_CHAR" errTypeBadStringChar :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_MISSING_LINE_PICKUP" errTypeMissingLinePickup :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_UNCLOSED_STRING" errTypeUnclosedString :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_UNCLOSED_MULTILINE_STRING" errTypeUnclosedMultilineString :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_HEREDOC_BAD_OPEN" errTypeHeredocBadOpen :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_HEREDOC_BAD_INDENT_DEFINITION" errTypeHeredocBadIndentDefinition :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_HEREDOC_BAD_INDENTATION" errTypeHeredocBadIndentation :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_MIXED_INDENTATION" errTypeMixedIndentation :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_TRAILING_SPACE" errTypeTrailingSpace :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_NO_TRAILING_NEWLINE" errTypeNoTrailingNewline :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_SHALLOW_INDENT" errTypeShallowIndent :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_OFFSIDES" errTypeOffsides :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_BAD_DOT" errTypeBadDot :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_CRAMMED_TOKENS" errTypeCrammedTokens :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_UNBALANCED_WRAP" errTypeUnbalancedWrap :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_EXPECTING_NEWLINE_OR_DEDENT" errTypeExpectingNewlineOrDedent :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_MISSING_TEMPLATE_EXPR" errTypeMissingTemplateExpr :: CInt
+foreign import capi "eexpr.h value EEXPR_ERR_MISSING_CLOSE_TEMPLATE" errTypeMissingCloseTemplate :: CInt
 
 ------------ Location Data ------------
 
