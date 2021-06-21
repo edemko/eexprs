@@ -1,0 +1,9 @@
+{ "filename": "input.eexpr"
+, "warnings":
+  [ {"loc":{"from":{"line":1,"col":6},"to":{"line":1,"col":7}},"type":"bad-digit-separator"}
+  ]
+, "errors":
+  [ {"loc":{"from":{"line":4,"col":3},"to":{"line":4,"col":4}},"type":"bad-exponent-sign"}
+  , {"loc":{"from":{"line":5,"col":1},"to":{"line":1,"col":1}},"type":"missing-exponent"}
+  ]
+}

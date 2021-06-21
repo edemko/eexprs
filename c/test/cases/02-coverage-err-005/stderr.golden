@@ -1,0 +1,9 @@
+{ "filename": "input.eexpr"
+, "warnings": []
+, "errors":
+  [ {"loc":{"from":{"line":1,"col":2},"to":{"line":1,"col":3}},"type":"bad-string-char","input":"\u0002"}
+  , {"loc":{"from":{"line":2,"col":1},"to":{"line":2,"col":7}},"type":"unclosed-string"}
+  , {"loc":{"from":{"line":3,"col":6},"to":{"line":3,"col":6}},"type":"bad-bytes"}
+  , {"loc":{"from":{"line":3,"col":1},"to":{"line":4,"col":1}},"type":"unclosed-multiline-string"}
+  ]
+}

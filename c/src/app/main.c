@@ -237,6 +237,8 @@ int main(int argc, char** argv) {
     free(parser.eexprs[i]);
   }
   free(parser.eexprs);
+  free(parser.errors);
+  free(parser.warnings);
   free(input.bytes);
   return parser.nErrors == 0 ? 0 : 1;
 }

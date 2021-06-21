@@ -1,0 +1,36 @@
+{ "filename": "input.eexpr"
+, "eexprs":
+  [ { "loc":{"from":{"line":1,"col":1},"to":{"line":1,"col":20}}
+    , "type":"string","template":
+      [ "hello "
+      , null
+      , "world!"
+      ]
+    }
+  , { "loc":{"from":{"line":3,"col":1},"to":{"line":3,"col":25}}
+    , "type":"string","template":
+      [ "Hello "
+      , { "loc":{"from":{"line":3,"col":9},"to":{"line":3,"col":13}}
+        , "type":"symbol","text":"name"
+        }
+      , "!\n"
+      , { "loc":{"from":{"line":3,"col":18},"to":{"line":3,"col":25}}
+        , "type":"symbol","text":"message"
+        }
+      , ""
+      ]
+    }
+  , { "loc":{"from":{"line":5,"col":1},"to":{"line":5,"col":3}}
+    , "type":"paren","subexpr":
+      { "loc":{"from":{"line":5,"col":2},"to":{"line":5,"col":3}}
+      , "type":"bracket","subexpr":null
+      }
+    }
+  ]
+, "warnings": []
+, "errors":
+  [ {"loc":{"from":{"line":1,"col":9},"to":{"line":1,"col":12}},"type":"missing-template-expr"}
+  , {"loc":{"from":{"line":3,"col":25},"to":{"line":5,"col":1}},"type":"missing-close-template"}
+  , {"loc":{"from":{"line":5,"col":3},"to":{"line":5,"col":4}},"type":"unbalanced-wrap","unclosed":{"open":"bracket","loc":{"from":{"line":5,"col":2},"to":{"line":5,"col":3}}}}
+  ]
+}

@@ -14,7 +14,7 @@ function runCase() {
   local case="$1"
   local oldWD="$PWD"
   cd "cases/$case/"
-  echo >&2 "$(tput bold)running test: $case$(tput sgr0)"
+  echo >&2 "$(tput bold)running test: $case$(tput sgr0) $(head -n1 README.md 2>/dev/null || true)"
   if [ ! -f "README.md" ]; then
     echo >&2 "$(tput bold)$(tput setaf 3)[WARNING]$(tput sgr0) no description (README.md) for case $case"
   fi

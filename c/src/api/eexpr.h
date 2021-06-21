@@ -257,6 +257,7 @@ typedef struct eexpr_string {
   // Array cnotaining additional subexpressions and text parts of the template.
   struct eexpr_strTemplate {
     // The subexpression to be spliced between the previous text part and `.utf8str`.
+    // May be NULL if there was a missing expression part in the template.
     eexpr* subexpr;
     // `.nBytes` and `.utf8str` together are the text part that should appear after `.subexpr`.
     size_t nBytes;
@@ -425,9 +426,6 @@ typedef enum eexpr_tokenType {
   EEXPR_TOK_UNKNOWN_NEWLINE,
   EEXPR_TOK_UNKNOWN_COLON,
   EEXPR_TOK_UNKNOWN_DOT,
-  // tokens that are placeholders for bad syntax (to easy colorizing)
-  EEXPR_TOK_NUMBER_ERROR,
-  EEXPR_TOK_STRING_ERROR,
   // a sentinel token that doesn't make it into the token stream at all
   EEXPR_TOK_NONE
 } eexpr_tokenType;

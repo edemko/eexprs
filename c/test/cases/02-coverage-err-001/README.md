@@ -1,1 +1,1 @@
-Test that string escape errors are correctly generated.
+lexer detects invalid string escapes

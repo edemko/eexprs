@@ -1,1 +1,1 @@
-Test improper whitespace is detected
+lexer detects improper whitespace

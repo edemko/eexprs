@@ -1,0 +1,26 @@
+{ "filename": "input.eexpr"
+, "tokens":
+  [ {"loc":{"from":{"line":1,"col":1},"to":{"line":1,"col":9}},"type":"string","text":"hello ","splice":"open"}
+  , {"loc":{"from":{"line":1,"col":9},"to":{"line":1,"col":12}},"type":"unknown-space","char":" ","size":3}
+  , {"loc":{"from":{"line":1,"col":12},"to":{"line":1,"col":20}},"type":"string","text":"world!","splice":"close"}
+  , {"loc":{"from":{"line":1,"col":20},"to":{"line":2,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":2,"col":1},"to":{"line":3,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":3,"col":1},"to":{"line":3,"col":9}},"type":"string","text":"Hello ","splice":"open"}
+  , {"loc":{"from":{"line":3,"col":9},"to":{"line":3,"col":13}},"type":"symbol","text":"name"}
+  , {"loc":{"from":{"line":3,"col":13},"to":{"line":3,"col":18}},"type":"string","text":"!\n","splice":"middle"}
+  , {"loc":{"from":{"line":3,"col":18},"to":{"line":3,"col":25}},"type":"symbol","text":"message"}
+  , {"loc":{"from":{"line":3,"col":25},"to":{"line":4,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":4,"col":1},"to":{"line":5,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":5,"col":1},"to":{"line":5,"col":2}},"type":"wrap","family":"paren","open":true}
+  , {"loc":{"from":{"line":5,"col":2},"to":{"line":5,"col":3}},"type":"wrap","family":"bracket","open":true}
+  , {"loc":{"from":{"line":5,"col":3},"to":{"line":5,"col":4}},"type":"wrap","family":"paren","open":false}
+  , {"loc":{"from":{"line":5,"col":4},"to":{"line":5,"col":5}},"type":"wrap","family":"bracket","open":false}
+  , {"loc":{"from":{"line":5,"col":5},"to":{"line":6,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":6,"col":1},"to":{"line":7,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":7,"col":1},"to":{"line":7,"col":5}},"type":"symbol","text":"asdf"}
+  , {"loc":{"from":{"line":7,"col":5},"to":{"line":8,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":8,"col":1},"to":{"line":8,"col":1}},"type":"end-of-file"}
+  ]
+, "warnings": []
+, "errors": []
+}

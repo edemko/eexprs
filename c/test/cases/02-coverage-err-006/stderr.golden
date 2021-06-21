@@ -1,0 +1,11 @@
+{ "filename": "input.eexpr"
+, "warnings":
+  [ {"loc":{"from":{"line":1,"col":6},"to":{"line":1,"col":8}},"type":"trailing-space"}
+  , {"loc":{"from":{"line":12,"col":1},"to":{"line":12,"col":3}},"type":"trailing-space"}
+  ]
+, "errors":
+  [ {"loc":{"from":{"line":7,"col":1},"to":{"line":7,"col":4}},"type":"mixed-indentation","established":{"type":" ","loc":{"from":{"line":2,"col":1},"to":{"line":2,"col":3}}}}
+  , {"loc":{"from":{"line":17,"col":1},"to":{"line":17,"col":3}},"type":"heredoc-bad-indentation"}
+  , {"loc":{"from":{"line":21,"col":1},"to":{"line":23,"col":1}},"type":"unclosed-multiline-string"}
+  ]
+}

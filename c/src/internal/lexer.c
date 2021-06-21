@@ -514,12 +514,11 @@ bool takeNumber(engine* st) {
         char32_t lookahead;
         size_t adv = peekUchar(&lookahead, st->rest);
         if (isSign(lookahead)) {
+          expNeg = lookahead == negativeSign;
           if (fractionalDigits) {
-            expNeg = lookahead == negativeSign;
             lexer_advance(st, adv, 1);
           }
           else {
-            expNeg = false;
             eexpr_error err = {.loc = {.start = st->loc}, .type = EEXPR_ERR_BAD_EXPONENT_SIGN};
             lexer_advance(st, adv, 1);
             err.loc.end = st->loc;
@@ -569,12 +568,8 @@ bool takeNumber(engine* st) {
           else { break; }
         }
         if (expDigits == 0) {
-          tok.type = EEXPR_TOK_NUMBER_ERROR;
-          tok.loc.end = st->loc;
-          lexer_addTok(st, &tok);
           eexpr_error err = {.loc = tok.loc, .type = EEXPR_ERR_MISSING_EXPONENT};
           dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
-          return true;
         }
       }
     }
@@ -681,7 +676,7 @@ bool takeString(engine* st) {
       lexer_advance(st, adv, 1);
     }
     else {
-      eexpr_error err = {.loc = {.start = st->loc, .end = st->loc}, .type = EEXPR_ERR_UNCLOSED_STRING};
+      eexpr_error err = {.loc = {.start = tok.loc.start, .end = st->loc}, .type = EEXPR_ERR_UNCLOSED_STRING};
       dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
     }
   }
@@ -715,11 +710,7 @@ bool takeSqlString(engine* st) {
         strBuilder_append(&buf, tmp);
       }
       else {
-        free(buf.bytes);
-        st->fatal.type = EEXPR_ERR_UNCLOSED_MULTILINE_STRING;
-        st->fatal.loc.start = tok.loc.start;
-        st->fatal.loc.end = st->loc;
-        return true;
+        goto unclosed;
       }
     }
     else if (c == sqlStringDelim) {
@@ -738,11 +729,17 @@ bool takeSqlString(engine* st) {
         return true;
       }
     }
-    else if (adv == 0) {
-      free(buf.bytes);
-      st->fatal.type = EEXPR_ERR_UNCLOSED_MULTILINE_STRING;
-      st->fatal.loc.start = tok.loc.start;
-      st->fatal.loc.end = st->loc;
+    else if (adv == 0) unclosed: {
+      tok.loc.end = st->loc;
+      tok.as.string.text.len = buf.len;
+      tok.as.string.text.bytes = realloc(buf.bytes, buf.len);
+      tok.as.string.splice = EEXPR_STRCORRUPT;
+      lexer_addTok(st, &tok);
+      eexpr_error err =
+        { .loc = {.start = tok.loc.start, .end = st->loc}
+        , .type = EEXPR_ERR_UNCLOSED_MULTILINE_STRING
+        };
+      dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
       return true;
     }
     else if (c == UCHAR_NULL) {
@@ -835,9 +832,9 @@ bool takeHeredoc(engine* st) {
     }
     char32_t lookahead; size_t adv = peekUchar(&lookahead, st->rest);
     if (lookahead == escapeLeader) {
+      trailingSpace = false;
       indented = true;
       lexer_advance(st, adv, 1);
-      trailingSpace = false;
       err.loc.start = st->loc;
       while (true) {
         char32_t c; size_t adv = peekUchar(&c, st->rest);
@@ -861,6 +858,7 @@ bool takeHeredoc(engine* st) {
       st->fatal.type = EEXPR_ERR_HEREDOC_BAD_OPEN;
       st->fatal.loc.start = tok.loc.start;
       st->fatal.loc.end = st->loc;
+      return true;
     }
   }
   eexpr_indentType indentType;
@@ -889,7 +887,7 @@ bool takeHeredoc(engine* st) {
         else if (c == escapeLeader) {
           lexer_advance(st, adv, 1);
           indentNChars += 1;
-          if (c == tabChar) {
+          if (indentChar == tabChar) {
             // tab-based indentation needs an alignment tab after the closing backslash
             char32_t c; size_t adv = peekUchar(&c, st->rest);
             if (c == tabChar) {
@@ -902,8 +900,9 @@ bool takeHeredoc(engine* st) {
           break;
         }
         else badIndentDef: {
-          tok.type = EEXPR_TOK_STRING_ERROR;
           tok.loc.end = st->loc;
+          tok.as.string.text.len = 0;
+          tok.as.string.text.bytes = NULL;
           lexer_addTok(st, &tok);
           st->fatal.type = EEXPR_ERR_HEREDOC_BAD_INDENT_DEFINITION;
           st->fatal.loc = tok.loc;
@@ -962,8 +961,9 @@ bool takeHeredoc(engine* st) {
       }
       else {
         free(ender.bytes);
-        tok.type = EEXPR_TOK_STRING_ERROR;
         tok.loc.end = st->loc;
+        tok.as.string.text.len = textBuf.len;
+        tok.as.string.text.bytes = textBuf.bytes;
         lexer_addTok(st, &tok);
         st->fatal.type = EEXPR_ERR_UNCLOSED_MULTILINE_STRING;
         st->fatal.loc = tok.loc;
@@ -1006,7 +1006,6 @@ bool takeHeredoc(engine* st) {
   tok.loc.end = st->loc;
   tok.as.string.text.len = textBuf.len;
   tok.as.string.text.bytes = textBuf.bytes;
-  assert(tok.as.string.text.bytes != NULL);
   lexer_addTok(st, &tok);
   return true;
 }

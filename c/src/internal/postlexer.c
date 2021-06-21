@@ -337,7 +337,42 @@ void disambiguateSpaces(engine* st) {
 }
 
 /*
-  `(chain | ellipsis) (chain | ellipsis) --> error`
+  `(wrap.open | string.open | string.middle)^1 space --> \1`
+  `space (wrap.close | string.close | string.middle)^1 --> \1`
+*/
+static
+void ignoreWrappedSpaces(engine* st) {
+  for (dllistNode_eexpr_token* strm = st->tokStream.start; strm != NULL; strm = strm->next) {
+    if (strm->here.transparent) { continue; }
+    if ( (strm->here.type == EEXPR_TOK_WRAP && strm->here.as.wrap.isOpen)
+      || (strm->here.type == EEXPR_TOK_STRING
+        && ( strm->here.as.string.splice == EEXPR_STROPEN
+          || strm->here.as.string.splice == EEXPR_STRMIDDLE
+           )
+         )
+       ) {
+      dllistNode_eexpr_token* next = getNext(strm);
+      if (next != NULL && next->here.type == EEXPR_TOK_SPACE) {
+        next->here.transparent = true;
+      }
+    }
+    else if (strm->here.type == EEXPR_TOK_SPACE) {
+      dllistNode_eexpr_token* next = getNext(strm);
+      if ( (next->here.type == EEXPR_TOK_WRAP && !next->here.as.wrap.isOpen)
+        || (next->here.type == EEXPR_TOK_STRING
+          && ( next->here.as.string.splice == EEXPR_STRCLOSE
+            || next->here.as.string.splice == EEXPR_STRMIDDLE
+             )
+           )
+         ) {
+        strm->here.transparent = true;
+      }
+    }
+  }
+}
+
+/*
+  `(chain | ellipsis) (ellipsis | chain) --> error`
   `number chain --> error`
   `(number | symbol) (number | symbol) --> error`
   `string.(close | plain) string.(open | plain) --> error`
@@ -382,6 +417,7 @@ void engine_cookLex(engine* st) {
   disambiguateColons(st);
   if (!detectIndentation(st)) { return; }
   disambiguateSpaces(st);
+  ignoreWrappedSpaces(st);
   disambiguateDots(st);
   detectCramming(st);
   // TODO detect mixed indentation

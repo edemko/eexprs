@@ -1,0 +1,13 @@
+a . b
+0. 1
+...
+:
+    start indent
+  bad dedent
+:
+    indent one :
+  too small indent
+1.a
+1q
+"smu""sh"
+  

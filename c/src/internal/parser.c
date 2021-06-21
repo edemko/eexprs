@@ -87,6 +87,7 @@ eexpr* parseWrap(engine* st) {
       parser_pop(st);
     }
     else {
+      out->loc.end = close->loc.start;
       mkUnbalanceError(st);
     }
     return out;
@@ -111,6 +112,7 @@ eexpr* parseWrap(engine* st) {
           parser_pop(st);
         }
         else {
+          out->loc.end = lookahead->loc.start;
           mkUnbalanceError(st);
         }
         return out;
@@ -185,7 +187,10 @@ eexpr* parseTemplate(engine* st) {
           out->loc.end = part.subexpr->loc.end;
         }
         else {
-          eexpr_error err = {.loc = lookahead->loc, .type = EEXPR_ERR_MISSING_TEMPLATE_EXPR};
+          eexpr_error err =
+            { .loc = {.start = out->loc.end, .end = lookahead->loc.start}
+            , .type = EEXPR_ERR_MISSING_TEMPLATE_EXPR
+            };
           if ( lookahead->type == EEXPR_TOK_STRING
             && (lookahead->as.string.splice == EEXPR_STRMIDDLE || lookahead->as.string.splice == EEXPR_STRCLOSE)
              ) {
@@ -200,14 +205,14 @@ eexpr* parseTemplate(engine* st) {
           { // append last template part
             part.nBytes = lookahead->as.string.text.len;
             part.utf8str = lookahead->as.string.text.bytes;
-            if (part.subexpr != NULL) {
-              dynarr_push_strTemplPart(&out->as.string.parts, &part);
-            }
+            dynarr_push_strTemplPart(&out->as.string.parts, &part);
             out->loc.end = lookahead->loc.end;
           }
           // ensure we are expecting a close string
           if (st->wrapStack.len == 0 || dynarr_peek_openWrap(&st->wrapStack)->type != '\"') {
+            out->loc.end = lookahead->loc.start;
             mkUnbalanceError(st);
+            return out;
           }
           else { // ensure the splice type makes sense
             if (lookahead->as.string.splice == EEXPR_STRCLOSE) {
@@ -226,7 +231,10 @@ eexpr* parseTemplate(engine* st) {
             part.nBytes = 0; part.utf8str = NULL;
             dynarr_push_strTemplPart(&out->as.string.parts, &part);
           }
-          eexpr_error err = {.loc = lookahead->loc, .type = EEXPR_ERR_MISSING_CLOSE_TEMPLATE};
+          eexpr_error err =
+            { .loc = {.start = out->loc.end, .end = lookahead->loc.start}
+            , .type = EEXPR_ERR_MISSING_CLOSE_TEMPLATE
+            };
           dllist_insertAfter_eexpr_error(&st->errStream, NULL, &err);
           return out;
         }

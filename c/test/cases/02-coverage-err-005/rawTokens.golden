@@ -1,0 +1,17 @@
+{ "filename": "input.eexpr"
+, "tokens":
+  [ {"loc":{"from":{"line":1,"col":1},"to":{"line":1,"col":4}},"type":"string","text":""}
+  , {"loc":{"from":{"line":1,"col":4},"to":{"line":2,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":2,"col":1},"to":{"line":2,"col":7}},"type":"string","text":"hello","splice":"corrupt"}
+  , {"loc":{"from":{"line":2,"col":7},"to":{"line":3,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":3,"col":1},"to":{"line":4,"col":1}},"type":"string","text":"asdffdsa\n","splice":"corrupt"}
+  , {"loc":{"from":{"line":4,"col":1},"to":{"line":4,"col":1}},"type":"end-of-file"}
+  ]
+, "warnings": []
+, "errors":
+  [ {"loc":{"from":{"line":1,"col":2},"to":{"line":1,"col":3}},"type":"bad-string-char","input":"\u0002"}
+  , {"loc":{"from":{"line":2,"col":1},"to":{"line":2,"col":7}},"type":"unclosed-string"}
+  , {"loc":{"from":{"line":3,"col":6},"to":{"line":3,"col":6}},"type":"bad-bytes"}
+  , {"loc":{"from":{"line":3,"col":1},"to":{"line":4,"col":1}},"type":"unclosed-multiline-string"}
+  ]
+}

@@ -214,12 +214,6 @@ void fdumpToken(FILE* fp, const eexpr_token* tok) {
     case EEXPR_TOK_UNKNOWN_DOT: {
       fprintf(fp, ",\"type\":\"unknown-dot\"");
     }; break;
-    case EEXPR_TOK_NUMBER_ERROR: {
-      fprintf(fp, ",\"type\":\"error-number\"");
-    }; break;
-    case EEXPR_TOK_STRING_ERROR: {
-      fprintf(fp, ",\"type\":\"error-string\"");
-    }; break;
     case EEXPR_TOK_NONE: { assert(false); }; break;
   }
   fprintf(fp, "}");
@@ -283,7 +277,12 @@ void fdumpEexpr(FILE* fp, int indent, const eexpr* x) {
         fdumpStrn(fp, s.head.nBytes, s.head.utf8str);
         for (size_t i = 0; i < s.nSubexprs; ++i) {
           fprintf(fp, "\n%*s, ", indent+2, "");
-          fdumpEexpr(fp, indent+4, s.tail[i].subexpr);
+          if (s.tail[i].subexpr != NULL) {
+            fdumpEexpr(fp, indent+4, s.tail[i].subexpr);
+          }
+          else {
+            fprintf(fp, "null");
+          }
           fprintf(fp, "\n%*s, ", indent+2, "");
           fdumpStrn(fp, s.tail[i].nBytes, s.tail[i].utf8str);
         }
@@ -444,6 +443,19 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
       fprintf(fp, ",\"type\":\"unclosed-multiline-string\"");
     }; break;
     case EEXPR_ERR_MIXED_INDENTATION: {
+      fprintf(fp, ",\"type\":\"mixed-indentation\",\"established\":{\"type\":");
+      switch (err->as.mixedIndentation.establishedType) {
+        case EEXPR_INDENT_SPACES: fdumpChar(fp, ' '); break;
+        case EEXPR_INDENT_TABS: fdumpChar(fp, '\t'); break;
+        case EEXPR_INDENT_NULL: assert(false); break;
+      }
+      fprintf(fp, ",\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}}"
+         , err->as.mixedIndentation.establishedAt.start.line + 1
+         , err->as.mixedIndentation.establishedAt.start.col + 1
+         , err->as.mixedIndentation.establishedAt.end.line + 1
+         , err->as.mixedIndentation.establishedAt.end.col + 1
+         );
+    }; break;
     case EEXPR_ERR_HEREDOC_BAD_OPEN: {
       fprintf(fp, ",\"type\":\"heredoc-bad-open\"");
     }; break;
@@ -452,21 +464,6 @@ void fdumpError(FILE* fp, const eexpr_error* err) {
     }; break;
     case EEXPR_ERR_HEREDOC_BAD_INDENTATION: {
       fprintf(fp, ",\"type\":\"heredoc-bad-indentation\"");
-    }; break;
-      fprintf(fp, ",\"type\":\"mixed-indentation\",\"established\":{\"type\":");
-      char32_t c;
-      switch (err->as.mixedIndentation.establishedType) {
-        case EEXPR_INDENT_SPACES: c = ' '; break;
-        case EEXPR_INDENT_TABS: c = '\t'; break;
-        case EEXPR_INDENT_NULL: assert(false); break;
-      }
-      fdumpChar(fp, c);
-      fprintf(fp, ",\"loc\":{\"from\":{\"line\":%zu,\"col\":%zu},\"to\":{\"line\":%zu,\"col\":%zu}}}"
-         , err->as.mixedIndentation.establishedAt.start.line + 1
-         , err->as.mixedIndentation.establishedAt.start.col + 1
-         , err->as.mixedIndentation.establishedAt.end.line + 1
-         , err->as.mixedIndentation.establishedAt.end.col + 1
-         );
     }; break;
     case EEXPR_ERR_TRAILING_SPACE: {
       fprintf(fp, ",\"type\":\"trailing-space\"");

@@ -21,11 +21,11 @@ It's going in `include/`, but I have not documented that fact.
   - [ ] go through ASCII for the allow/denylist
   - [ ] understand unicode character classes
   - [ ] go through mathematical symbols for the allow/denylist
-- [ ] create tests
+- [x] create tests
   - [x] make test runner
-  - [ ] every production in the grammar must succeed
-  - [ ] valgrind everything for good measure
-  - [ ] ungrammatical eexprs should have good error reporting
+  - [x] every production in the grammar must succeed
+  - [x] ungrammatical eexprs should have good error reporting
+  - [x] valgrind everything for good measure
   - [ ] fuzz it
   - [ ] sanitize (at least for undefined behavior)
 - [ ] check `TODO`/`FIXME` again

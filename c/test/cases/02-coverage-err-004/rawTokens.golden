@@ -1,0 +1,25 @@
+{ "filename": "input.eexpr"
+, "tokens":
+  [ {"loc":{"from":{"line":1,"col":1},"to":{"line":1,"col":7}},"type":"number","mantissa":"1234"}
+  , {"loc":{"from":{"line":1,"col":7},"to":{"line":2,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":2,"col":1},"to":{"line":2,"col":2}},"type":"number","mantissa":"0"}
+  , {"loc":{"from":{"line":2,"col":2},"to":{"line":2,"col":7}},"type":"symbol","text":"p1234"}
+  , {"loc":{"from":{"line":2,"col":7},"to":{"line":3,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":3,"col":1},"to":{"line":3,"col":2}},"type":"number","mantissa":"0"}
+  , {"loc":{"from":{"line":3,"col":2},"to":{"line":3,"col":3}},"type":"unknown-dot"}
+  , {"loc":{"from":{"line":3,"col":3},"to":{"line":3,"col":4}},"type":"symbol","text":"a"}
+  , {"loc":{"from":{"line":3,"col":4},"to":{"line":4,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":4,"col":1},"to":{"line":4,"col":6}},"type":"number","mantissa":"1","exponent":{"explicit":"-10"}}
+  , {"loc":{"from":{"line":4,"col":6},"to":{"line":5,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":5,"col":1},"to":{"line":5,"col":3}},"type":"number","mantissa":"1"}
+  , {"loc":{"from":{"line":5,"col":3},"to":{"line":6,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":6,"col":1},"to":{"line":6,"col":1}},"type":"end-of-file"}
+  ]
+, "warnings":
+  [ {"loc":{"from":{"line":1,"col":6},"to":{"line":1,"col":7}},"type":"bad-digit-separator"}
+  ]
+, "errors":
+  [ {"loc":{"from":{"line":4,"col":3},"to":{"line":4,"col":4}},"type":"bad-exponent-sign"}
+  , {"loc":{"from":{"line":5,"col":1},"to":{"line":1,"col":1}},"type":"missing-exponent"}
+  ]
+}

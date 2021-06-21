@@ -1,0 +1,1 @@
+lexer detects malformed strings

@@ -1,0 +1,27 @@
+{ "filename": "input.eexpr"
+, "tokens":
+  [ {"loc":{"from":{"line":1,"col":1},"to":{"line":4,"col":6}},"type":"string","text":"hello\n world"}
+  , {"loc":{"from":{"line":4,"col":6},"to":{"line":5,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":5,"col":1},"to":{"line":6,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":6,"col":1},"to":{"line":8,"col":6}},"type":"string","text":"mixed indentation"}
+  , {"loc":{"from":{"line":8,"col":6},"to":{"line":9,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":9,"col":1},"to":{"line":10,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":10,"col":1},"to":{"line":13,"col":8}},"type":"string","text":"eh\n"}
+  , {"loc":{"from":{"line":13,"col":8},"to":{"line":14,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":14,"col":1},"to":{"line":15,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":15,"col":1},"to":{"line":18,"col":8}},"type":"string","text":"   \nasdf"}
+  , {"loc":{"from":{"line":18,"col":8},"to":{"line":19,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":19,"col":1},"to":{"line":20,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":20,"col":1},"to":{"line":21,"col":1}},"type":"unknown-newline"}
+  , {"loc":{"from":{"line":21,"col":1},"to":{"line":23,"col":1}},"type":"string","text":"\"\"\"\n"}
+  ]
+, "warnings":
+  [ {"loc":{"from":{"line":1,"col":6},"to":{"line":1,"col":8}},"type":"trailing-space"}
+  , {"loc":{"from":{"line":12,"col":1},"to":{"line":12,"col":3}},"type":"trailing-space"}
+  ]
+, "errors":
+  [ {"loc":{"from":{"line":7,"col":1},"to":{"line":7,"col":4}},"type":"mixed-indentation","established":{"type":" ","loc":{"from":{"line":2,"col":1},"to":{"line":2,"col":3}}}}
+  , {"loc":{"from":{"line":17,"col":1},"to":{"line":17,"col":3}},"type":"heredoc-bad-indentation"}
+  , {"loc":{"from":{"line":21,"col":1},"to":{"line":23,"col":1}},"type":"unclosed-multiline-string"}
+  ]
+}

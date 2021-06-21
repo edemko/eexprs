@@ -1,0 +1,22 @@
+""" \  
+ \hello
+   world
+  """
+
+"""\
+	\	mixed indentation
+		"""
+
+"""\
+   \eh
+  
+    """
+
+"""\
+   \   
+  asdf
+    """
+
+
+"""RUHROH
+"""

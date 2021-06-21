@@ -1,0 +1,8 @@
+{ "filename": "input.eexpr"
+, "warnings": []
+, "errors":
+  [ {"loc":{"from":{"line":1,"col":9},"to":{"line":1,"col":12}},"type":"missing-template-expr"}
+  , {"loc":{"from":{"line":3,"col":25},"to":{"line":5,"col":1}},"type":"missing-close-template"}
+  , {"loc":{"from":{"line":5,"col":3},"to":{"line":5,"col":4}},"type":"unbalanced-wrap","unclosed":{"open":"bracket","loc":{"from":{"line":5,"col":2},"to":{"line":5,"col":3}}}}
+  ]
+}

@@ -1,0 +1,16 @@
+{ "filename": "input.eexpr"
+, "warnings":
+  [ {"loc":{"from":{"line":13,"col":3},"to":{"line":13,"col":3}},"type":"no-trailing-newline"}
+  , {"loc":{"from":{"line":13,"col":1},"to":{"line":13,"col":3}},"type":"trailing-space"}
+  ]
+, "errors":
+  [ {"loc":{"from":{"line":6,"col":1},"to":{"line":6,"col":3}},"type":"offsides"}
+  , {"loc":{"from":{"line":9,"col":1},"to":{"line":9,"col":3}},"type":"shallow-indent"}
+  , {"loc":{"from":{"line":1,"col":3},"to":{"line":1,"col":4}},"type":"bad-dot"}
+  , {"loc":{"from":{"line":2,"col":2},"to":{"line":2,"col":3}},"type":"bad-dot"}
+  , {"loc":{"from":{"line":3,"col":3},"to":{"line":3,"col":4}},"type":"bad-dot"}
+  , {"loc":{"from":{"line":10,"col":1},"to":{"line":10,"col":3}},"type":"crammed-tokens"}
+  , {"loc":{"from":{"line":11,"col":1},"to":{"line":11,"col":3}},"type":"crammed-tokens"}
+  , {"loc":{"from":{"line":12,"col":1},"to":{"line":12,"col":10}},"type":"crammed-tokens"}
+  ]
+}
