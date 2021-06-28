@@ -1,0 +1,54 @@
+cabal-version: 3.0
+name: eexpr
+version: 0.0.1.0
+-- synopsis: 
+-- description:
+category: Data
+homepage: https://github.com/Okuno Zankoku/eexpr
+bug-reports: https://github.com/Okuno Zankoku/eexpr/issues
+author: Okuno Zankoku
+maintainer: zankoku.okuno@gmail.com
+copyright: 2021 Okuno Zankoku
+license: BSD-3-Clause
+license-file: LICENSE
+extra-source-files: CHANGELOG.md
+
+library
+  hs-source-dirs: src
+  exposed-modules:
+    Data.Eexpr.Grammar
+    Data.Eexpr.Grammar.Internal
+  -- other-modules:
+  build-depends:
+    , base >=4.11.1
+    , eexpr-bindings
+    , eexpr-core
+    , profunctors >=5
+    , text-short >=0.1.3
+  default-language: Haskell2010
+  ghc-options: -Wall -O2
+
+test-suite test
+  hs-source-dirs: test
+  main-is: Main.hs
+  type: exitcode-stdio-1.0
+  build-depends:
+    , eexpr
+    , base
+    -- , quickcheck-classes
+    -- , tasty
+    -- , tasty-hunit
+    -- , tasty-quickcheck
+  default-language: Haskell2010
+  ghc-options: -Wall -O2
+
+benchmark bench
+  hs-source-dirs: bench
+  main-is: Main.hs
+  type: exitcode-stdio-1.0
+  build-depends:
+    , eexpr
+    , base
+    , gauge
+  default-language: Haskell2010
+  ghc-options: -Wall -O2

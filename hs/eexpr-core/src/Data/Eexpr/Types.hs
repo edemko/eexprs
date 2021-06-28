@@ -3,6 +3,7 @@
 
 module Data.Eexpr.Types
   ( Eexpr(..)
+  , annotation
   , mapAnnotation
   , Bignum(..)
   , Radix(Radix, Base2, Base8, Base10, Base12, Base16)
@@ -53,6 +54,21 @@ mapAnnotation f (Colon a l r) = Colon (f a) (mapAnnotation f l) (mapAnnotation f
 mapAnnotation f (Comma a subs) = Comma (f a) (mapAnnotation f <$> subs)
 mapAnnotation f (Semicolon a subs) = Semicolon (f a) (mapAnnotation f <$> subs)
 
+annotation :: Eexpr a -> a
+annotation (Symbol ann _) = ann
+annotation (Number ann _) = ann
+annotation (String ann _ _) = ann
+annotation (Paren ann _) = ann
+annotation (Bracket ann _ ) = ann
+annotation (Brace ann _ ) = ann
+annotation (Block ann _ ) = ann
+annotation (Predot ann _) = ann
+annotation (Chain ann _) = ann
+annotation (Space ann _) = ann
+annotation (Ellipsis ann _ _) = ann
+annotation (Colon ann _ _) = ann
+annotation (Comma ann _) = ann
+annotation (Semicolon ann _) = ann
 
 ------------------------ Helper Types ------------------------
 

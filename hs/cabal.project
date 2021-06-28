@@ -1,1 +1,1 @@
-packages: ./eexpr-core ./eexpr-bindings
+packages: ./eexpr ./eexpr-core ./eexpr-bindings
