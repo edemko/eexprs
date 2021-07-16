@@ -5,6 +5,7 @@ module Data.List.NonEmpty2
   ( NonEmpty2(..)
   -- * Basic Functions
   , length
+  , uncons
   , head
   , tail
   , init
@@ -46,6 +47,9 @@ instance Semigroup (NonEmpty2 a) where
 
 length :: NonEmpty2 a -> Int
 length (_ :|| _ :| xs) = 2 + Prelude.length xs
+
+uncons :: NonEmpty2 a -> (a, NonEmpty a)
+uncons (x :|| xs) = (x, xs)
 
 head :: NonEmpty2 a -> a
 head (x :|| _) = x

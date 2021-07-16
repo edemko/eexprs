@@ -32,6 +32,9 @@ It's going in `include/`, but I have not documented that fact.
 - [ ] extra grammar
   - [ ] escape sequences matching `\\^[@-_]` (e.g. `"\^D"` for end-of-transmision)
   - [ ] perhaps I should allow "fat colon" `::` in the grammar (perhaps similar to dot: fat chain vs. fat colon)
+  - [ ] colon must be followed by space
+    - perhaps then I could have a colon with no space around it be a colon-chain
+    - or, I could merge no-space colon into surrounding symbols, effectively allowing symbols to contain or be composed of colons
 - [ ] write a "standards document" for the eexpr grammar
 
 I should consider the next technical step.

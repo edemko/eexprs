@@ -8,10 +8,12 @@ module Data.Eexpr.Grammar
   , liftMaybe
   , fromMaybe
   , GrammarError(..)
+  , Eexpr
   , Location(..)
   -- * Combinators
   , location
   , map
+  , mapErrors
   , predicate
   -- ** Altered Alternative
   , choice
@@ -48,19 +50,18 @@ module Data.Eexpr.Grammar
   ,(>>>)
   ,(<<<)
   , Arrow(..)
+  , ArrowApply(..)
   ) where
 
 import Data.Eexpr.Grammar.Internal
 import Prelude hiding (id,map,fail)
 
 import Data.Maybe (isNothing)
-import Control.Arrow (Arrow(..))
+import Control.Arrow (Arrow(..),ArrowApply(..))
 import Control.Category (Category(..),(>>>),(<<<))
 import Data.Eexpr.Types (Eexpr(..), annotation, Location(..), Bignum(..))
 import Data.Text.Short (ShortText)
 import Data.List.NonEmpty2 (NonEmpty(..),NonEmpty2(..))
-
-import qualified Data.List.NonEmpty2 as NE2
 
 
 predicate :: err -> (a -> Bool) -> Grammar err a a

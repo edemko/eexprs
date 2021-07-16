@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -10,6 +12,7 @@ module Data.Eexpr.Grammar.Internal
   , fromMaybe
   , location
   , map
+  , mapErrors
   -- * Altered Alternative
   , choice
   , fail
@@ -17,7 +20,7 @@ module Data.Eexpr.Grammar.Internal
 
 import Prelude hiding (id,map,fail)
 
-import Control.Arrow (Arrow(..),(>>>))
+import Control.Arrow (Arrow(..),ArrowApply(..),(>>>))
 import Control.Category (Category(..))
 import Control.Monad (join)
 import Data.Eexpr.Types (Eexpr(..), annotation, Location(..))
@@ -32,6 +35,7 @@ newtype Grammar err a b = Grammar
 
 data GrammarError err = GrammarError !Location err
   deriving stock (Read, Show)
+  deriving stock (Functor)
 
 runGrammar :: Grammar err (Eexpr Location) a -> Eexpr Location -> Either (NonEmpty (GrammarError err)) a
 runGrammar g e = snd <$> unGrammar g (annotation e) e
@@ -70,7 +74,7 @@ instance Applicative (Grammar err a) where
 
 -- Together, choice and fail are essentially `Alternative`, but they require an extra `err` type argument
 
-choice :: (Foldable f) => err -> f (Grammar err a b) -> Grammar err a b
+choice :: (Foldable f) => err -> f (Grammar any a b) -> Grammar err a b
 choice err alts = Grammar $ \l a -> go l a (toList alts)
   where
   go l a (Grammar g:gs) = case g l a of
@@ -97,7 +101,15 @@ instance Arrow (Grammar err) where
       (Right _, Left e2) -> Left e2
       (Left e1, Left e2) -> Left $ e1 <> e2
 
+instance ArrowApply (Grammar err) where
+  app = Grammar $ \l (Grammar g, x) -> g l x
+
 map :: Grammar err a b -> Grammar err [a] [b]
 map (Grammar g) = Grammar $ \l as -> g l <$> as & partitionEithers & \case
   ([], bs) -> Right (l, snd <$> bs)
   (e:es, _) -> Left $ join (e :| es)
+
+mapErrors :: (err -> err') -> Grammar err a b -> Grammar err' a b
+mapErrors f (Grammar g) = Grammar $ \l x -> case g l x of
+  Right it -> Right it
+  Left errs -> Left (fmap f <$> errs)
