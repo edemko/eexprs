@@ -7,11 +7,12 @@ module Data.Eexpr.Grammar
   , liftEither
   , liftMaybe
   , fromMaybe
-  , GrammarError(..)
+  , Context
+  , Error(..)
   , Eexpr
-  , Location(..)
   -- * Combinators
-  , location
+  , context
+  , annotation
   , map
   , mapErrors
   , predicate
@@ -19,7 +20,7 @@ module Data.Eexpr.Grammar
   , choice
   , fail
   -- ** Primitive Grammars
-  , withLocation
+  , withAnnotation
   , symbol
   , number
   , string
@@ -54,130 +55,135 @@ module Data.Eexpr.Grammar
   ) where
 
 import Data.Eexpr.Grammar.Internal
-import Prelude hiding (id,map,fail)
+import Prelude hiding (id,(.),map,fail)
 
-import Data.Maybe (isNothing)
 import Control.Arrow (Arrow(..),ArrowApply(..))
 import Control.Category (Category(..),(>>>),(<<<))
-import Data.Eexpr.Types (Eexpr(..), annotation, Location(..), Bignum(..))
-import Data.Text.Short (ShortText)
+import Data.Eexpr.Types (Eexpr(..), Bignum(..))
+import Data.List.NonEmpty ((<|))
 import Data.List.NonEmpty2 (NonEmpty(..),NonEmpty2(..))
+import Data.Maybe (isNothing)
+import Data.Text.Short (ShortText)
+
+import qualified Data.Eexpr.Types as Eexpr
+import qualified Data.List.NonEmpty as NE
 
 
-predicate :: err -> (a -> Bool) -> Grammar err a a
+predicate :: err -> (a -> Bool) -> Grammar ann err a a
 predicate err p = liftEither $ \a -> if p a then Right a else Left err
 
+annotation :: Grammar ann err a ann
+annotation = (Eexpr.annotation . NE.head) <$> context
 
+notTheEexpr :: NonEmpty (Eexpr ann) -> err -> Either (NonEmpty (Error ann err)) any
+notTheEexpr ctx err = Left (Error ctx err :| [])
 
 ------------------------ Primitive Grammars ------------------------
 
-withLocation :: Grammar err a b -> Grammar err a (Location, b)
-withLocation g = location &&& g
+withAnnotation :: Grammar ann err a b -> Grammar ann err a (ann, b)
+withAnnotation g = annotation &&& g
 
-notTheEexpr :: err -> Eexpr Location -> Either (NonEmpty (GrammarError err)) a
-notTheEexpr err e = Left $ GrammarError (annotation e) err :| []
+symbol :: err -> Grammar ann err (Eexpr ann) ShortText
+symbol err = Grammar $ \ctx e -> case e of
+  Symbol _ name -> Right (e <| ctx, name)
+  _ -> notTheEexpr ctx err
 
-symbol :: err -> Grammar err (Eexpr Location) ShortText
-symbol err = Grammar $ const $ \case
-  Symbol l' name -> Right (l', name)
-  x -> notTheEexpr err x
+number :: err -> Grammar ann err (Eexpr ann) Bignum
+number err = Grammar $ \ctx e -> case e of
+  Number _ val -> Right (e <| ctx, val)
+  _ -> notTheEexpr ctx err
 
-number :: err -> Grammar err (Eexpr Location) Bignum
-number err = Grammar $ const $ \case
-  Number l' val -> Right (l', val)
-  x -> notTheEexpr err x
-
-integerLiteral :: err -> Grammar err (Eexpr Location) Bignum
+integerLiteral :: err -> Grammar ann err (Eexpr ann) Bignum
 integerLiteral err = number err >>> predicate err (\Bignum{fractionalExponent} -> fractionalExponent == 0)
 
-fractionalLiteral :: err -> Grammar err (Eexpr Location) Bignum
+fractionalLiteral :: err -> Grammar ann err (Eexpr ann) Bignum
 fractionalLiteral err = number err >>> predicate err (\Bignum{fractionalExponent} -> fractionalExponent /= 0)
 
-string :: err -> Grammar err (Eexpr Location) (ShortText, [(Eexpr Location, ShortText)])
-string err = Grammar $ const $ \case
-  String l' hd tl -> Right (l', (hd, tl))
-  x -> notTheEexpr err x
+string :: err -> Grammar ann err (Eexpr ann) (ShortText, [(Eexpr ann, ShortText)])
+string err = Grammar $ \ctx e -> case e of
+  String _ hd tl -> Right (e <| ctx, (hd, tl))
+  _ -> notTheEexpr ctx err
 
-stringLiteral :: err -> Grammar err (Eexpr Location) ShortText
+stringLiteral :: err -> Grammar ann err (Eexpr ann) ShortText
 stringLiteral err = string err >>> second (predicate err null) >>> arr fst
 
-paren :: err -> Grammar err (Eexpr Location) (Maybe (Eexpr Location))
-paren err = Grammar $ const $ \case
-  Paren l' sub -> Right (l', sub)
-  x -> notTheEexpr err x
+paren :: err -> Grammar ann err (Eexpr ann) (Maybe (Eexpr ann))
+paren err = Grammar $ \ctx e -> case e of
+  Paren _ sub -> Right (e <| ctx, sub)
+  _ -> notTheEexpr ctx err
 
-parenExpr :: err -> Grammar err (Eexpr Location) (Eexpr Location)
+parenExpr :: err -> Grammar ann err (Eexpr ann) (Eexpr ann)
 parenExpr err = fromMaybe err (paren err)
 
-nilParen :: err -> Grammar err (Eexpr Location) ()
+nilParen :: err -> Grammar ann err (Eexpr ann) ()
 nilParen err = paren err >>> predicate err isNothing >>> arr (const ())
 
-bracket :: err -> Grammar err (Eexpr Location) (Maybe (Eexpr Location))
-bracket err = Grammar $ const $ \case
-  Bracket l' sub -> Right (l', sub)
-  x -> notTheEexpr err x
+bracket :: err -> Grammar ann err (Eexpr ann) (Maybe (Eexpr ann))
+bracket err = Grammar $ \ctx e -> case e of
+  Bracket _ sub -> Right (e <| ctx, sub)
+  _ -> notTheEexpr ctx err
 
-bracketExpr :: err -> Grammar err (Eexpr Location) (Eexpr Location)
+bracketExpr :: err -> Grammar ann err (Eexpr ann) (Eexpr ann)
 bracketExpr err = fromMaybe err (bracket err)
 
-nilBracket :: err -> Grammar err (Eexpr Location) ()
+nilBracket :: err -> Grammar ann err (Eexpr ann) ()
 nilBracket err = bracket err >>> predicate err isNothing >>> arr (const ())
 
-brace :: err -> Grammar err (Eexpr Location) (Maybe (Eexpr Location))
-brace err = Grammar $ const $ \case
-  Brace l' sub -> Right (l', sub)
-  x -> notTheEexpr err x
+brace :: err -> Grammar ann err (Eexpr ann) (Maybe (Eexpr ann))
+brace err = Grammar $ \ctx e -> case e of
+  Brace _ sub -> Right (e <| ctx, sub)
+  _ -> notTheEexpr ctx err
 
-braceExpr :: err -> Grammar err (Eexpr Location) (Eexpr Location)
+braceExpr :: err -> Grammar ann err (Eexpr ann) (Eexpr ann)
 braceExpr err = fromMaybe err (brace err)
 
-nilBrace :: err -> Grammar err (Eexpr Location) ()
+nilBrace :: err -> Grammar ann err (Eexpr ann) ()
 nilBrace err = brace err >>> predicate err isNothing >>> arr (const ())
 
-block :: err -> Grammar err (Eexpr Location) (NonEmpty (Eexpr Location))
-block err = Grammar $ const $ \case
-  Block l' subs -> Right (l', subs)
-  x -> notTheEexpr err x
+block :: err -> Grammar ann err (Eexpr ann) (NonEmpty (Eexpr ann))
+block err = Grammar $ \ctx e -> case e of
+  Block _ subs -> Right (e <| ctx, subs)
+  _ -> notTheEexpr ctx err
 
-predot :: err -> Grammar err (Eexpr Location) (Eexpr Location)
-predot err = Grammar $ const $ \case
-  Predot l' sub -> Right (l', sub)
-  x -> notTheEexpr err x
+predot :: err -> Grammar ann err (Eexpr ann) (Eexpr ann)
+predot err = Grammar $ \ctx e -> case e of
+  Predot _ sub -> Right (e <| ctx, sub)
+  _ -> notTheEexpr ctx err
 
-chain :: err -> Grammar err (Eexpr Location) (NonEmpty2 (Eexpr Location))
-chain err = Grammar $ const $ \case
-  Chain l' subs -> Right (l', subs)
-  x -> notTheEexpr err x
+chain :: err -> Grammar ann err (Eexpr ann) (NonEmpty2 (Eexpr ann))
+chain err = Grammar $ \ctx e -> case e of
+  Chain _ subs -> Right (e <| ctx, subs)
+  _ -> notTheEexpr ctx err
 
-space :: err -> Grammar err (Eexpr Location) (NonEmpty2 (Eexpr Location))
-space err = Grammar $ const $ \case
-  Space l' subs -> Right (l', subs)
-  x -> notTheEexpr err x
+space :: err -> Grammar ann err (Eexpr ann) (NonEmpty2 (Eexpr ann))
+space err = Grammar $ \ctx e -> case e of
+  Space _ subs -> Right (e <| ctx, subs)
+  _ -> notTheEexpr ctx err
 
-ellipsis :: err -> Grammar err (Eexpr Location) (Maybe (Eexpr Location), Maybe (Eexpr Location))
-ellipsis err = Grammar $ const $ \case
-  Ellipsis l' before after -> Right (l', (before, after))
-  x -> notTheEexpr err x
+ellipsis :: err -> Grammar ann err (Eexpr ann) (Maybe (Eexpr ann), Maybe (Eexpr ann))
+ellipsis err = Grammar $ \ctx e -> case e of
+  Ellipsis _ before after -> Right (e <| ctx, (before, after))
+  _ -> notTheEexpr ctx err
 
-colon :: err -> Grammar err (Eexpr Location) (Eexpr Location, Eexpr Location)
-colon err = Grammar $ const $ \case
-  Colon l' before after -> Right (l', (before, after))
-  x -> notTheEexpr err x
+colon :: err -> Grammar ann err (Eexpr ann) (Eexpr ann, Eexpr ann)
+colon err = Grammar $ \ctx e -> case e of
+  Colon _ before after -> Right (e <| ctx, (before, after))
+  _ -> notTheEexpr ctx err
 
-comma :: err -> Grammar err (Eexpr Location) [Eexpr Location]
-comma err = Grammar $ const $ \case
-  Comma l' subs -> Right (l', subs)
-  x -> notTheEexpr err x
+comma :: err -> Grammar ann err (Eexpr ann) [Eexpr ann]
+comma err = Grammar $ \ctx e -> case e of
+  Comma _ subs -> Right (e <| ctx, subs)
+  _ -> notTheEexpr ctx err
 
-semicolon :: err -> Grammar err (Eexpr Location) [Eexpr Location]
-semicolon err = Grammar $ const $ \case
-  Semicolon l' subs -> Right (l', subs)
-  x -> notTheEexpr err x
-
-
+semicolon :: err -> Grammar ann err (Eexpr ann) [Eexpr ann]
+semicolon err = Grammar $ \ctx e -> case e of
+  Semicolon _ subs -> Right (e <| ctx, subs)
+  _ -> notTheEexpr ctx err
 
 
--- leadingKeyword :: ShortText -> Grammar () (Eexpr Location) (Eexpr Location)
+
+
+-- leadingKeyword :: ShortText -> Grammar () (Eexpr ann) (Eexpr ann)
 -- leadingKeyword name = lookahead $ choice ()
 --   [ space () >>> arr NE2.head >>> symbol () >>> predicate () (== name)
 --   , symbol () >>> predicate () (== name)
