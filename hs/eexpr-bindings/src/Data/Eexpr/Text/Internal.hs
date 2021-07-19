@@ -67,6 +67,7 @@ data PauseAt
 newDefaultParser :: (PrimMonad m) => ByteString -> m (ParserObj (PrimState m))
 {-# NOINLINE newDefaultParser #-}
 newDefaultParser inp = do
+  -- TODO since I'm using the unsafe ffi, I don't need to pin this; so I can bang `unParser` and eliminate two indirections
   st <- Prim.newPinnedByteArray (fromIntegral Ffi.sizeofParser)
   let obj = ParserObj st inp
   unsafeIOToPrim $ Ffi.initDefault (parserPtr obj)
@@ -113,7 +114,7 @@ fromC eexpr_p = do
   location <- unsafeIOToPrim $ do
     loc_fp <- mallocForeignPtrBytes (fromIntegral Ffi.sizeofLoc)
     withForeignPtr loc_fp $ \loc_p -> do
-      _ <- Ffi.eexprLocate eexpr_p loc_p
+      Ffi.eexprLocate eexpr_p loc_p
       copyCLoc loc_p
   case Ffi.eexprType eexpr_p of
     typ
