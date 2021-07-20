@@ -139,8 +139,9 @@ void disambiguateDots(engine* st) {
 }
 
 /*
-  `unknown-colon end-of-line whitespace(n)?_1 --> open-indent(n || 0) end-of-line \1`
-  `unknown-colon ^end-of-line --> colon
+  `unknown-colon end-of-line space(n)?_1 --> open-indent(n || 0) end-of-line \1`
+  `^(space | start-of-line | unknown-dot) open-indent --> space open-indent`
+  `unknown-colon ^end-of-line --> colon`
 */
 static
 void disambiguateColons(engine* st) {
@@ -156,6 +157,19 @@ void disambiguateColons(engine* st) {
         next->here.transparent = true;
         if (ws->here.type == EEXPR_TOK_UNKNOWN_SPACE) {
           ws->here.transparent = true;
+        }
+        // insert space before indented block
+        dllistNode_eexpr_token* prev = getPrev(strm);
+        if ( prev->here.type != EEXPR_TOK_UNKNOWN_NEWLINE
+          && prev->here.type != EEXPR_TOK_UNKNOWN_SPACE
+          && prev->here.type != EEXPR_TOK_UNKNOWN_DOT
+          ) {
+          eexpr_token synthSpace =
+            { .loc = { .start = strm->here.loc.start, .end = strm->here.loc.start }
+            , .type = EEXPR_TOK_SPACE
+            , .transparent = false
+            };
+          dllist_insertBefore_eexpr_token(&st->tokStream, &synthSpace, strm);
         }
       }
       else if (next->here.type == EEXPR_TOK_EOF) {

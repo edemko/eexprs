@@ -41,6 +41,8 @@ do:
   second\
   third
    fourth
+do.:
+  chained do
 
 "Hello, `toUpper name`!"
 "Goodbyte, `firstName` `lastName`!"
