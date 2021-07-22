@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Eric Demko" />
+  <title>Report on E-Exprs</title>
+  <style>
+    html {
+      line-height: 1.5;
+      font-family: Georgia, serif;
+      font-size: 20px;
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 1em;
+      }
+    }
+    @media print {
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, 'Lucida Console', Consolas, monospace;
+      font-size: 85%;
+      margin: 0;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Report on E-Exprs</h1>
+<p class="author">Eric Demko</p>
+</header>
+<p>The key contribution of this report is a grammar and parser for a data language with optimized ergonomics for encoding a wide range of programming languages. They key idea—which has been used to great effect since the dawn of high-level languages<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a>—is to define the concrete syntax of one language as a subset of the concrete syntax of a previously-implemented data language. Thus, when implementing a new concrete syntax, one can re-use all of the work of converting a byte stream into a algebraic data type (ADT), and need only perform functional pattern matching to inject it into a type representing your abstract syntax. The rest of this report will define eexprs, explicate the implementation technique, and motivate/rationalize my design choices.</p>
+<div class="Warning">
+<p>asdf</p>
+</div>
+<h2 id="motivation">Motivation</h2>
+<p>I’ve lost count of how many toy language implementations I’ve given up on after having put not-insignificant time into the parser; I’m <em>incredibly bored of writing parsers</em>. So, I resolved to stop writing them. As Lisp programmers are already aware, code is data: one obvious technique would be to encode the abstract syntax in an existing data format. While JSON parsers are readily available, actually reading or writing a term is physically painful. Other common data languages like XML and YAML suffer a similar fate. I think anyone would much prefer s-exprs or e-exprs.</p>
+<dl>
+<dt>JSON</dt>
+<dd><pre><code>{ &quot;_type&quot;: &quot;apply&quot;, &quot;function&quot;: &quot;push&quot;
+, &quot;args&quot;: [ &quot;x&quot;, {&quot;_type&quot;: &quot;list&quot;, &quot;elems&quot;:
+  [ {&quot;_type&quot;: &quot;apply&quot;, &quot;function&quot;: &quot;f&quot;, args: [1]}
+  , {&quot;_type&quot;: &quot;apply&quot;, &quot;function&quot;: &quot;g&quot;, args: [2]}
+  ]} ]
+}</code></pre>
+</dd>
+<dt>E-exprs</dt>
+<dd><code>push x [f 1, g 2]</code>
+</dd>
+<dt>S-exprs</dt>
+<dd><code>(push x (list (f 1) (g 2)))</code>
+</dd>
+<dt>YAML</dt>
+<dd><pre><code>!apply
+function: push
+args:
+  - x
+  - - !apply {function: f, args: [1]}
+    - !apply {function: g, args: [2]}</code></pre>
+</dd>
+<dt>XML</dt>
+<dd><pre><code>&lt;apply&gt;
+  &lt;function&gt;
+    &lt;var&gt;push&lt;/var&gt;
+  &lt;/function&gt;
+  &lt;args&gt;
+    &lt;var&gt;x&lt;/var&gt;
+    &lt;list&gt;
+      &lt;apply&gt;
+        &lt;function&gt;f&lt;/function&gt;
+        &lt;args&gt;&lt;int&gt;1&lt;/int&gt;&lt;/args&gt;
+      &lt;/apply&gt;
+      &lt;apply&gt;
+        &lt;function&gt;g&lt;/function&gt;
+        &lt;args&gt;&lt;int&gt;2&lt;/int&gt;&lt;/args&gt;
+      &lt;/apply&gt;
+    &lt;/list&gt;
+  &lt;/args&gt;
+&lt;/apply&gt;</code></pre>
+</dd>
+</dl>
+<p>The most widely-known data languages are optimized for machine-machine communication, with only some consideration for humans to peek at it occasionally. However, writing source code is all about human-human communication, with only some consideration for the ability of a machine to read it. Both s-exprs and e-exprs are much better for this task.</p>
+<h3 id="recognizer-technique-with-sexprs">Recognizer Technique with Sexprs</h3>
+<p>S-exprs are the main inspiration for s-exprs. The two languages share a number of common features, but sexprs are a much smaller language. Therefore, I’ll go over sexprs first to illustrate the technique succinctly before demonstrating eexprs. Though I have tried to distill the essence of this particular advantage of sexprs, if you are already familiar with this technique, it still might seem like flogging a dead horse.</p>
+<p>The key idea is to separate parsing for a target language into two stages:</p>
+<ol type="1">
+<li>Parse a byte stream into the abstract syntax (i.e. data type) of s-exprs.</li>
+<li>Recursively pattern match against the s-expr value to construct a term in the target language’s abstract syntax.</li>
+</ol>
+<p>In the case of sexprs, we have a particularly small abstract syntax:</p>
+<pre><code>data SExpr
+  = Atom Text
+  | Combination [SExpr]</code></pre>
+<p>Although one might have an idea about what the values of this type mean (e.g. that combinations are function calls), sexprs need not be a carrier for only Lisp dialects. One could just as easily use sexprs to represent the abstract syntax of (say) Prolog or Algol.</p>
+<p>To use s-exprs as part of a lambda calculus implementation, we need only define our abstract syntax,</p>
+<pre><code>data Lam
+  = Var Text
+  | Lam [Text] [Lam]
+  | App Lam [Lam]</code></pre>
+<p>and then define a recognizer,</p>
+<pre><code>recognize :: Sexpr -&gt; Maybe Lam
+recognize (Atom name)
+  = Just (Var name)
+recognize (Combination (Atom &quot;lambda&quot; : params : body)
+  = Lam &lt;$&gt; map recognizeParams params &lt;*&gt; map recognize body
+  where
+  recognizeParams (Atom name) = Just name
+  recognizeParams _ = Nothing
+recognize (Combination (func : args)
+  = App &lt;$&gt; recognize func &lt;*&gt; map recognize args
+recognize _ = Nothing</code></pre>
+<p>and with only this handful of code, we have completed an entire parser for the lambda calculus.</p>
+<p>Admittedly, this recognizer does not report informative errors. Later, we will see a “grammar combinator” library for e-exprs that tracks context and can therefore support much richer error diagnostics.</p>
+<p>The advantages of the technique are</p>
+<ul>
+<li>A high-quality s-expr parser and grammar combinator library need only be implemented once, and then it can be shared between multitudes of new languages.</li>
+<li>Most of the tedious and tricky parts of parsing are in the s-expr parser; the code that needs to be written for new languages is small and simple.</li>
+</ul>
+<p>The question now is, if s-exprs are so great, why implement e-exprs? My view is that s-exprs, while they are far more ergonomic than JSON, are <em>not</em> ergonomic compared to common programming languages. A claim like that is certain to spark vocal argument, but to engage in it here would derail the main thrust of this paper. Instead, let’s jump straight into describing e-exprs and delay any rant-like objects until <a href="#suboptimality-of-s-exprs">later in the report</a>. Hopefully, the advantages of e-exprs will become clear as we examine them.</p>
+<h2 id="e-exprs">E-Exprs</h2>
+<h3 id="a-whirlwind-tour">A Whirlwind Tour</h3>
+<p>The leaves of an eexpr are atoms such as numbers, symbols, and strings. A range of Unicode symbols<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> are also supported, and there is no distinction between different classes of symbols (such as operator, variable). In addition to C-style strings, there are also also be written sql-style, or as heredocs, which are equivalent in the abstract grammar. All other eexprs are simply various combinations of these leaves. FIXME move this to a more detailed place where I can include rationale: There is no special syntax for character literals.</p>
+<pre><code># numbers
+12
+0xf00d
+6.636e-34
+# symbols
+filename
+if
+&gt;&gt;=
+λ
+a+3Ω
+# strings
+&quot;Hello!&quot;
+&#39;wouldn&#39;&#39;t&#39;&#39;ve&#39;
+&quot;&quot;&quot;
+long form
+  text that
+ is &quot;uninterpreted&quot;
+&quot;&quot;&quot;</code></pre>
+<p>The simplest ways to combine eexprs is to simply write them next to each other separated by spaces, or to enclose them in parenthesis. An eexpr can also be enclosed in square or curly braces, or separated by commas or semicolons. Each of these enclosers and separators are treated distinctly by eexprs, but an eexpr-based language may choose to ignore distinctions. There are no restrictions as to which separators can be used with which enclosers, or even that either needs the other at all.</p>
+<pre><code>greet name
+(a + b)
+[1, 2, 3]
+{a b}; c; d</code></pre>
+<p>C-style strings can be made into templates that embed further eexprs in backticks within the string. Unlike some other string template syntaxes, arbitrary eexprs can be spliced into a template.</p>
+<pre><code>&quot;Hello, `name`!&quot;
+&quot;`results.len` result`if results.len == 1 then &quot;&quot; else &quot;s&quot;` found&quot;</code></pre>
+<p>Eexprs can also be separated by dots, just as long as there is no whitespace around the dots. To support more familiar syntax, the dot is optional before strings and enclosers.</p>
+<pre><code># all dots present
+player.[1].position
+r.&#39;\bwords?\b&#39;.search.(&quot;some words&quot;)
+# equivalents:
+player[1].position
+r&#39;\bwords?\b&#39;.search(&quot;some words&quot;)</code></pre>
+<p>Eexprs can also be combined in an indented block, which are indicated by an end-of-line colon. Most of the time, the indented block should be a space-separated child of the other eexprs on the starting line rather than a child of the last dot-separated eexpr. Thus, the space before an indented block is optional.</p>
+<pre><code># no-nice-things version
+do :
+  thing-1
+  thing-2
+# equivalent, but more familiar syntax
+do:
+  thing-1
+  thing-2
+# explicit dot-expressions are still possible
+do.:
+  thing-1
+  thing-2</code></pre>
+<p>Since indented blocks are often enclosed, an end-of-line open encloser implicitly starts an indented block:</p>
+<pre><code># this natural syntax
+do {
+  thing-1
+  thing-2
+}
+# is equivalent to
+do {:
+  thing-1
+  thing-2
+}</code></pre>
+<p>Two eexprs can also be separated by a colon. These separating colons bind more tightly than comma, which makes it easy to encode key-value dictionaries in eexprs. Note that we can use indented blocks to allow the omission of oft-forgotten end-of-line commas.</p>
+<pre><code>{
+  type: &quot;point&quot;
+  lat: 51.388, lon: 30.099
+}</code></pre>
+<p>Finally there are a few minor syntaxes, such as ellipsis and prefix dot which we will go over in detail later. And of course there are line comments introduced by a hash—which we have already seen.</p>
+<p>In these examples, I have written eexprs suggestive of some underlying semantics so as to motivate the features. However, it is important to note that no specific semantics are imposed by eexprs. E.g. a client of eexprs could encode function calls with the Haskell-like <code>f x</code>, Lisp-like <code>(f x)</code>, Algol-like <code>f(x)</code>, Forth-like <code>x f</code>, or in innumerable other ways—assuming the client language supports function calls at all.</p>
+<p>TODO: once I implement these features, document them here:</p>
+<ul>
+<li>mixfixes</li>
+<li>ascii &lt;-&gt; unicode</li>
+</ul>
+<h3 id="abstract-syntax">Abstract Syntax</h3>
+<p>TODO show the data type</p>
+<p>FIXME: this paragraph is garbo. This grammar is representable by a simple ADT. To transform an eexpr term into a more specific syntax, you could simply pattern-match against this ADT. However, if you want to report (client) grammatical errors in context, then it it likely preferable to use an arrow-based api to match eexprs. I have implemented such such an api. It also includes an instance for <code>ArrowApp</code>, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style’s ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).</p>
+<h3 id="recognizer-combinators">Recognizer Combinators</h3>
+<h3 id="concrete-syntax">Concrete Syntax</h3>
+<p>TODO this section should be a formal description of the grammar, along with informal explanations and rationales. Here should be the notes about how much work a parser implementation would need to do.</p>
+<h4 id="lexer">Lexer</h4>
+<h4 id="post-lexer">Post-lexer</h4>
+<h4 id="grammar">Grammar</h4>
+<h2 id="suboptimality-of-s-exprs">Suboptimality of S-Exprs</h2>
+<p>TODO now that this is in a different part of the report, it needs new linking verbiage</p>
+<p>As powerful as the recognizer technique is, I don’t think s-exprs is its best medium. I don’t want to rant about s-exprs too much, since that’s not the point; if you stopped reading right now and used recognizers over s-exprs instead of writing parsers, your life would improve plenty. That said, if you have used enough s-exprs, you have probably experienced some pain points that e-exprs would improve on. At the other end of the spectrum, if you have resisted learning a Lisp because it looks too alien, then perhaps it would be better to jump directly to e-exprs.</p>
+<p>The most important practical problem with s-exprs is a historical one: there is no standard for them. Different Lisp implementations have different notions of what constitutes an atom, and many have different concrete syntaxes for atoms even when they agree on the abstract syntax. Additionally, most implementations come with reader macros, which require a programming language to be well-defined before parsing into s-exprs can even be fully defined. Further, the “pure” s-exprs presented above have been “polluted” with a variety of syntactic shortcuts, such as the cons-dot <code>(a . b)</code>, a variety of quotation syntaxes, and syntax for keyword arguments; these extensions are another source of differences between implementations. The suspicious thing about these syntax extensions is that they are something no Lisp programmer would want to live without, but would contribute very little to non-Lisps.</p>
+<p>The most common objection I’ve heard is that Lisps have “too many parenthesis”. While this appears to be a surface complaint, it would be foolish to ignore such persistent “customer” feedback. A more cogent version of this complaint would be that the meaning of parenthesis in Lisp are grossly overloaded. When faced with new Lisp code, one must figure out what each set of parenthesis is used for: do they invoke macros? procedures? project a struct member? delimit a list? a mapping? the items in a list or mapping? code blocks? statements within a block? and so on… Given more syntax, a language designer has more opportunity to visually distinguish common programming constructs.</p>
+<dl>
+<dt>E-expr</dt>
+<dd><pre><code>match os.name:
+  &quot;linux&quot;: display &quot;Hello, `fromMaybe name &quot;Linus&quot;`!&quot;
+  &quot;mac&quot;: display &quot;Hello, `fromMaybe name &quot;Steve&quot;`!&quot;
+  &quot;windows&quot;: {
+    display &quot;Hello, `fromMaybe name &quot;Bill&quot;`!&quot;
+    init-wsl
+  }</code></pre>
+</dd>
+<dt>S-expr</dt>
+<dd><pre><code>(match (os-name os)
+  (&quot;linux&quot; (display (string-concat &quot;Hello, &quot; (fromMaybe name &quot;Linus&quot;) &quot;!&quot;))
+  (&quot;mac&quot; (display (string-concat &quot;Hello, &quot; (fromMaybe name &quot;Steve&quot;) &quot;&quot;))
+  (&quot;windows&quot; (begin
+    (display (string-concat &quot;Hello, &quot; (fromMaybe name &quot;Bill&quot;) &quot;!&quot;)
+    (init-wsl))))</code></pre>
+</dd>
+</dl>
+<p>Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue. However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages. A design philosophy I used for eexprs is “the easier it is to write with tooling, the easier it is everywhere”<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a>. Indeed, while I’m developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.</p>
+<p>Before moving on, I just want to point out one non-advantage of s-exprs. I have heard it argued that the minimalist syntax of Lisp is the price you pay for Lisp’s most iconic advantage: its macro system. Indeed, one can very easily construct new sexprs from templates simply by introducing special forms for <code>quasiquote</code>, <code>unquote</code> and <code>unquote-splicing</code>. However, it is not necessary for s-exprs to be so minimalistic; it is sufficient that they form an algebraic data type. With an appropriate set of quasiquoters and unquoters, any language representable in an ADT can also take advantage of quasiquotation to implement metaprogramming. Nevertheless, I can see why in the 1960’s they went with sexprs rather than a richer system.<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a></p>
+<h1 id="notes">NOTES</h1>
+<p>parse a “level 0/1” int by checking that <code>radix^exp</code> is less than <code>2^n</code> for some reasonable <code>n</code> (perhaps 64 for known small ints, but if you allow exact big ints, then some larger n like <code>8^m</code> for a max of <code>m</code> bytes of memory (maybe 4096 is good? just how big a bigint do you need‽</p>
+<p>If a colon has a newline on the right, it starts a block. If a colon has inline space on the right, it’s a normal colon. If a colon has no space on the right, it might be part of a symbol: it joins up with any symbols to the right or left it also joins up with any colon to the right recursively That way, I can have <code>Foo:bar.baz</code> be the <code>baz</code> record of the <code>Foo:bar</code> qualified name, just as long as I also have a way to split strings on colons.</p>
+<p>Because eexprs draw a line between two algorithms both commonly referred to as “parsing” a “grammar”, we’ll use</p>
+<ul>
+<li>“eexpr grammar” and “parsing” for the grammar of plain eexprs and the parser that grammar, respectively</li>
+<li>“client grammar” and “recognizing” for the grammar of a eexpr-based language and the parser/pattern matcher for that grammar, respectively</li>
+</ul>
+<section class="footnotes" role="doc-endnotes">
+<hr />
+<ol>
+<li id="fn1" role="doc-endnote"><p>specifically: since 1958 with LISP<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2" role="doc-endnote"><p>How useful unicode input turns out to be is a different question. I’ve set my system up to be able to input many mathematical characters, but it’s a lot of work to ask from users in general. Instead, I would like to offer tools to can translate eexprs between Unicode and ASCII representations; it would be up to language and library implementors to offer an ASCII alternative for each Unicode symbol they use.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3" role="doc-endnote"><p>In a talk about accessibility, I picked up the idea that if you make something accessible for disabled people, you’ve probably made it easier for abled people as well. For example, a website that is usable by a person with dementia is not likely to be frustrating for the average user. This philosophy applies to the design of programming languages, and in a cybernetic sense, a lack of technology is a lack of ability.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4" role="doc-endnote"><p>Have you ever tried to implement a compiler in 4096 <em>bytes</em> of memory?<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section>
+</body>
+</html>
