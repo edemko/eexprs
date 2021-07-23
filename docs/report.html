@@ -22,7 +22,7 @@
       padding-top: 50px;
       padding-bottom: 50px;
       hyphens: auto;
-      overflow-wrap: break-word;
+      word-wrap: break-word;
       text-rendering: optimizeLegibility;
       font-kerning: normal;
     }
@@ -93,7 +93,6 @@
     pre code {
       padding: 0;
       overflow: visible;
-      overflow-wrap: normal;
     }
     .sourceCode {
      background-color: transparent;
@@ -145,6 +144,7 @@
     div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
     ul.task-list{list-style: none;}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" type="text/javascript"></script>
   <!--[if lt IE 9]>
     <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
   <![endif]-->
@@ -242,8 +242,7 @@ recognize _ = Nothing</code></pre>
 <li>Most of the tedious and tricky parts of parsing are in the s-expr parser; the code that needs to be written for new languages is small and simple.</li>
 </ul>
 <p>The question now is, if s-exprs are so great, why implement e-exprs? My view is that s-exprs, while they are far more ergonomic than JSON, are <em>not</em> ergonomic compared to common programming languages. A claim like that is certain to spark vocal argument, but to engage in it here would derail the main thrust of this paper. Instead, let’s jump straight into describing e-exprs and delay any rant-like objects until <a href="#suboptimality-of-s-exprs">later in the report</a>. Hopefully, the advantages of e-exprs will become clear as we examine them.</p>
-<h2 id="e-exprs">E-Exprs</h2>
-<h3 id="a-whirlwind-tour">A Whirlwind Tour</h3>
+<h2 id="a-whirlwind-tour-of-e-exprs">A Whirlwind Tour of E-Exprs</h2>
 <p>The leaves of an eexpr are atoms such as numbers, symbols, and strings. A range of Unicode symbols<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> are also supported, and there is no distinction between different classes of symbols (such as operator, variable). In addition to C-style strings, there are also also be written sql-style, or as heredocs, which are equivalent in the abstract grammar. All other eexprs are simply various combinations of these leaves. FIXME move this to a more detailed place where I can include rationale: There is no special syntax for character literals.</p>
 <pre><code># numbers
 12
@@ -314,15 +313,226 @@ do {:
 <li>mixfixes</li>
 <li>ascii &lt;-&gt; unicode</li>
 </ul>
-<h3 id="abstract-syntax">Abstract Syntax</h3>
+<h2 id="abstract-syntax">Abstract Syntax</h2>
 <p>TODO show the data type</p>
 <p>FIXME: this paragraph is garbo. This grammar is representable by a simple ADT. To transform an eexpr term into a more specific syntax, you could simply pattern-match against this ADT. However, if you want to report (client) grammatical errors in context, then it it likely preferable to use an arrow-based api to match eexprs. I have implemented such such an api. It also includes an instance for <code>ArrowApp</code>, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style’s ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).</p>
-<h3 id="recognizer-combinators">Recognizer Combinators</h3>
-<h3 id="concrete-syntax">Concrete Syntax</h3>
-<p>TODO this section should be a formal description of the grammar, along with informal explanations and rationales. Here should be the notes about how much work a parser implementation would need to do.</p>
-<h4 id="lexer">Lexer</h4>
-<h4 id="post-lexer">Post-lexer</h4>
-<h4 id="grammar">Grammar</h4>
+<h2 id="recognizer-combinators">Recognizer Combinators</h2>
+<h2 id="concrete-syntax">Concrete Syntax</h2>
+<p>At least conceptually, the grammar of eexprs can be split into four phases:</p>
+<ol type="1">
+<li>Decode UTF-8</li>
+<li>Raw Lexer</li>
+<li>Token Cooker</li>
+<li>Parser</li>
+</ol>
+<p>Raw lexing identifies individual tokens in a Unicode stream. It can be described mostly with regular expressions, though at points we require capturing groups. In the reference implementation, we require at most three (TODO verify) codepoints of lookahead.</p>
+<p>Cooking the token stream involves examining tokens in context to determine if they are relevant to the parser, and sometimes disambiguate how the token is to be used (e.g. space that separates eexprs vs. space which indicates indentation). This is described by a term rewrite system which only uses a few (TODO how many?) tokens of lookaround.</p>
+<p>Finally, the parser consumes the cooked token stream to produce an eexpr according to a context-free grammar.</p>
+<div class="Rationale">
+<p>The Unicode character set seems the most future-proof choice, since its goal is to subsume all other character sets. Choosing UTF-8 as the only encoding is less flexible, but detection of magic strings in their appropriate encodings is a source of complexity. Would that complexity be worth it? I don’t think so, and the <a href="http://utf8everywhere.org/">UTF-8 Everywhere Manifesto</a> presents the argument better than I can here.</p>
+</div>
+<h3 id="raw-lexer">Raw Lexer</h3>
+<p>TODO what all metasyntax do I use? only introduce it just before it is needed, not all at once</p>
+<pre><code>token ::= nl | lws(_, _) | lineJoin | comment
+       | number | symbol
+       | TODO</code></pre>
+<h4 id="whitespace">Whitespace</h4>
+<p>TODO these are the bits of whitespace that are used all over the place</p>
+<pre><code>NL ::= &lt;U+000A New Line&gt;
+CR ::= &lt;U+000D Carriage Return&gt;
+RS ::= &lt;U+001E Information Separator Two&gt;
+nl ::= NL CR? | CR NL? | RS
+# additional types of newline may be considered
+# it is also possible for implementations to ignore obsolete newline sequences; I&#39;ve included everything from wiki just because I could
+
+lws(&#39;SP&#39;, n ≥ 1) ::= &lt;U+0020 Space)&gt;{n}
+lws(&#39;HT&#39;, n ≥ 1) ::= &lt;U+0009 Character Tabulation&gt;{n}
+# additional types of space may be considered, but each must get a distinct whitespace type</code></pre>
+<p>TODO these are whitespace-like things</p>
+<pre><code>BS ::= &lt;U+005C Reverse Solidus&gt;
+lineJoin ::= BS lws(_, _)? nl
+
+comment ::= &#39;#&#39; (!nl)*</code></pre>
+<h4 id="numbers-and-symbols">Numbers and Symbols</h4>
+<p>E-exprs support both integer and fractional numbers in a variety of radices (bases). Doing this requires a surprising number of rules, but the logic is fairly intuitive.</p>
+<p>At their core, numbers consist of an integer part, an optional mantissa, and an optional exponent. For numbers not in base ten, a different radix can be indicated by beginning the integer part with a radix-leader (<code>0x</code> and the like). When there is a mantissa, there must be digits on both sides of the decimal point (e.g. <code>0.0</code> is allowed, but neither <code>0.</code> nor <code>.0</code> ). The exponent is essentially the same as the integer part, but only fractional numbers are allowed to have signed exponents. There are a variety of ways to indicate the start of an exponent, dependent on the base.</p>
+<pre><code>number ::= sign? intPart(base) uexp(base)?
+        |  sign? intPart(base) fracPart(base) exp(base)?
+
+intPart(base) ::= radixLeader(base) digits(base)
+fracPart(base) ::= &#39;.&#39; digits(base)
+
+uexp(base) ::= expLetter(base) digits(base)
+            |  &#39;^&#39; radixLeader(expBase) digits(expBase)
+exp(base) ::= sign? uexp(base)</code></pre>
+<div class="Rationale">
+<p>Fractional numbers must have both integer and mantissa present, since there’s really no reason to omit either. I think the extra character on either side is a negligible cost; if you find it it significant, I would wonder why you have so many magic constants in your code. Plenty of style guides require the zero in all or most contexts, and including it makes space in the grammar to distinguish numbers from other syntaxes. While the prefix-dot syntax I discuss below would have conflicted with an optional zero integral part for numbers, I had already decided on the numerical syntax before developing the prefix-dot. Perhaps it was dumb luck that I didn’t have to work hard to squeeze an idea into the syntax, but I flatter myself to think that early preparation enabled that luck.</p>
+</div>
+<p>E-exprs support bases 2, 8, 10, 12, and 16. Unsurprisingly, base 10 is the default, and the digits are exactly as you might expect.. To allow visual grouping, digits may be separated by underscores, but underscores should not appear at the start of end of a string of digits.</p>
+<pre><code>digits(base) ::= digit(base)+ ((&#39;_&#39; | digit(base))* digit(base))?
+
+digit(2) ::= &#39;0&#39; | &#39;1&#39;
+digit(8) ::= &#39;0&#39;…&#39;7&#39;
+digit(10) ::= &#39;0&#39;…&#39;9&#39;
+digit(12) ::= radixChar(10) | (&#39;↊&#39; | &#39;X&#39;) | (&#39;↋&#39; | &#39;E&#39;)
+digit(16) ::= radixChar(10) | &#39;a&#39;…&#39;f&#39; | &#39;A&#39;…&#39;F&#39;</code></pre>
+<div class="Rationale">
+<p>Allowing underscores in numbers makes it possible to group digits in ways that make large numbers easy to identify by subitizing rather than the more costly method of counting. Allowing multiple underscores makes it possible to have multiple levels of grouping; as numbers get larger, it becomes difficult to idenify how many groups there are. Consider <code>18_446_744__073_709_551_616</code> vs. <code>18_446_744_073_467_709_551_616</code> vs. <code>18446744073709551616</code>: it is easy to see that the first is about 18 million billion, but in the second I have to count the groups to estimate 18 <em>billion</em> billion, and in the third I have to count every digits to verify that it’s back to 18 million billion. I picked this example specifically because I had trouble remembering roughly how much <span class="math inline">\(2^{64}\)</span> is: unlike <span class="math inline">\(2^{32}\)</span>, there are just too many thousands groups to subitize.</p>
+</div>
+<div class="Rationale">
+<p>Base twelve is thrown in there basically just for fun, though it does help that the Unicode Consortium added dedicated codepoints for dec and el digits. The alternate ASCII glyphs <code>X</code> and <code>E</code> were chosen because the Dozenal Society of America voted for those forms where Unicode is poorly supported.</p>
+<p>More seriously, I had considered bases 32, 62, and 64. However, the alphabets for these bases are not widely agreed-on, so I leave those notations to client grammars.</p>
+<p>If it were easier to input Cuneiform, and I had a good way to solve the problem of representing zeros, I might have added <em>it</em> too—again for the lulz.</p>
+</div>
+<p>Radix indicators are the commonly-used ones. There is no indicator for ten (and I have marked this explicitly in the grammar), since base ten is the default. Exponents—you may have seen above—can always be marked with a <code>^</code> character, which also allows a change of radix.<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a> There are also some radix-specific exponent markers for radices where there is some agreement: namely in bases 2, 10, and 16.</p>
+<pre><code>sign ::= &#39;+&#39; | &#39;-&#39;
+
+radixLeader(base) ::= &#39;0&#39; radixLetter(base)
+radixLeader(10) ::= ɛ
+
+radixLetter(2) ::= &#39;b&#39; | &#39;B&#39;
+radixLetter(8) ::= &#39;o&#39; | &#39;O&#39;
+radixLetter(10) ::= Ø
+radixLetter(12) ::= &#39;z&#39; | &#39;Z&#39;
+radixLetter(16) ::= &#39;x&#39; | &#39;X&#39;
+
+expLetter(2) ::= &#39;b&#39; | &#39;B&#39;
+expLetter(8) ::= Ø
+expLetter(10) ::= &#39;e&#39; | &#39;E&#39;
+expLetter(12) ::= Ø
+expLetter(16) ::= &#39;h&#39; | &#39;H&#39;</code></pre>
+<p>Eexpr implementations should be careful when choosing an internal representation for parsed numbers. It is possible for a naïve implementation to consume all system memory. For example, numbers such as <span class="math inline">\(10^{(10^{100})}\)</span> can be represented in an eexpr with as few as 103 bytes, but when represented as an exact bigint, would require more memory than humans have ever manufactured. In the reference implementation, we do not attempt to expand the exponent, and instead leave it to client languages to determine whether (and how) to represent a number or emit an error. To help with this (TODO implement this), we have also included grammar combinators which only succeed for numbers that fit into various common representations.</p>
+<h4 id="strings">Strings</h4>
+<p>Eexprs support three string formats to support different levels of escaping within the string. They are:</p>
+<ul>
+<li>C-style (or double-quoted strings),</li>
+<li>SQL-style (or single-quoted strings), and</li>
+<li>heredocs (or triple-quoted strings<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a>).</li>
+</ul>
+<pre><code>string(x, y) ::= cString(x, y)
+string(S, S) ::= sqlString
+              |  heredoc</code></pre>
+<p>C-style strings have the richest syntax for escapes, and are the only string style that can be used as a template. Instead of attempting to detect nesting level in the lexer, we instead detect fragments of templates and leave it to the parser to attempt assembly into sensible string template expressions. We therefore categorize C-style strings by how they might join with other string parts.</p>
+<pre><code>SQ ::= &lt;U+0027 APOSTROPHE&gt;
+DQ ::= &lt;U+0022 QUOTATION MARK&gt;
+BQ ::= &lt;U+0060 GRAVE ACCENT&gt;
+
+cStrDelim(S) ::= DQ
+cStrDelim(T) ::= BQ
+cStr(x, y) ::= cStrDelim(x) cStrUnit* cStrDelim(y)
+
+cStrUnit ::= cStrChar
+          |  BS cEscapeChar
+          |  BS cStrLineJoin BS
+
+HEX ::= &#39;0&#39;…&#39;9&#39; | &#39;a&#39;…&#39;f&#39; | &#39;A&#39;…&#39;F&#39;
+cEscapeChar ::= BS | SQ | DQ | BQ
+             |  &#39;n&#39; | &#39;r&#39; | &#39;t&#39;
+             |  &#39;0&#39; | &#39;e&#39; | &#39;a&#39; | &#39;b&#39; | &#39;f&#39; | &#39;v&#39;
+             |  &#39;x&#39; HEX{2} | &#39;u&#39; HEX{4} | &#39;U&#39; HEX{6}
+             |  &#39;&amp;&#39;
+cStrLineJoin ::= nl lws(_)
+
+# TODO I should likely eliminate non-printing characters as well
+cStrChar ::= 1 - (BS | DQ | BQ | nl)</code></pre>
+<p>While most of the escape sequences are taken from C, a few are less-widely represented. The sequence <code>\e</code> encodes <code>&lt;U+001B ESCAPE&gt;</code>, and the sequence <code>\&amp;</code> encodes a zero-length string. The <code>\x</code>, <code>\u</code>, and <code>\U</code> sequences encode arbitrary codepoints from (respectively) ASCII, the Unicode Basic Multilingual Plane, and all of Unicode. Attempting to encode a codepoint outside the range of Unicode (anything larger than 0x10FFFF) is an error.</p>
+<div class="Rationale">
+<p>To be honest, I’m not sure that I need both <code>\&amp;</code> and the fixed-length <code>\x</code>/<code>\u</code>/<code>\U</code> escapes. The former was stolen from Haskell which allows variable-length Unicode escapes (e.g. <code>"\x333" !=</code>“33”<code>== \x33\&amp;3</code>). The latter is my own solution (though apparently C has something similar) to deal with the potential ambiguity of variable-length Unicode escapes by eliminating variable length entirely. It is entirely possible that I may change this area of the syntax before a 1.0 release in response to feedback.</p>
+</div>
+<div class="Rationale">
+<p>While <code>\e</code> is not an escape compliant with the C Standard, this was because some character sets (e.g. EBCDIC) lack a character with the corresponding ASCII semantics. In the case of eexprs—which are explicitly reliant on Unicode—this is not a concern. Meanwhile, <code>\e</code> is used sometimes for terminal programming, and would likely be more meaningful for custom binary formats than the obscute “vertical tab” <code>\v</code> sequence.</p>
+</div>
+<div class="Rationale">
+<p>Two C escapes <code>\?</code> and octal <code>\nnn</code> are missing from eexprs. The <code>\?</code> escape is to avoid trigraph syntax, a rarely-used C feature which eexprs do not include. Octal escapes on the other hand, are perfectly reasonable, but it seems few programmers use octal today. Even DEC, which famously used octal in all their PDP-11 and VAX documentation, switched to hexadecimal notation when they published the Alpha architecture.</p>
+</div>
+<p>SQL-style strings offer fewer escapes, but a compensatorily wider range of valid characters. SQL-style strings are delimited by single quotes, but a sequence of two single-quotes encodes a single quote into the string.</p>
+<pre><code>sqlStr ::= SQ sqlStrUnit* SQ
+sqlStrUnit ::= 1 - SQ
+            |  SQ SQ</code></pre>
+<div class="Rationale">
+<p>I had considered using single-quotes to indicate character literals. However, I was also envious of syntax such as Python’s r-strings for easily writing strings which have lots of backslashes, such as regex. Instead of hardcoding a fixed (and therefore small) set of string prefixes, I instead opted to allow dot-separated symbol+string to omit the dot. Client languages can then determine any special interpretations for such a string, perhaps interpreting a string as a character. This then made space for SQL-style strings, which like Python r-strings can encode C-style escapes with ease.</p>
+<p>In typed languages, Haskell’s <code>IsString</code> should serve as an inspiration: interpret a string literal as a character literal in contexts where a character-typed value is expected. The same technique can also be used for alternate memory layouts of strings, hexadecimal strings, base64 strings, ip addresses, mac addresses, and so on for as many types as users wish they had literals for.</p>
+<p>In untyped languages, conversion functions (in general) cannot be inferred, and so must be manually inserted. This could be done by prefixing a string with a conversion function (perhaps in a separate namespace). Thus, <code>c'a'</code> for a character, <code>base64url"KMK044O7z4njg7sp44Gj55Sx"</code> for a base64-encoded bytestring, and so on.</p>
+</div>
+<p>TODO heredocs</p>
+<div class="Rationale">
+<p>TODO heredocs are here mostly for docstrings. while many languages put documentation in comments, I like Python’s ability to print documentation for an object from the repl. putting such documentation in comments would make it difficult to attach it to language objects, since comments are meant to be removed before parsing.</p>
+<p>the other use they might have is in embedding other languages, such as sql.</p>
+</div>
+<h4 id="punctuation">Punctuation</h4>
+<p>TODO</p>
+<pre><code>punctuation ::= encloser(_, _)
+             | separator(_)
+             | ellipsis
+             | unknownDot
+             | unknownColon
+
+encloser(Open, Paren) ::= &#39;(&#39;
+encloser(Open, Bracket) ::= &#39;[&#39;
+encloser(Open, Brace) ::= &#39;{&#39;
+encloser(Close, Paren) ::= &#39;)&#39;
+encloser(Close, Bracket) ::= &#39;]&#39;
+encloser(Close, Brace) ::= &#39;}&#39;
+
+separator(Semicolon) ::= &#39;;&#39;
+separator(Comma) ::= &#39;,&#39;
+
+unknownDot ::= &#39;.&#39;
+unknownColon ::= &#39;:&#39;
+ellipsis ::= &#39;..&#39; # TODO probly also include &#39;…&#39;</code></pre>
+<h3 id="lexeme-cooker">Lexeme Cooker</h3>
+<p>The lexeme cooker is a sequence of rewrite rules. TODO: I am less familiar with the properties of rewrite systems, but I think these could be applied each in-order in a single pass over the string, or make several passes one for each. TODO: I’m also not sure how much these rules could be re-ordered, but I do know some must come before others (e.g. whitespace classification before indentation). Rules listed earlier in this system take precedence over rules listed later.</p>
+<p>Before applying this system, the token stream is augmented with a start-of-file token <code>SOF</code> at the start and an <code>EOF</code> token at the end. Implementations perhaps need not actually allocate space for such tokens, but this practice at least makes it easier to specify.</p>
+<p>TODO A few rules don’t really fit anywhere. In the reference implementation, it is a warning for a file to use two different types of newline. Trailing whitespace is a warning.</p>
+<p><code>MIXED_SPACE, MIXED_NEWLINES, MIXED_INDENTATION, TRAILING_SPACE, NO_TRAILING_NEWLINE</code></p>
+<p>It is recommended for implementations to emit warnings in these cases, and allow users to suppress them or escalate them into errors.</p>
+<pre><code>!sol EOF ⇒ Ø?</code></pre>
+<div class="Rationale">
+<p>Given a set of valid files of eexprs that end with at least one trailing newline, any simple concat of these files would produce a valid file of eexprs. This property could come in handy when assembling eexprs mechanically. In particular, a compiler could simply prepend the dependencies of a module and compile the whole program at once, rather than needing to define an interface file format and perform linking. One of the goals of eexprs is to make it faster to produce reasonable quality experimental languages, so a feature that makes it easier to support multi-file source code is a no-brainer.</p>
+</div>
+<div class="Rationale">
+<p>In the endless religious war of tabs vs. spaces, there is only one real issue that bugs me: alignment. Namely, I think humans should not be aligning code by hand—it’s too fragile to justify the tedium. Somehow, we need to get machines to align code for us. Proposals have been made to enhance editors with smarter features, but I think it is unreasonable to expect all editors to choose the same methodology, or even to upgrade at all.</p>
+<p>I propose a separate tool which can operate over any text file, searching for special characters that indicate where alignment into a table should take place. Unfortunately, there isn’t a clearly good choice for an alignment indicator character. Importantly, whatever indicator is chosen should remain in-place so that code can be re-indented without re-inserting the indicator; thus, we cannot simply use any sequences of tabs and spaces, even if we were to ban one of them from all other uses. If we could just pick a codepoint without care, I would probably go for a zero-width space, or possibly repurpose one of the disused ASCII control characters; these are unfortunately not easy to type on any standard keyboard. For accessibility, backslash-space might be the best, but I expect it to have poor aesthetics, and possibly have complex interactions with tabs characters.</p>
+<p>In any case, it is reasonable to expect that some whitespace handling in eexprs will be adjusted in the future to enable the use of an external alignment tool.</p>
+</div>
+<h4 id="managing-whitespace">Managing Whitespace</h4>
+<pre><code>sol ::= nl | SOF
+eol ::= nl | EOF
+</code></pre>
+<p>TODO mixed whitespace is an error</p>
+<pre><code>lws(x, _) lws(y ≠ x, _) ⇒ Ø</code></pre>
+<p>It should be impossible for the lexer to produce two <code>lws</code> tokens of the same type, but just in case, the rule <code>lws(x, m) lws(x, n) ⇒ lws(x, n + m)</code> would fix up such an issue.</p>
+<p>TODO ignore comments, trailing newline, line continues, and blank lines</p>
+<pre><code>lws(_)? comment? eol ⇒ eol
+lws(_) lineJoin ⇒ lineJoin
+lineJoin lws(n) ⇒ lws(n)
+nl eol ⇒ eol</code></pre>
+<p>TODO colons at the end of a line indicate indentation, otherwise are separating colons FIXME and also I should disallow separating colons without a space afterwards TODO and also a space is inserted when needed</p>
+<pre><code>unknownColon nl lws(n) ⇒ indent(n)
+unknownColon nl ⇒ indent(0)
+unknownColon EOF ⇒ indent(0) EOF
+unknownColon ⇒ colon
+
+(?before ≠ space | sol | unknownDot) indent ⇒ \before space indent</code></pre>
+<p>TODO indentation is weird ’cause I need a stack. I mean, I could thread an attributeful token through the stream, but I think the stack explanation is clearer. Perhaps I annotate the rewriter with a state when I need to <code>A (i = [3, rest..])⇒(i = [rest..]) B</code>.</p>
+<p>TODO at this point, that all nl and lws have been rewritten</p>
+<pre><code>nl | lws(_) ⇒ Ø</code></pre>
+<p>TODO spaces are irrelevant inside enclosers</p>
+<pre><code>encloser(Open, a) space ⇒ encloser(Open, a)
+space encloser(Close, a) ⇒ encloser(Close, a)
+
+cStr(a, T) space ⇒ cStr(a, T)
+space cStr(T, a) ⇒ cStr(T, a)</code></pre>
+<p>TODO dots with no space around are chain dots. TODO dots with space only before are prefix dots TODO other dots are errors</p>
+<pre><code>(?1 ≠ space | sol) unknownDot (?2 ≠ space | eol) ⇒ \1 dot \2
+(?1 = space | sol) unknownDot (?2 ≠ space | eol) ⇒ \1 prefixDot \2
+unknownDot ⇒ Ø</code></pre>
+<p>TODO punctuation built out of dots cannot be adjacent TODO dot after a number is an error (confusable with a trailing decimal point TODO symbol and number cannot be adjacent (confusable as a single symbol) TODO string next to string is an error (looks too much like implicit catenation?) detectCramming(st);</p>
+<pre><code>(dot | ellipsis | prefixDot) (ellipsis | dot) ⇒ Ø
+number dot ⇒ Ø
+(number | symbol) (number | symbol) ⇒ Ø
+cStr(_, S) cStr(S, _) ⇒ Ø</code></pre>
+<h3 id="grammar">Grammar</h3>
 <h2 id="suboptimality-of-s-exprs">Suboptimality of S-Exprs</h2>
 <p>TODO now that this is in a different part of the report, it needs new linking verbiage</p>
 <p>As powerful as the recognizer technique is, I don’t think s-exprs is its best medium. I don’t want to rant about s-exprs too much, since that’s not the point; if you stopped reading right now and used recognizers over s-exprs instead of writing parsers, your life would improve plenty. That said, if you have used enough s-exprs, you have probably experienced some pain points that e-exprs would improve on. At the other end of the spectrum, if you have resisted learning a Lisp because it looks too alien, then perhaps it would be better to jump directly to e-exprs.</p>
@@ -347,8 +557,8 @@ do {:
     (init-wsl))))</code></pre>
 </dd>
 </dl>
-<p>Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue. However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages. A design philosophy I used for eexprs is “the easier it is to write with tooling, the easier it is everywhere”<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a>. Indeed, while I’m developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.</p>
-<p>Before moving on, I just want to point out one non-advantage of s-exprs. I have heard it argued that the minimalist syntax of Lisp is the price you pay for Lisp’s most iconic advantage: its macro system. Indeed, one can very easily construct new sexprs from templates simply by introducing special forms for <code>quasiquote</code>, <code>unquote</code> and <code>unquote-splicing</code>. However, it is not necessary for s-exprs to be so minimalistic; it is sufficient that they form an algebraic data type. With an appropriate set of quasiquoters and unquoters, any language representable in an ADT can also take advantage of quasiquotation to implement metaprogramming. Nevertheless, I can see why in the 1960’s they went with sexprs rather than a richer system.<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a></p>
+<p>Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue. However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages. A design philosophy I used for eexprs is “the easier it is to write with tooling, the easier it is everywhere”<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>. Indeed, while I’m developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.</p>
+<p>Before moving on, I just want to point out one non-advantage of s-exprs. I have heard it argued that the minimalist syntax of Lisp is the price you pay for Lisp’s most iconic advantage: its macro system. Indeed, one can very easily construct new sexprs from templates simply by introducing special forms for <code>quasiquote</code>, <code>unquote</code> and <code>unquote-splicing</code>. However, it is not necessary for s-exprs to be so minimalistic; it is sufficient that they form an algebraic data type. With an appropriate set of quasiquoters and unquoters, any language representable in an ADT can also take advantage of quasiquotation to implement metaprogramming. Nevertheless, I can see why in the 1960’s they went with sexprs rather than a richer system.<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a></p>
 <h1 id="notes">NOTES</h1>
 <p>parse a “level 0/1” int by checking that <code>radix^exp</code> is less than <code>2^n</code> for some reasonable <code>n</code> (perhaps 64 for known small ints, but if you allow exact big ints, then some larger n like <code>8^m</code> for a max of <code>m</code> bytes of memory (maybe 4096 is good? just how big a bigint do you need‽</p>
 <p>If a colon has a newline on the right, it starts a block. If a colon has inline space on the right, it’s a normal colon. If a colon has no space on the right, it might be part of a symbol: it joins up with any symbols to the right or left it also joins up with any colon to the right recursively That way, I can have <code>Foo:bar.baz</code> be the <code>baz</code> record of the <code>Foo:bar</code> qualified name, just as long as I also have a way to split strings on colons.</p>
@@ -362,8 +572,10 @@ do {:
 <ol>
 <li id="fn1" role="doc-endnote"><p>specifically: since 1958 with LISP<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
 <li id="fn2" role="doc-endnote"><p>How useful unicode input turns out to be is a different question. I’ve set my system up to be able to input many mathematical characters, but it’s a lot of work to ask from users in general. Instead, I would like to offer tools to can translate eexprs between Unicode and ASCII representations; it would be up to language and library implementors to offer an ASCII alternative for each Unicode symbol they use.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn3" role="doc-endnote"><p>In a talk about accessibility, I picked up the idea that if you make something accessible for disabled people, you’ve probably made it easier for abled people as well. For example, a website that is usable by a person with dementia is not likely to be frustrating for the average user. This philosophy applies to the design of programming languages, and in a cybernetic sense, a lack of technology is a lack of ability.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn4" role="doc-endnote"><p>Have you ever tried to implement a compiler in 4096 <em>bytes</em> of memory?<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3" role="doc-endnote"><p>Why you would want to change bases between base and exponent I don’t know…<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4" role="doc-endnote"><p>even three double-quotes would be six quotes…?<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5" role="doc-endnote"><p>In a talk about accessibility, I picked up the idea that if you make something accessible for disabled people, you’ve probably made it easier for abled people as well. For example, a website that is usable by a person with dementia is not likely to be frustrating for the average user. This philosophy applies to the design of programming languages, and in a cybernetic sense, a lack of technology is a lack of ability.<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6" role="doc-endnote"><p>Have you ever tried to implement a compiler in 4096 <em>bytes</em> of memory?<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
 </ol>
 </section>
 </body>

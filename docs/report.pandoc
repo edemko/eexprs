@@ -139,9 +139,7 @@ Instead, let's jump straight into describing e-exprs and delay any rant-like obj
 Hopefully, the advantages of e-exprs will become clear as we examine them.
 
 
-## E-Exprs
-
-### A Whirlwind Tour
+## A Whirlwind Tour of E-Exprs
 
 The leaves of an eexpr are atoms such as numbers, symbols, and strings.
 A range of Unicode symbols[^unicode-usefulness] are also supported, and there is no distinction between different classes of symbols (such as operator, variable).
@@ -254,7 +252,7 @@ TODO: once I implement these features, document them here:
   * mixfixes
   * ascii <-> unicode
 
-### Abstract Syntax
+## Abstract Syntax
 
 TODO show the data type
 
@@ -265,15 +263,427 @@ However, if you want to report (client) grammatical errors in context, then it i
 I have implemented such such an api.
 It also includes an instance for `ArrowApp`, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style's ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).
 
-### Recognizer Combinators
+## Recognizer Combinators
 
-### Concrete Syntax
+## Concrete Syntax
 
-TODO this section should be a formal description of the grammar, along with informal explanations and rationales. Here should be the notes about how much work a parser implementation would need to do.
+At least conceptually, the grammar of eexprs can be split into four phases:
+  1. Decode UTF-8
+  2. Raw Lexer
+  3. Token Cooker
+  4. Parser
 
-#### Lexer
-#### Post-lexer
-#### Grammar
+Raw lexing identifies individual tokens in a Unicode stream.
+It can be described mostly with regular expressions, though at points we require capturing groups.
+In the reference implementation, we require at most three (TODO verify) codepoints of lookahead.
+
+Cooking the token stream involves examining tokens in context to determine if they are relevant to the parser, and sometimes disambiguate how the token is to be used (e.g. space that separates eexprs vs. space which indicates indentation).
+This is described by a term rewrite system which only uses a few (TODO how many?) tokens of lookaround.
+
+Finally, the parser consumes the cooked token stream to produce an eexpr according to a context-free grammar.
+
+::: Rationale
+The Unicode character set seems the most future-proof choice, since its goal is to subsume all other character sets.
+Choosing UTF-8 as the only encoding is less flexible, but detection of magic strings in their appropriate encodings is a source of complexity.
+Would that complexity be worth it?
+I don't think so, and the [UTF-8 Everywhere Manifesto](http://utf8everywhere.org/) presents the argument better than I can here.
+:::
+
+### Raw Lexer
+
+TODO what all metasyntax do I use? only introduce it just before it is needed, not all at once
+
+```
+token ::= nl | lws(_, _) | lineJoin | comment
+       | number | symbol
+       | TODO
+```
+
+#### Whitespace
+
+TODO these are the bits of whitespace that are used all over the place
+
+```
+NL ::= <U+000A New Line>
+CR ::= <U+000D Carriage Return>
+RS ::= <U+001E Information Separator Two>
+nl ::= NL CR? | CR NL? | RS
+# additional types of newline may be considered
+# it is also possible for implementations to ignore obsolete newline sequences; I've included everything from wiki just because I could
+
+lws('SP', n ≥ 1) ::= <U+0020 Space)>{n}
+lws('HT', n ≥ 1) ::= <U+0009 Character Tabulation>{n}
+# additional types of space may be considered, but each must get a distinct whitespace type
+```
+
+TODO these are whitespace-like things
+
+```
+BS ::= <U+005C Reverse Solidus>
+lineJoin ::= BS lws(_, _)? nl
+
+comment ::= '#' (!nl)*
+```
+
+#### Numbers and Symbols
+
+E-exprs support both integer and fractional numbers in a variety of radices (bases).
+Doing this requires a surprising number of rules, but the logic is fairly intuitive.
+
+At their core, numbers consist of an integer part, an optional mantissa, and an optional exponent.
+For numbers not in base ten, a different radix can be indicated by beginning the integer part with a radix-leader (`0x` and the like).
+When there is a mantissa, there must be digits on both sides of the decimal point (e.g. `0.0` is allowed, but neither `0.` nor `.0` ).
+The exponent is essentially the same as the integer part, but only fractional numbers are allowed to have signed exponents.
+There are a variety of ways to indicate the start of an exponent, dependent on the base.
+
+```
+number ::= sign? intPart(base) uexp(base)?
+        |  sign? intPart(base) fracPart(base) exp(base)?
+
+intPart(base) ::= radixLeader(base) digits(base)
+fracPart(base) ::= '.' digits(base)
+
+uexp(base) ::= expLetter(base) digits(base)
+            |  '^' radixLeader(expBase) digits(expBase)
+exp(base) ::= sign? uexp(base)
+```
+
+::: Rationale
+Fractional numbers must have both integer and mantissa present, since there's really no reason to omit either.
+I think the extra character on either side is a negligible cost; if you find it it significant, I would wonder why you have so many magic constants in your code.
+Plenty of style guides require the zero in all or most contexts, and including it makes space in the grammar to distinguish numbers from other syntaxes.
+While the prefix-dot syntax I discuss below would have conflicted with an optional zero integral part for numbers,
+  I had already decided on the numerical syntax before developing the prefix-dot.
+Perhaps it was dumb luck that I didn't have to work hard to squeeze an idea into the syntax,
+  but I flatter myself to think that early preparation enabled that luck.
+:::
+
+E-exprs support bases 2, 8, 10, 12, and 16.
+Unsurprisingly, base 10 is the default, and the digits are exactly as you might expect..
+To allow visual grouping, digits may be separated by underscores, but underscores should not appear at the start of end of a string of digits.
+
+```
+digits(base) ::= digit(base)+ (('_' | digit(base))* digit(base))?
+
+digit(2) ::= '0' | '1'
+digit(8) ::= '0'…'7'
+digit(10) ::= '0'…'9'
+digit(12) ::= radixChar(10) | ('↊' | 'X') | ('↋' | 'E')
+digit(16) ::= radixChar(10) | 'a'…'f' | 'A'…'F'
+```
+
+::: Rationale
+Allowing underscores in numbers makes it possible to group digits in ways that make large numbers easy to identify by subitizing rather than the more costly method of counting.
+Allowing multiple underscores makes it possible to have multiple levels of grouping; as numbers get larger, it becomes difficult to idenify how many groups there are.
+Consider `18_446_744__073_709_551_616` vs. `18_446_744_073_467_709_551_616` vs. `18446744073709551616`:
+  it is easy to see that the first is about 18 million billion,
+  but in the second I have to count the groups to estimate 18 _billion_ billion,
+  and in the third I have to count every digits to verify that it's back to 18 million billion.
+I picked this example specifically because I had trouble remembering roughly how much $2^{64}$ is: unlike $2^{32}$, there are just too many thousands groups to subitize.
+:::
+
+::: Rationale
+Base twelve is thrown in there basically just for fun, though it does help that the Unicode Consortium added dedicated codepoints for dec and el digits.
+The alternate ASCII glyphs `X` and `E` were chosen because the Dozenal Society of America voted for those forms where Unicode is poorly supported.
+
+More seriously, I had considered bases 32, 62, and 64.
+However, the alphabets for these bases are not widely agreed-on, so I leave those notations to client grammars.
+
+If it were easier to input Cuneiform, and I had a good way to solve the problem of representing zeros, I might have added _it_ too---again for the lulz.
+:::
+
+Radix indicators are the commonly-used ones.
+There is no indicator for ten (and I have marked this explicitly in the grammar), since base ten is the default.
+Exponents---you may have seen above---can always be marked with a `^` character, which also allows a change of radix.[^why-change-radix]
+There are also some radix-specific exponent markers for radices where there is some agreement: namely in bases 2, 10, and 16.
+
+[^why-change-radix]: Why you would want to change bases between base and exponent I don't know...
+
+```
+sign ::= '+' | '-'
+
+radixLeader(base) ::= '0' radixLetter(base)
+radixLeader(10) ::= ɛ
+
+radixLetter(2) ::= 'b' | 'B'
+radixLetter(8) ::= 'o' | 'O'
+radixLetter(10) ::= Ø
+radixLetter(12) ::= 'z' | 'Z'
+radixLetter(16) ::= 'x' | 'X'
+
+expLetter(2) ::= 'b' | 'B'
+expLetter(8) ::= Ø
+expLetter(10) ::= 'e' | 'E'
+expLetter(12) ::= Ø
+expLetter(16) ::= 'h' | 'H'
+```
+
+Eexpr implementations should be careful when choosing an internal representation for parsed numbers.
+It is possible for a naïve implementation to consume all system memory.
+For example, numbers such as $10^{(10^{100})}$ can be represented in an eexpr with as few as 103 bytes, but when represented as an exact bigint, would require more memory than humans have ever manufactured.
+In the reference implementation, we do not attempt to expand the exponent, and instead leave it to client languages to determine whether (and how) to represent a number or emit an error.
+To help with this (TODO implement this), we have also included grammar combinators which only succeed for numbers that fit into various common representations.
+
+
+#### Strings
+
+Eexprs support three string formats to support different levels of escaping within the string.
+They are:
+  * C-style (or double-quoted strings),
+  * SQL-style (or single-quoted strings), and
+  * heredocs (or triple-quoted strings[^six-quotes]).
+
+[^six-quotes]: even three double-quotes would be six quotes...?
+
+```
+string(x, y) ::= cString(x, y)
+string(S, S) ::= sqlString
+              |  heredoc
+```
+
+C-style strings have the richest syntax for escapes, and are the only string style that can be used as a template.
+Instead of attempting to detect nesting level in the lexer, we instead detect fragments of templates and leave it to the parser to attempt assembly into sensible string template expressions.
+We therefore categorize C-style strings by how they might join with other string parts.
+
+```
+SQ ::= <U+0027 APOSTROPHE>
+DQ ::= <U+0022 QUOTATION MARK>
+BQ ::= <U+0060 GRAVE ACCENT>
+
+cStrDelim(S) ::= DQ
+cStrDelim(T) ::= BQ
+cStr(x, y) ::= cStrDelim(x) cStrUnit* cStrDelim(y)
+
+cStrUnit ::= cStrChar
+          |  BS cEscapeChar
+          |  BS cStrLineJoin BS
+
+HEX ::= '0'…'9' | 'a'…'f' | 'A'…'F'
+cEscapeChar ::= BS | SQ | DQ | BQ
+             |  'n' | 'r' | 't'
+             |  '0' | 'e' | 'a' | 'b' | 'f' | 'v'
+             |  'x' HEX{2} | 'u' HEX{4} | 'U' HEX{6}
+             |  '&'
+cStrLineJoin ::= nl lws(_)
+
+# TODO I should likely eliminate non-printing characters as well
+cStrChar ::= 1 - (BS | DQ | BQ | nl)
+```
+
+While most of the escape sequences are taken from C, a few are less-widely represented.
+The sequence `\e` encodes `<U+001B ESCAPE>`, and the sequence `\&` encodes a zero-length string.
+The `\x`, `\u`, and `\U` sequences encode arbitrary codepoints from (respectively) ASCII, the Unicode Basic Multilingual Plane, and all of Unicode.
+Attempting to encode a codepoint outside the range of Unicode (anything larger than 0x10FFFF) is an error.
+
+::: Rationale
+To be honest, I'm not sure that I need both `\&` and the fixed-length `\x`/`\u`/`\U` escapes.
+The former was stolen from Haskell which allows variable-length Unicode escapes (e.g. `"\x333" != `"33"` == \x33\&3`).
+The latter is my own solution (though apparently C has something similar) to deal with the potential ambiguity of variable-length Unicode escapes by eliminating variable length entirely.
+It is entirely possible that I may change this area of the syntax before a 1.0 release in response to feedback.
+:::
+
+::: Rationale
+While `\e` is not an escape compliant with the C Standard, this was because some character sets (e.g. EBCDIC) lack a character with the corresponding ASCII semantics.
+In the case of eexprs---which are explicitly reliant on Unicode---this is not a concern.
+Meanwhile, `\e` is used sometimes for terminal programming, and would likely be more meaningful for custom binary formats than the obscute "vertical tab" `\v` sequence.
+:::
+
+::: Rationale
+Two C escapes `\?` and octal `\nnn` are missing from eexprs.
+The `\?` escape is to avoid trigraph syntax, a rarely-used C feature which eexprs do not include.
+Octal escapes on the other hand, are perfectly reasonable, but it seems few programmers use octal today.
+Even DEC, which famously used octal in all their PDP-11 and VAX documentation, switched to hexadecimal notation when they published the Alpha architecture.
+:::
+
+SQL-style strings offer fewer escapes, but a compensatorily wider range of valid characters.
+SQL-style strings are delimited by single quotes, but a sequence of two single-quotes encodes a single quote into the string.
+
+```
+sqlStr ::= SQ sqlStrUnit* SQ
+sqlStrUnit ::= 1 - SQ
+            |  SQ SQ
+```
+
+::: Rationale
+I had considered using single-quotes to indicate character literals.
+However, I was also envious of syntax such as Python's r-strings for easily writing strings which have lots of backslashes, such as regex.
+Instead of hardcoding a fixed (and therefore small) set of string prefixes, I instead opted to allow dot-separated symbol+string to omit the dot.
+Client languages can then determine any special interpretations for such a string, perhaps interpreting a string as a character.
+This then made space for SQL-style strings, which like Python r-strings can encode C-style escapes with ease.
+
+In typed languages, Haskell's `IsString` should serve as an inspiration:
+  interpret a string literal as a character literal in contexts where a character-typed value is expected.
+The same technique can also be used for alternate memory layouts of strings, hexadecimal strings, base64 strings, ip addresses, mac addresses, and so on for as many types as users wish they had literals for.
+
+In untyped languages, conversion functions (in general) cannot be inferred, and so must be manually inserted.
+This could be done by prefixing a string with a conversion function (perhaps in a separate namespace).
+Thus, `c'a'` for a character, `base64url"KMK044O7z4njg7sp44Gj55Sx"` for a base64-encoded bytestring, and so on.
+:::
+
+TODO heredocs
+
+::: Rationale
+TODO heredocs are here mostly for docstrings.
+while many languages put documentation in comments, I like Python's ability to print documentation for an object from the repl.
+putting such documentation in comments would make it difficult to attach it to language objects, since comments are meant to be removed before parsing.
+
+the other use they might have is in embedding other languages, such as sql.
+:::
+
+
+#### Punctuation
+
+TODO
+
+```
+punctuation ::= encloser(_, _)
+             | separator(_)
+             | ellipsis
+             | unknownDot
+             | unknownColon
+
+encloser(Open, Paren) ::= '('
+encloser(Open, Bracket) ::= '['
+encloser(Open, Brace) ::= '{'
+encloser(Close, Paren) ::= ')'
+encloser(Close, Bracket) ::= ']'
+encloser(Close, Brace) ::= '}'
+
+separator(Semicolon) ::= ';'
+separator(Comma) ::= ','
+
+unknownDot ::= '.'
+unknownColon ::= ':'
+ellipsis ::= '..' # TODO probly also include '…'
+```
+
+### Lexeme Cooker
+
+The lexeme cooker is a sequence of rewrite rules.
+TODO: I am less familiar with the properties of rewrite systems, but I think these could be applied each in-order in a single pass over the string, or make several passes one for each.
+TODO: I'm also not sure how much these rules could be re-ordered, but I do know some must come before others (e.g. whitespace classification before indentation).
+Rules listed earlier in this system take precedence over rules listed later.
+
+Before applying this system, the token stream is augmented with a start-of-file token `SOF` at the start and an `EOF` token at the end.
+Implementations perhaps need not actually allocate space for such tokens, but this practice at least makes it easier to specify.
+
+
+TODO A few rules don't really fit anywhere.
+In the reference implementation, it is a warning for a file to use two different types of newline.
+Trailing whitespace is a warning.
+
+`MIXED_SPACE, MIXED_NEWLINES, MIXED_INDENTATION, TRAILING_SPACE, NO_TRAILING_NEWLINE`
+
+It is recommended for implementations to emit warnings in these cases, and allow users to suppress them or escalate them into errors.
+
+```
+!sol EOF ⇒ Ø?
+```
+
+::: Rationale
+Given a set of valid files of eexprs that end with at least one trailing newline, any simple concat of these files would produce a valid file of eexprs.
+This property could come in handy when assembling eexprs mechanically.
+In particular, a compiler could simply prepend the dependencies of a module and compile the whole program at once, rather than needing to define an interface file format and perform linking.
+One of the goals of eexprs is to make it faster to produce reasonable quality experimental languages, so a feature that makes it easier to support multi-file source code is a no-brainer.
+:::
+
+::: Rationale
+In the endless religious war of tabs vs. spaces, there is only one real issue that bugs me: alignment.
+Namely, I think humans should not be aligning code by hand---it's too fragile to justify the tedium.
+Somehow, we need to get machines to align code for us.
+Proposals have been made to enhance editors with smarter features, but I think it is unreasonable to expect all editors to choose the same methodology, or even to upgrade at all.
+
+I propose a separate tool which can operate over any text file, searching for special characters that indicate where alignment into a table should take place.
+Unfortunately, there isn't a clearly good choice for an alignment indicator character.
+Importantly, whatever indicator is chosen should remain in-place so that code can be re-indented without re-inserting the indicator; thus, we cannot simply use any sequences of tabs and spaces, even if we were to ban one of them from all other uses.
+If we could just pick a codepoint without care, I would probably go for a zero-width space, or possibly repurpose one of the disused ASCII control characters; these are unfortunately not easy to type on any standard keyboard.
+For accessibility, backslash-space might be the best, but I expect it to have poor aesthetics, and possibly have complex interactions with tabs characters.
+
+In any case, it is reasonable to expect that some whitespace handling in eexprs will be adjusted in the future to enable the use of an external alignment tool.
+:::
+
+#### Managing Whitespace
+
+
+```
+sol ::= nl | SOF
+eol ::= nl | EOF
+
+```
+
+TODO mixed whitespace is an error
+```
+lws(x, _) lws(y ≠ x, _) ⇒ Ø
+```
+It should be impossible for the lexer to produce two `lws` tokens of the same type, but just in case, the rule `lws(x, m) lws(x, n) ⇒ lws(x, n + m)` would fix up such an issue.
+
+TODO ignore comments, trailing newline, line continues, and blank lines
+```
+lws(_)? comment? eol ⇒ eol
+lws(_) lineJoin ⇒ lineJoin
+lineJoin lws(n) ⇒ lws(n)
+nl eol ⇒ eol
+```
+
+TODO colons at the end of a line indicate indentation, otherwise are separating colons
+FIXME and also I should disallow separating colons without a space afterwards
+TODO and also a space is inserted when needed
+```
+unknownColon nl lws(n) ⇒ indent(n)
+unknownColon nl ⇒ indent(0)
+unknownColon EOF ⇒ indent(0) EOF
+unknownColon lws(_) ⇒ colon
+unknownColon ⇒ Ø # FIXME implement this
+
+(?before ≠ space | sol | unknownDot) indent ⇒ \before space indent
+```
+
+FIXME I'm thinking more about whether to join a colon-nospace-symbol into a single symbol, but there's not a good way to express this in the rewrite rules.
+Perhaps it can go in the symbol raw lexer rule for symbols, but it doesn't belong to this phase.
+I guess for now I'll require lws after regular colons, just to play it safe.
+
+TODO indentation is weird 'cause I need a stack.
+I mean, I could thread an attributeful token through the stream, but I think the stack explanation is clearer.
+Perhaps I annotate the rewriter with a state when I need to `A (i = [3, rest..])⇒(i = [rest..]) B`.
+
+
+TODO at this point, that all nl and lws have been rewritten
+```
+nl | lws(_) ⇒ Ø
+```
+
+TODO spaces are irrelevant immediately inside enclosers
+```
+encloser(Open, a) space ⇒ encloser(Open, a)
+space encloser(Close, a) ⇒ encloser(Close, a)
+
+cStr(a, T) space ⇒ cStr(a, T)
+space cStr(T, a) ⇒ cStr(T, a)
+```
+
+TODO dots with no space around are chain dots.
+TODO dots with space only before are prefix dots
+TODO other dots are errors
+```
+(?1 ≠ space | sol) unknownDot (?2 ≠ space | eol) ⇒ \1 dot \2
+(?1 = space | sol) unknownDot (?2 ≠ space | eol) ⇒ \1 prefixDot \2
+unknownDot ⇒ Ø
+```
+
+TODO punctuation built out of dots cannot be adjacent
+TODO dot after a number is an error (confusable with a trailing decimal point
+TODO symbol and number cannot be adjacent (confusable as a single symbol)
+TODO string next to string is an error (looks too much like implicit catenation?)
+detectCramming(st);
+```
+(dot | ellipsis | prefixDot) (ellipsis | dot) ⇒ Ø
+number dot ⇒ Ø
+(number | symbol) (number | symbol) ⇒ Ø
+cStr(_, S) cStr(S, _) ⇒ Ø
+```
+
+
+### Grammar
 
 
 ## Suboptimality of S-Exprs

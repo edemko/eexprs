@@ -52,7 +52,6 @@ bool isSymbolStart(char32_t cs[2]);
 
 //////////////////////////////////// Strings ////////////////////////
 
-bool isCodepointDelim(char32_t c);
 bool isStringDelim(char32_t c);
 
 eexpr_stringType spliceType(char32_t open, char32_t close);

@@ -139,7 +139,7 @@ void disambiguateDots(engine* st) {
 }
 
 /*
-  `unknown-colon end-of-line space(n)?_1 --> open-indent(n || 0) end-of-line \1`
+  `unknown-colon eol space(n)?_1 --> open-indent(n || 0)`
   `^(space | start-of-line | unknown-dot) open-indent --> space open-indent`
   `unknown-colon ^end-of-line --> colon`
 */

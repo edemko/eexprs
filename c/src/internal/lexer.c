@@ -35,13 +35,13 @@ bool decodeUnihex(char32_t* out, size_t nDigits, char32_t* digits) {
 }
 
 /* Char escapes are escape sequences which are interpreted as exactly one codepoint.
-  They can be one of the "common" escape characters, or a as a 2-6 byte hexadecimal escape.
+  They can be one of the "common" escape characters, or a 2-6 byte hexadecimal escape.
   `\\[:commonEscapeChar:]`
   `\\x[:hexDigit:]{2}`
   `\\u[:hexDigit:]{4}`
   `\\U[:hexDigit:]{6}`
 */
-// helper for takeCodepoint and takeString
+// helper for takeString
 // returns whether decoding advanced the parser
 // places the decoded character in `out`, or UCHAR_NULL if no valid escape sequence is found
 // call only after detecting an escapeLeader
@@ -751,17 +751,6 @@ bool takeSqlString(engine* st) {
     }
   }
 }
-// /*
-// A codepoint literal is any (reasonable) character between single-ticks.
-// Escape sequences are also permitted, as long as they encode exactly one codepoint.
-//   `'[:stringChar::charEscape:]'`
-// */
-// // the question is, do I even want codepoint literals if I could just `fromString` them?
-// // I could make eexpr consumers recognize something like `c"\n"` or `fromString` them under the appropriate type context
-// // if I take them out, that would allow me to write sql strings (single-quote-delimited multiline strings where the only escape sequence---and the only one needed---is two single-quotes to insert a snigle quote into the string
-// // heck, how often does a programmer want a codepoint literal instead of a grapheme cluster literal, or a user-perceived character literal?
-// //   I don't see why I should favor codepoints by making them so integral to eexprs
-
 
 /*
 Heredocs offer a way to embed multi-line strings without escaping.
@@ -1033,7 +1022,7 @@ bool takeWrap(engine* st) {
 
 /*
 Splitters are colon, dot, ellipsis, semicolon, and comma.
-  `\.\.[:.;,]`
+  `\.\.|[:.;,]`
 */
 static
 bool takeSplitter(engine* st) {
@@ -1089,7 +1078,6 @@ void engine_rawLex(engine* st) {
     if (takeNumber(st)) { continue; }
     if (takeHeredoc(st)) { continue; }
     if (takeString(st)) { continue; }
-    // if (takeCodepoint(st)) { continue; }
     if (takeSqlString(st)) { continue; }
     if (takeSplitter(st)) { continue; }
     if (takeWrap(st)) { continue; }

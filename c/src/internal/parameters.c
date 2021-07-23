@@ -21,15 +21,15 @@ char32_t _exp10[] = {'e','E',UCHAR_NULL};
 // base 12
 char32_t _leader12[] = {'z','Z',UCHAR_NULL}; // as in doZenal
 char32_t _digits12[] = { '0','1','2','3','4','5','6','7','8','9',0x218A/*↊*/,0x218B/*↋*/
-                    , '0','1','2','3','4','5','6','7','8','9','X','E' // after the usage of the Dozenal Society of America when they use ASCII
-                    , UCHAR_NULL};
+                       , '0','1','2','3','4','5','6','7','8','9','X','E' // after the usage of the Dozenal Society of America when they use ASCII
+                       , UCHAR_NULL};
 char32_t _exp12[] = {UCHAR_NULL}; // I don't know of any widespread agreement
 // base 16
 char32_t _leader16[] = {'x','X',UCHAR_NULL};
 char32_t _digits16[] = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'
-                    , '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
-                    , UCHAR_NULL
-                    };
+                       , '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
+                       , UCHAR_NULL
+                       };
 char32_t _exp16[] = {'h','H',UCHAR_NULL};
 // base 62, base64(url) are not included, since they aren't easily understood by humans. instead, interpret a string (preferrably at compiletime)
 
@@ -142,9 +142,6 @@ bool isSymbolStart(char32_t cs[2]) {
 
 //////////////////////////////////// Strings ////////////////////////
 
-bool isCodepointDelim(char32_t c) {
-  return c == '\'';
-}
 bool isStringDelim(char32_t c) {
   return (c == '\"') | (c == '`');
 }
@@ -167,7 +164,6 @@ bool isStringChar(char32_t c) {
   return (0x20 <= c)
        & (c < 0x10FFFF)
        & (c != escapeLeader)
-      && !isCodepointDelim(c)
       && !isStringDelim(c)
        ;
       // TODO I should probably rule out all non-printing characters
