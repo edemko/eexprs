@@ -345,8 +345,8 @@ nl ::= NL CR? | CR NL? | RS
 # additional types of newline may be considered
 # it is also possible for implementations to ignore obsolete newline sequences; I&#39;ve included everything from wiki just because I could
 
-lws(&#39;SP&#39;, n ≥ 1) ::= &lt;U+0020 Space)&gt;{n}
-lws(&#39;HT&#39;, n ≥ 1) ::= &lt;U+0009 Character Tabulation&gt;{n}
+lws(SP, n ≥ 1) ::= &lt;U+0020 Space)&gt;{n}
+lws(HT, n ≥ 1) ::= &lt;U+0009 Character Tabulation&gt;{n}
 # additional types of space may be considered, but each must get a distinct whitespace type</code></pre>
 <p>TODO these are whitespace-like things</p>
 <pre><code>BS ::= &lt;U+005C Reverse Solidus&gt;
@@ -402,6 +402,172 @@ expLetter(10) ::= &#39;e&#39; | &#39;E&#39;
 expLetter(12) ::= Ø
 expLetter(16) ::= &#39;h&#39; | &#39;H&#39;</code></pre>
 <p>Eexpr implementations should be careful when choosing an internal representation for parsed numbers. It is possible for a naïve implementation to consume all system memory. For example, numbers such as <span class="math inline">\(10^{(10^{100})}\)</span> can be represented in an eexpr with as few as 103 bytes, but when represented as an exact bigint, would require more memory than humans have ever manufactured. In the reference implementation, we do not attempt to expand the exponent, and instead leave it to client languages to determine whether (and how) to represent a number or emit an error. To help with this (TODO implement this), we have also included grammar combinators which only succeed for numbers that fit into various common representations.</p>
+<h4 id="symbols">Symbols</h4>
+<p>TODO TODO make sure to alter symbolChar later if I change the name here FIXME implement these choices</p>
+<pre><code>symbol ::= symbolChar1 symbolChar* - sign digit(10) symbolChar*
+
+iIl,1o0O.
+
+symbolChar ::= alphaNum | asciiSymb
+            |  greekAlpha | hebrewAlpha
+            |  mathAlpha | blackboard
+            |  arrows
+            | unsortedCharsTODO
+            | &#39;💣&#39; | &#39;💥&#39; # TODO explosion-related images, for when a named value might be unsafe
+
+alphaNum ::= &#39;a&#39;…&#39;z&#39; | &#39;A&#39;…&#39;Z&#39; | &#39;0&#39;…&#39;9&#39;
+asciiSymb ::=
+  | &#39;!&#39; | &#39;$&#39; | &#39;%&#39; | &#39;&amp;&#39; | SQ | &#39;*&#39; | &#39;+&#39; | &#39;-&#39; | &#39;/&#39;
+  | &#39;&lt;&#39; | &#39;=&#39; | &#39;&gt;&#39; | &#39;?&#39; | &#39;@&#39;
+  | &#39;^&#39; | &#39;_&#39;
+  | &#39;|&#39; | &#39;~&#39;
+
+greekAlpha ::=
+  | &#39;Α&#39;…&#39;Ω&#39; - &lt;U+03A2&gt; | &#39;α&#39;…&#39;ω&#39;
+  # variant forms
+  | &#39;ϐ&#39; | &#39;ϴ&#39; | &#39;ϑ&#39; | &#39;ϒ&#39; | &#39;ϕ&#39; | &#39;ϖ&#39; | &#39;ϰ&#39; | &#39;ϱ&#39; | &#39;ϵ&#39;
+  # archaic and numeral
+  | &#39;Ͱ&#39;…&#39;ͳ&#39; | &#39;ϗ&#39;…&#39;ϡ&#39; | &#39;Ϻ&#39;…&#39;ϻ&#39;
+  # modified forms
+  | &#39;϶&#39; | &#39;ϼ&#39;
+hebrewAlpha ::=
+  # TODO oh yeah, some hebrew letters get used in math as well
+  | &#39;ℵ&#39;…&#39;ℸ&#39;
+mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝓐𝓪, 𝔄𝔞, 𝔸𝕒)
+  # TODO I removed bold fraktur b/c it&#39;s not different enough from normal fraktur
+    &#39;𝒜&#39;…&#39;𝔷&#39; - &lt;reserved points in this range&gt;
+  | &#39;ℬ&#39; | &#39;ℰ&#39; | &#39;ℱ&#39; | &#39;ℋ&#39; | &#39;ℐ&#39; | &#39;ℒ&#39; | &#39;ℳ&#39; | &#39;ℛ&#39;
+  | &#39;ℯ&#39; | &#39;ℊ&#39; | &#39;ℴ&#39;
+  | &#39;ℭ&#39; | &#39;ℌ&#39; | &#39;ℑ&#39; | &#39;ℜ&#39; | &#39;ℨ&#39;
+blackboard ::=
+    &#39;𝔸&#39;…&#39;𝕫&#39; - &lt;reserved points in this range&gt; | &#39;ℂ&#39; | &#39;ℍ&#39; | &#39;ℕ&#39; | &#39;ℙ&#39;…&#39;ℝ&#39; | &#39;ℤ&#39;
+  | &#39;𝟘&#39;…&#39;𝟡&#39;
+  | &#39;ℼ&#39; | &#39;ℽ&#39; | &#39;ℾ&#39; | &#39;ℿ&#39; | &#39;⅀&#39; # greek
+
+&quot;you can have one alternate head or tail, but not both&quot;
+&quot;you can also drop the head with an alternate tail&quot;
+&quot;there are no straight strokes, only slash strokes&quot;
+
+arrows ::= #TODO fix metasyntax
+  ←↑→↓↔↕ # straight
+  ↚↛↮ # stroked
+  ⇐⇑⇒⇓⇔⇕ # double
+  ⇍⇎⇏ # stroked double
+  ↜↝↭ # wave
+  ⇜⇝ # sqiggle
+  ⤸⤹⤺⤻ # arc
+  ⇚⇛⤊⤋ # triple
+  ⟰⟱⭅⭆ # quadruple
+# long
+  ⟵⟶⟷ # long
+  ⟸⟹⟺ # long double
+  ⟻⟼ # long from bar
+  ⟽⟾ # long double from bar
+  ⟿⬳ # long squiggle
+#alt heads
+  ↞↟↠↡ # two headed
+  ↼↽↾↿⇀⇁⇂⇃⥊⥋⥌⥍⥎⥏⥐⥑ # harpoon
+  ⇤⇥⤒⤓ # to bar
+# alt tails
+  ↢↣ # tail
+  ↩↪ # hook
+  ↤↥↦↧ # from bar
+  ↫↬ # loop
+# no head, alt tail
+  ⤙⤚ # only tail
+  ⤛⤜ # only double tail
+  ⥼⥽⥾⥿ # fish tail
+# to/from endpoints
+  ⤅⬶ # two headed from bar
+  ⤆⤇ # double from bar
+# turning
+  ↰↱↲↳⬎⬏⬐⬑ # tip turn
+  ⤴⤵⤶⤷ # curving
+  ↶↷⤾⤿ # semicircle
+  ⮌⮍⮎⮏ # (triangle-headed) u-shaped
+  ↺↻ # circle
+  ⟲⟳ # gapped circle
+  ⥀⥁ # closed circle
+# multiple
+  ⇄⇅⇆⇇⇈⇉⇊⇵ # paired
+  ⇋⇌ # paired harpoon
+  ⇶⬱ # three
+  ⥢⥣⥤⥥⥦⥧⥨⥩⥪⥫⥬⥭⥮⥯ # paired harpoons
+unsortedCharsTODO ::=
+  # TODO random stuff from letterlike symbols
+  | &#39;ℓ&#39; | &#39;℘&#39; | &#39;⅋&#39; | &#39;№&#39; | &#39;℧&#39;
+symbolChar1 ::- symbolChar - SQ</code></pre>
+<div class="Warning">
+<p>The selection of available symbol characters is not yet set in stone. So far, I have only examined the Basic Latin Unicode block for useful characters. I would like to allow mathematical operators, arrows, greek letters at least, and I may include a number of other scripts if it comes to it. However, I’ll also want to use some normalization algorithm to ensure visually-identical symbols are treated identically. I am loathe to include characters from scripts I am not fluent with; if they are to be added, it should be in consultation with people who <em>do</em> understand these scripts.</p>
+<p>Here is a list of blocks that I have examined or plan to examine:</p>
+<ul class="task-list">
+<li><input type="checkbox" disabled="" checked="" />
+Basic Latin</li>
+<li><input type="checkbox" disabled="" />
+math-related:<ul class="task-list">
+<li><input type="checkbox" disabled="" />
+Mathematical Operators</li>
+<li><input type="checkbox" disabled="" checked="" />
+Mathematical Alphanumeric Symbols</li>
+<li><input type="checkbox" disabled="" checked="" />
+Letterlike Symbols</li>
+<li><input type="checkbox" disabled="" />
+whatever block ◊ is in</li>
+</ul></li>
+<li><input type="checkbox" disabled="" />
+arrows:<ul class="task-list">
+<li><input type="checkbox" disabled="" checked="" />
+Arrows</li>
+<li><input type="checkbox" disabled="" checked="" />
+Supplemental Arrows-A</li>
+<li><input type="checkbox" disabled="" checked="" />
+Supplemental Arrows-B</li>
+<li><input type="checkbox" disabled="" checked="" />
+Supplemental Arrows-C (no, these are mostly thickness variants and some wingdings-looking stuff, though there are a few arrowheads)</li>
+<li><input type="checkbox" disabled="" checked="" />
+Miscellaneous Symbols and Arrows</li>
+</ul></li>
+<li><input type="checkbox" disabled="" />
+SI unit symbols (not a block)</li>
+<li><input type="checkbox" disabled="" />
+Miscellaneous Technical</li>
+<li><input type="checkbox" disabled="" checked="" />
+greek:<ul class="task-list">
+<li><input type="checkbox" disabled="" checked="" />
+Greek and Coptic</li>
+<li><input type="checkbox" disabled="" checked="" />
+Greek Extended</li>
+</ul></li>
+<li><input type="checkbox" disabled="" />
+Hebrew</li>
+<li><input type="checkbox" disabled="" />
+keyboard key symbols (not a block)</li>
+<li><input type="checkbox" disabled="" />
+Latin-1 Supplement, Latin Extended-A -B -C -D and -E, Latin Extended Additional</li>
+<li><input type="checkbox" disabled="" />
+Combining Diacritical Marks, Combining Diacritical Marks Extended, Combining Diacritical Marks Supplement</li>
+<li><input type="checkbox" disabled="" />
+Combining Diacritical Marks for Symbols</li>
+<li><input type="checkbox" disabled="" />
+Combining Half Marks</li>
+<li><input type="checkbox" disabled="" />
+General Punctuation, Supplemental Punctuation</li>
+<li><input type="checkbox" disabled="" />
+Superscripts and Subscripts</li>
+<li><input type="checkbox" disabled="" />
+Currency Symbols</li>
+<li><input type="checkbox" disabled="" />
+Geometric Shapes, Geometric Shapes Extended, Miscellaneous Symbols, Dingbats, Ornamental Dingbats</li>
+<li><input type="checkbox" disabled="" />
+Miscellaneous Mathematical Symbols-A and -B, Supplemental Mathematical Operators</li>
+<li><input type="checkbox" disabled="" checked="" />
+IPA extensions, Spacing Modifier Letters (I don’t think the IPA script is really useful for variable names)</li>
+<li><input type="checkbox" disabled="" checked="" />
+Number Forms (I already have the dozenal digits, the fractions are too limited in scope, roman numerals are unneeded)</li>
+<li><input type="checkbox" disabled="" checked="" />
+Control Pictures (I find it unlikely that adding these won’t introduce confusion)</li>
+</ul>
+</div>
 <h4 id="strings">Strings</h4>
 <p>Eexprs support three string formats to support different levels of escaping within the string. They are:</p>
 <ul>
@@ -454,10 +620,32 @@ sqlStrUnit ::= 1 - SQ
 <p>In typed languages, Haskell’s <code>IsString</code> should serve as an inspiration: interpret a string literal as a character literal in contexts where a character-typed value is expected. The same technique can also be used for alternate memory layouts of strings, hexadecimal strings, base64 strings, ip addresses, mac addresses, and so on for as many types as users wish they had literals for.</p>
 <p>In untyped languages, conversion functions (in general) cannot be inferred, and so must be manually inserted. This could be done by prefixing a string with a conversion function (perhaps in a separate namespace). Thus, <code>c'a'</code> for a character, <code>base64url"KMK044O7z4njg7sp44Gj55Sx"</code> for a base64-encoded bytestring, and so on.</p>
 </div>
-<p>TODO heredocs</p>
+<p>Heredocs are multi-line strings that have no escaping whatsoever because their content is included verbatim. They begin with a line ending in a “triple quote” and optional identifier and end with a line beginning with that same identifier (if any) and another triple quote. All the intervening lines are included unaltered, including alternate newlines, control characters, and so on. Additionally, heredocs may also be indented by including a backslash after the opening identifier and another backslash to indicate the indent amount.</p>
+<p>Indicating indent depth with a backslash on the first line of a heredoc allows for heredocs to start with leading whitespace. Accommodations have been made for aligning indented backslash despite the first-line backslash: when indentation is done with spaces, the backslash counts towards the number of spaces of leading indent, and when it is done with tabs, a tab must follow the backslash<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>. The final newline before the close quotes is not included in the heredoc, so if you would like a heredoc to end with a trailing newline, leave a blank line.</p>
+<pre><code>heredoc ::= startHeredoc(name, ws, n)
+            heredocLine(name, ws, n)*
+            endHeredoc(name, ws, n)
+
+openHeredoc(\name) ::= DQ DQ DQ (?name = symbolChar*) lws(_, _)?
+startHeredoc(name, _, 0) ::= openHeredoc(name) nl
+startHeredoc(name, SP, n + 1) ::= openHeredoc(name) BS lws(_, _)? nl
+                                  zlws(SP, n) BS
+startHeredoc(name, HT, n + 1) ::= openHeredoc(name) BS lws(_, _)? nl
+                                  zlws(HT, n) BS HT
+
+heredocLine(name, ws, n) ::= zlws(ws, n) heredocContent nl
+heredocContent ::= (1 - nl)* - (closeHeredoc(name) (1 - nl)*)
+
+endHeredoc(name, ws, 0) ::= closeHeredoc(name)
+endHeredoc(name, ws, n) ::= lws(ws, n) closeHeredoc(name)
+closeHeredoc(name) ::= name DQ DQ DQ
+
+zlws(_, 0) ::= ɛ
+zlws(ws, n) ::= lws(ws, n)</code></pre>
+<p>This makes them an attractive target for embedding non-eexpr content.</p>
 <div class="Rationale">
-<p>TODO heredocs are here mostly for docstrings. while many languages put documentation in comments, I like Python’s ability to print documentation for an object from the repl. putting such documentation in comments would make it difficult to attach it to language objects, since comments are meant to be removed before parsing.</p>
-<p>the other use they might have is in embedding other languages, such as sql.</p>
+<p>Heredocs are an attractive target for embedding non-eexpr content. I especially want to use if for embedding documentation as doc strings rather than comments<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>. Writing documentation in comments makes it more difficult to attach them to language constructs. The difference can be seen very well in Python, which uses docstrings, and can therefore report documentation directly in the REPL, or during script execution. True, documentation could be written in an e-expr-based markup, but I’d likely prefer markdown—I’m not a zealot. Regardless, heredocs can embed any desired documentation language.</p>
+<p>Another use for heredocs is embedding non-eexpr languages more generally. An obvious use would be for crafting SQL expressions directly in a web server. Other possibilities are embedding a scripting language such as Lua, or C code as part of a foreign function interface.</p>
 </div>
 <h4 id="punctuation">Punctuation</h4>
 <p>TODO</p>
@@ -511,13 +699,15 @@ nl eol ⇒ eol</code></pre>
 <pre><code>unknownColon nl lws(n) ⇒ indent(n)
 unknownColon nl ⇒ indent(0)
 unknownColon EOF ⇒ indent(0) EOF
-unknownColon ⇒ colon
+unknownColon lws(_) ⇒ colon
+unknownColon ⇒ Ø # FIXME implement this
 
 (?before ≠ space | sol | unknownDot) indent ⇒ \before space indent</code></pre>
+<p>FIXME I’m thinking more about whether to join a colon-nospace-symbol into a single symbol, but there’s not a good way to express this in the rewrite rules. Perhaps it can go in the symbol raw lexer rule for symbols, but it doesn’t belong to this phase. I guess for now I’ll require lws after regular colons, just to play it safe.</p>
 <p>TODO indentation is weird ’cause I need a stack. I mean, I could thread an attributeful token through the stream, but I think the stack explanation is clearer. Perhaps I annotate the rewriter with a state when I need to <code>A (i = [3, rest..])⇒(i = [rest..]) B</code>.</p>
 <p>TODO at this point, that all nl and lws have been rewritten</p>
 <pre><code>nl | lws(_) ⇒ Ø</code></pre>
-<p>TODO spaces are irrelevant inside enclosers</p>
+<p>TODO spaces are irrelevant immediately inside enclosers</p>
 <pre><code>encloser(Open, a) space ⇒ encloser(Open, a)
 space encloser(Close, a) ⇒ encloser(Close, a)
 
@@ -557,8 +747,8 @@ cStr(_, S) cStr(S, _) ⇒ Ø</code></pre>
     (init-wsl))))</code></pre>
 </dd>
 </dl>
-<p>Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue. However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages. A design philosophy I used for eexprs is “the easier it is to write with tooling, the easier it is everywhere”<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>. Indeed, while I’m developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.</p>
-<p>Before moving on, I just want to point out one non-advantage of s-exprs. I have heard it argued that the minimalist syntax of Lisp is the price you pay for Lisp’s most iconic advantage: its macro system. Indeed, one can very easily construct new sexprs from templates simply by introducing special forms for <code>quasiquote</code>, <code>unquote</code> and <code>unquote-splicing</code>. However, it is not necessary for s-exprs to be so minimalistic; it is sufficient that they form an algebraic data type. With an appropriate set of quasiquoters and unquoters, any language representable in an ADT can also take advantage of quasiquotation to implement metaprogramming. Nevertheless, I can see why in the 1960’s they went with sexprs rather than a richer system.<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a></p>
+<p>Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue. However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages. A design philosophy I used for eexprs is “the easier it is to write with tooling, the easier it is everywhere”<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a>. Indeed, while I’m developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.</p>
+<p>Before moving on, I just want to point out one non-advantage of s-exprs. I have heard it argued that the minimalist syntax of Lisp is the price you pay for Lisp’s most iconic advantage: its macro system. Indeed, one can very easily construct new sexprs from templates simply by introducing special forms for <code>quasiquote</code>, <code>unquote</code> and <code>unquote-splicing</code>. However, it is not necessary for s-exprs to be so minimalistic; it is sufficient that they form an algebraic data type. With an appropriate set of quasiquoters and unquoters, any language representable in an ADT can also take advantage of quasiquotation to implement metaprogramming. Nevertheless, I can see why in the 1960’s they went with sexprs rather than a richer system.<a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a></p>
 <h1 id="notes">NOTES</h1>
 <p>parse a “level 0/1” int by checking that <code>radix^exp</code> is less than <code>2^n</code> for some reasonable <code>n</code> (perhaps 64 for known small ints, but if you allow exact big ints, then some larger n like <code>8^m</code> for a max of <code>m</code> bytes of memory (maybe 4096 is good? just how big a bigint do you need‽</p>
 <p>If a colon has a newline on the right, it starts a block. If a colon has inline space on the right, it’s a normal colon. If a colon has no space on the right, it might be part of a symbol: it joins up with any symbols to the right or left it also joins up with any colon to the right recursively That way, I can have <code>Foo:bar.baz</code> be the <code>baz</code> record of the <code>Foo:bar</code> qualified name, just as long as I also have a way to split strings on colons.</p>
@@ -574,8 +764,10 @@ cStr(_, S) cStr(S, _) ⇒ Ø</code></pre>
 <li id="fn2" role="doc-endnote"><p>How useful unicode input turns out to be is a different question. I’ve set my system up to be able to input many mathematical characters, but it’s a lot of work to ask from users in general. Instead, I would like to offer tools to can translate eexprs between Unicode and ASCII representations; it would be up to language and library implementors to offer an ASCII alternative for each Unicode symbol they use.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
 <li id="fn3" role="doc-endnote"><p>Why you would want to change bases between base and exponent I don’t know…<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
 <li id="fn4" role="doc-endnote"><p>even three double-quotes would be six quotes…?<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn5" role="doc-endnote"><p>In a talk about accessibility, I picked up the idea that if you make something accessible for disabled people, you’ve probably made it easier for abled people as well. For example, a website that is usable by a person with dementia is not likely to be frustrating for the average user. This philosophy applies to the design of programming languages, and in a cybernetic sense, a lack of technology is a lack of ability.<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn6" role="doc-endnote"><p>Have you ever tried to implement a compiler in 4096 <em>bytes</em> of memory?<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5" role="doc-endnote"><p>So don’t set your tab size less than two. That’s what we call “expert guidance”!<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6" role="doc-endnote"><p>In fact, I’ve only recently gotten over pronouncing “heredoc” as “docstring”.<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn7" role="doc-endnote"><p>In a talk about accessibility, I picked up the idea that if you make something accessible for disabled people, you’ve probably made it easier for abled people as well. For example, a website that is usable by a person with dementia is not likely to be frustrating for the average user. This philosophy applies to the design of programming languages, and in a cybernetic sense, a lack of technology is a lack of ability.<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn8" role="doc-endnote"><p>Have you ever tried to implement a compiler in 4096 <em>bytes</em> of memory?<a href="#fnref8" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
 </ol>
 </section>
 </body>

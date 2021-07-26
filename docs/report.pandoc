@@ -311,8 +311,8 @@ nl ::= NL CR? | CR NL? | RS
 # additional types of newline may be considered
 # it is also possible for implementations to ignore obsolete newline sequences; I've included everything from wiki just because I could
 
-lws('SP', n ≥ 1) ::= <U+0020 Space)>{n}
-lws('HT', n ≥ 1) ::= <U+0009 Character Tabulation>{n}
+lws(SP, n ≥ 1) ::= <U+0020 Space)>{n}
+lws(HT, n ≥ 1) ::= <U+0009 Character Tabulation>{n}
 # additional types of space may be considered, but each must get a distinct whitespace type
 ```
 
@@ -424,6 +424,275 @@ For example, numbers such as $10^{(10^{100})}$ can be represented in an eexpr wi
 In the reference implementation, we do not attempt to expand the exponent, and instead leave it to client languages to determine whether (and how) to represent a number or emit an error.
 To help with this (TODO implement this), we have also included grammar combinators which only succeed for numbers that fit into various common representations.
 
+#### Symbols
+
+TODO
+TODO make sure to alter symbolChar later if I change the name here
+FIXME implement these choices
+
+```
+symbol ::= symbolChar1 symbolChar* - sign digit(10) symbolChar*
+
+iIl,1o0O.
+
+symbolChar ::= alphaNum | asciiSymb
+            |  greekAlpha | hebrewAlpha
+            |  mathAlpha | blackboard
+            |  mathSymb | arrows | extraDots
+            | unsortedCharsTODO
+symbolChar1 ::- symbolChar - SQ
+
+alphaNum ::= 'a'…'z' | 'A'…'Z' | '0'…'9'
+asciiSymb ::=
+  | '!' | '$' | '%' | '&' | SQ | '*' | '+' | '-' | '/'
+  | '<' | '=' | '>' | '?' | '@'
+  | '^' | '_'
+  | '|' | '~'
+
+greekAlpha ::=
+  | 'Α'…'Ω' - <U+03A2> | 'α'…'ω'
+  # variant forms
+  | 'ϐ' | 'ϴ' | 'ϑ' | 'ϒ' | 'ϕ' | 'ϖ' | 'ϰ' | 'ϱ' | 'ϵ'
+  # archaic and numeral
+  | 'Ͱ'…'ͳ' | 'ϗ'…'ϡ' | 'Ϻ'…'ϻ'
+  # modified forms
+  | '϶' | 'ϼ'
+hebrewAlpha ::=
+  # TODO oh yeah, some hebrew letters get used in math as well
+  | 'ℵ'…'ℸ'
+
+mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝓐𝓪, 𝔄𝔞, 𝔸𝕒)
+  # TODO I removed bold fraktur b/c it's not different enough from normal fraktur
+    '𝒜'…'𝔷' - <reserved points in this range>
+  | 'ℬ' | 'ℰ' | 'ℱ' | 'ℋ' | 'ℐ' | 'ℒ' | 'ℳ' | 'ℛ'
+  | 'ℯ' | 'ℊ' | 'ℴ'
+  | 'ℭ' | 'ℌ' | 'ℑ' | 'ℜ' | 'ℨ'
+blackboard ::=
+    '𝔸'…'𝕫' - <reserved points in this range> | 'ℂ' | 'ℍ' | 'ℕ' | 'ℙ'…'ℝ' | 'ℤ'
+  | '𝟘'…'𝟡'
+  | 'ℼ' | 'ℽ' | 'ℾ' | 'ℿ' | '⅀' # greek
+
+mathSymb ::= setSymb | logicSymb
+         | arithSymb | calculusSymb
+         | mathRels | mathOps | mathTurnstiles
+         | mathShapes
+         | '′' # prime
+         | extraMathSymb
+
+extraDots ::= '∴' | '∵' | '∷'
+
+setSymb ::= 
+  ∅∞
+  ∩∪⨿×
+  ⋂⋃∐⨉ # n-ary
+  ∈∉∋∌
+  ⊂⊃⊄⊅⊆⊇⊈⊉⊊⊋
+logicSymb ::=
+  ⊤⊥
+  ¬∀∃∄
+  ∧∨⊻⊼⊽
+  ⅋ # linear logic (also uses &!?⊗⊕, which are elsewhere)
+  ⋀⋁ # n-ary
+arithSymb ::=
+  ±∓⋅÷√
+  ∏∑⨊ # n-ary
+  ‰‱
+calculusSymb ::=
+  ∂∆∇∫
+mathRels ::= equivRels | compareRels
+equivRels ::=
+  ≠≡≢≣≟⩵⩶≝≜⩴≔≕ # "equal"
+  ≃≄≅≇≆ #iso
+  ∼≁≈≉≋ # approximate
+  ≍≭≎≏⪮ # bendy
+  ∝
+compareRels ::=
+  ≤≥⪇⪈≮≯≰≱ # straight
+  ≶≷≸≹⋚⋛ # posets
+  ≲≳≴≵⋦⋧ # approximate
+  ≺≻≼≽⊀⊁⋠⋡⋞⋟ # cusp
+  ⊏⊐⊑⊒⋢⋣⋤⋥ # square
+  ⊲⊳⊴⊵⋪⋫⋬⋭ # closed
+  ≬≪≫⋘⋙
+mathOps ::=
+  ∘⨾ # composition
+  ⧺⧻∔∸ # plus and minus variants
+  ≀ # wreath product
+  ⊕⊖⊗⊙⊘⦼⨸⊚⊛⊜⊝
+  ⊞⊟⊠⊡⧄⧇⧆
+  ⨹⨺⨻
+  ⨀⨁⨂ # n-ary
+  ⋈⋉⋊
+  ∗⋄⋆
+mathTurnstiles
+  ⊢⊨⊩⊫⟝
+mathShapes ::=
+  □⬠⬡○
+  ◊⬭⬯
+  ◇☆⯎⯏
+  ⋕⩩ # I've seen the last used in "SICP for GR" or whatever it's called
+
+
+extraMathSymb ::=
+# set theory
+  ⨃⨄⨅⨆ # n-ary
+  ⊌⊍⊎⋒⋓⊓⊔⩀⩁⩂⩃⩄⩅⩐⩎⩏
+  ⋐⋑⪽⪾⪿⫀⫁⫂⫃⫄⫅⫆⫇⫈⫉⫊⫋⫌
+# logic
+  ⋎⋏
+  ⌐⨼⨽
+  ⟑⟇⟎⟏⩑⩒⩓⩔⩕⩖⩗⩘⩙⩚⩛⩜⩝⩞⩟⩠⩢⩣
+  ⨇⨈ # n-ary
+# arithmetic
+  ⨪⨫⨬ # dotted minuses
+# calculus
+  ∬∭∮∯∰∱∲∳⨋⨌⨍⨎⨏⨐⨑⨒⨓⨔⨕⨖⨗⨘⨙⨚⨛⨜
+# relations
+  ≖≗≘≙≚≛≞ # straight
+  ⩪⩫∻∽∾⩯ # wiggles
+  ≂≊≌⋍⩬⩭⩰⩳ # straight and wiggly
+  ≐⩦⩧≑≒≓⩷⩸⩮ # dotted
+  ⋖⋗⋜⋝⩹⩺⩻⩼⪅⪆⪉⪊⪋⪌⪍⪎⪏⪐⪑⪒⪙⪚⪝⪞⪟⪠≦≧≨≩
+  ⩽⩾⩿⪀⪁⪂⪃⪄⪓⪔⪕⪖⪗⪘⪛⪜⫹⫺
+  ≾≿⋨⋩⪯⪰⪱⪲⪳⪴⪵⪶⪷⪸⪹⪺⪻⪼
+  ∹⊰⊱
+  ⪡⪢⫷⫸⪣⪤⪥⪪⪫⪬⪭⩤⩥⪦⪧⪨⪩
+# operators
+  ⩱⩲
+  ⦶⦷⦸⦹⦺⦻⦽⧀⧁⧂⧃⨭⨮⨴⨵
+  ⧅⧈⧉
+  ⧊⧋⧌⧍⧎⧏⧐
+  ⋋⋌
+  ⋇⟐
+  ⊹⊺ # I honestly have no idea what these are
+# tacks
+  ⊭⫤
+  ⊬⊣
+  ⊮⫣
+  ⊯⫥
+  ⫢⊪⫦
+  ⟞
+  ⫝̸⫝
+  ⟘⟙⫧⫨⫩⫪⫫
+# database
+  ⟕⟖⟗
+  ⨝⨞
+# misc
+  ∎ # QED/tombstone
+  ∿
+  ⦰⦱⦲⦳⦴⦵
+
+
+# you can have one alternate head or tail, but not both
+# you can also drop the head with an alternate tail
+# there are no straight strokes, only slash strokes
+arrows ::= #TODO fix metasyntax
+  ←↑→↓↔↕ # straight
+  ⇐⇑⇒⇓⇔⇕ # double
+  ↚↛↮ # stroked
+  ⇍⇎⇏ # stroked double
+  ↜↝↭ # wave
+  ⇜⇝ # squiggle
+  ⤸⤹⤺⤻ # arc
+  ⇚⇛⤊⤋ # triple
+  ⟰⟱⭅⭆ # quadruple
+# long
+  ⟵⟶⟷ # long
+  ⟸⟹⟺ # long double
+  ⟻⟼ # long from bar
+  ⟽⟾ # long double from bar
+  ⟿⬳ # long squiggle
+#alt heads
+  ↞↟↠↡ # two headed
+  ↼↽↾↿⇀⇁⇂⇃⥊⥋⥌⥍⥎⥏⥐⥑ # harpoon
+  ⇤⇥⤒⤓ # to bar
+  ⊸⟜⫯⫰⧟
+# alt tails
+  ↢↣ # tail
+  ↩↪ # hook
+  ↤↥↦↧ # from bar
+  ↫↬ # loop
+# no head, alt tail
+  ⤙⤚ # only tail
+  ⤛⤜ # only double tail
+  ⥼⥽⥾⥿ # fish tail
+# to/from endpoints
+  ⤅⬶ # two headed from bar
+  ⤆⤇ # double from bar
+# turning
+  ↰↱↲↳⬎⬏⬐⬑ # tip turn
+  ⤴⤵⤶⤷ # curving
+  ↶↷⤾⤿ # semicircle
+  ⮌⮍⮎⮏ # (triangle-headed) u-shaped
+  ↺↻ # circle
+  ⟲⟳ # gapped circle
+  ⥀⥁ # closed circle
+# multiple
+  ⇄⇅⇆⇇⇈⇉⇊⇵ # paired
+  ⇋⇌ # paired harpoon
+  ⇶⬱ # three
+  ⥢⥣⥤⥥⥦⥧⥨⥩⥪⥫⥬⥭⥮⥯ # paired harpoons
+
+
+unsortedCharsTODO ::=
+  # TODO random stuff from letterlike symbols
+  | 'ℓ' | '℘' | '№' | '℧'
+  | '†' | '‡' # or use these instead of emoji for unsafe functions
+  | '💣' | '💥' # TODO explosion-related images, for when a named value might be unsafe
+
+```
+
+::: Warning
+If you use non-ASCII notation in your language or library, it is not enough to include suggestions for ASCII alternatives.
+Instead, there must be a tool to convert losslessly between Unicode and ASCII.
+:::
+
+::: Warning
+The selection of available symbol characters is not yet set in stone.
+So far, I have only examined the Basic Latin Unicode block for useful characters.
+I would like to allow mathematical operators, arrows, greek letters at least, and I may include a number of other scripts if it comes to it.
+However, I'll also want to use some normalization algorithm to ensure visually-identical symbols are treated identically.
+I am loathe to include characters from scripts I am not fluent with; if they are to be added, it should be in consultation with people who _do_ understand these scripts.
+
+Here is a list of blocks that I have examined or plan to examine:
+  - [x] Basic Latin
+  - [x] math-related:
+    - [x] Mathematical Operators
+    - [x] Mathematical Alphanumeric Symbols
+    - [x] Letterlike Symbols
+    - [x] Miscellaneous Symbols
+    - [x] Miscellaneous Symbols and Arrows
+    - [x] Miscellaneous Mathematical Symbols-A
+    - [x] Miscellaneous Mathematical Symbols-B
+    - [x] Supplemental Mathematical Operators
+    - [x] Latin-1 Supplement
+    - [x] Geometric Shapes (I've only taken the white ones b/c they're easy to print, and all of the same "size")
+    - [x] Miscellaneous Technical
+    - [x] General Punctuation
+  - [x] arrows:
+    - [x] Arrows
+    - [x] Supplemental Arrows-A
+    - [x] Supplemental Arrows-B
+    - [x] Supplemental Arrows-C (no, these are mostly thickness variants and some wingdings-looking stuff, though there are a few arrowheads)
+    - [x] Miscellaneous Symbols and Arrows
+  - [ ] SI unit symbols (not a block)
+  - [x] greek:
+    - [x] Greek and Coptic
+    - [x] Greek Extended
+  - [ ] Hebrew
+  - [ ] keyboard key symbols (not a block)
+  - [ ] Latin-1 Supplement, Latin Extended-A -B -C -D and -E, Latin Extended Additional
+  - [ ] Combining Diacritical Marks, Combining Diacritical Marks Extended, Combining Diacritical Marks Supplement
+  - [ ] Combining Diacritical Marks for Symbols
+  - [ ] Combining Half Marks
+  - [ ] General Punctuation, Supplemental Punctuation
+  - [ ] Superscripts and Subscripts
+  - [ ] Currency Symbols
+  - [ ] Geometric Shapes, Geometric Shapes Extended, Miscellaneous Symbols, Dingbats, Ornamental Dingbats
+  - [x] IPA extensions, Spacing Modifier Letters (I don't think the IPA script is really useful for variable names)
+  - [x] Number Forms (I already have the dozenal digits, the fractions are too limited in scope, roman numerals are unneeded)
+  - [x] Control Pictures (I find it unlikely that adding these won't introduce confusion)
+:::
 
 #### Strings
 
@@ -520,15 +789,57 @@ This could be done by prefixing a string with a conversion function (perhaps in 
 Thus, `c'a'` for a character, `base64url"KMK044O7z4njg7sp44Gj55Sx"` for a base64-encoded bytestring, and so on.
 :::
 
-TODO heredocs
+Heredocs are multi-line strings that have no escaping whatsoever because their content is included verbatim.
+They begin with a line ending in a "triple quote" and optional identifier and end with a line beginning with that same identifier (if any) and another triple quote.
+All the intervening lines are included unaltered, including alternate newlines, control characters, and so on.
+Additionally, heredocs may also be indented by including a backslash after the opening identifier and another backslash to indicate the indent amount.
+
+Indicating indent depth with a backslash on the first line of a heredoc allows for heredocs to start with leading whitespace.
+Accommodations have been made for aligning indented backslash despite the first-line backslash:
+  when indentation is done with spaces, the backslash counts towards the number of spaces of leading indent,
+  and when it is done with tabs, a tab must follow the backslash[^tiny-tabs].
+The final newline before the close quotes is not included in the heredoc, so if you would like a heredoc to end with a trailing newline, leave a blank line.
+
+[^tiny-tabs]: So don't set your tab size less than two. That's what we call "expert guidance"!
+
+```
+heredoc ::= startHeredoc(name, ws, n)
+            heredocLine(name, ws, n)*
+            endHeredoc(name, ws, n)
+
+openHeredoc(\name) ::= DQ DQ DQ (?name = symbolChar*) lws(_, _)?
+startHeredoc(name, _, 0) ::= openHeredoc(name) nl
+startHeredoc(name, SP, n + 1) ::= openHeredoc(name) BS lws(_, _)? nl
+                                  zlws(SP, n) BS
+startHeredoc(name, HT, n + 1) ::= openHeredoc(name) BS lws(_, _)? nl
+                                  zlws(HT, n) BS HT
+
+heredocLine(name, ws, n) ::= zlws(ws, n) heredocContent nl
+heredocContent ::= (1 - nl)* - (closeHeredoc(name) (1 - nl)*)
+
+endHeredoc(name, ws, 0) ::= closeHeredoc(name)
+endHeredoc(name, ws, n) ::= lws(ws, n) closeHeredoc(name)
+closeHeredoc(name) ::= name DQ DQ DQ
+
+zlws(_, 0) ::= ɛ
+zlws(ws, n) ::= lws(ws, n)
+```
+This makes them an attractive target for embedding non-eexpr content.
 
 ::: Rationale
-TODO heredocs are here mostly for docstrings.
-while many languages put documentation in comments, I like Python's ability to print documentation for an object from the repl.
-putting such documentation in comments would make it difficult to attach it to language objects, since comments are meant to be removed before parsing.
+Heredocs are an attractive target for embedding non-eexpr content.
+I especially want to use if for embedding documentation as doc strings rather than comments[^freudian-slip].
+Writing documentation in comments makes it more difficult to attach them to language constructs.
+The difference can be seen very well in Python, which uses docstrings, and can therefore report documentation directly in the REPL, or during script execution.
+True, documentation could be written in an e-expr-based markup, but I'd likely prefer markdown---I'm not a zealot.
+Regardless, heredocs can embed any desired documentation language.
 
-the other use they might have is in embedding other languages, such as sql.
+Another use for heredocs is embedding non-eexpr languages more generally.
+An obvious use would be for crafting SQL expressions directly in a web server.
+Other possibilities are embedding a scripting language such as Lua, or C code as part of a foreign function interface.
 :::
+
+[^freudian-slip]: In fact, I've only recently gotten over pronouncing "heredoc" as "docstring".
 
 
 #### Punctuation
@@ -548,6 +859,12 @@ encloser(Open, Brace) ::= '{'
 encloser(Close, Paren) ::= ')'
 encloser(Close, Bracket) ::= ']'
 encloser(Close, Brace) ::= '}'
+
+  # TODO more enclosers
+  # ⌈⌉⌊⌋⟅⟆⟦⟧⟨⟩⟪⟫⟬⟭⟮⟯«»
+  # ⦃⦄⦅⦆⦇⦈⦉⦊⦋⦌⦍⦎⦏⦐⦑⦒⦓⦔⦕⦖⦗⦘
+  # ⧼⧽
+  # how to rewrite in ASCII? perhaps use fat colon + parens `⟬f x y⟭ → ap::(f x y) ≡ f <$> x <*> y`
 
 separator(Semicolon) ::= ';'
 separator(Comma) ::= ','
@@ -641,6 +958,8 @@ unknownColon ⇒ Ø # FIXME implement this
 FIXME I'm thinking more about whether to join a colon-nospace-symbol into a single symbol, but there's not a good way to express this in the rewrite rules.
 Perhaps it can go in the symbol raw lexer rule for symbols, but it doesn't belong to this phase.
 I guess for now I'll require lws after regular colons, just to play it safe.
+It's not just '::' that I want, but also ':=' and especially '::='.
+It seems I really do want to allow colons in identifiers in some capacity; I just have to make sure trailing colons are disallowed.
 
 TODO indentation is weird 'cause I need a stack.
 I mean, I could thread an attributeful token through the stream, but I think the stack explanation is clearer.

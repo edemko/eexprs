@@ -13,12 +13,19 @@ FORMAT+=+lists_without_preceding_blankline
 mathjaxUrl='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
 htmlTex=--mathjax="$mathjaxUrl"
 
+# MONOFONT="Unifont" # looks like trach even on ascii chars
+# MONOFONT="Everson Mono" # blegh, this lisence is some garbo from the '90s
+# MONOFONT='FreeMono' # no dot in zero, 1 and l aren't very distinct
+# above here is mostly ruled-out
+MONOFONT='Source Code Pro' # I like the spacing here, but there are lots of missing chars relative to DejaVu
+MONOFONT='DejaVu Sans Mono' # the spacing is a bit tight, but it has ~100 more chars than Source Code Pro
+
 mkTarget() {
   local basename="$1"
   pandoc "$basename.pandoc" --from "$FORMAT" --to html -s "$htmlTex" -o "$basename.html"
   pandoc "$basename.pandoc" --from "$FORMAT" \
     --to pdf --pdf-engine=xelatex \
-      -V 'monofont:Source Code Pro' \
+      -V monofont="$MONOFONT" \
     -o "$basename.pdf"
 }
 

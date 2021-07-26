@@ -348,7 +348,7 @@ bool takeComment(engine* st) {
 
 /*
 Symbols are simply one or more symbol characters.
-  `[:symbolChar:]+`
+  `[:symbolChar1:][:symbolChar:]* - ([+-]?[:digit:][:symbolChar:]*)`
 */
 static
 bool takeSymbol(engine* st) {
