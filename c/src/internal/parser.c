@@ -28,6 +28,7 @@ void mkUnbalanceError(engine* st) {
 
 static eexpr* parseSemicolon(engine* st);
 static eexpr* parseSpace(engine* st);
+static eexpr* parseBlockLine(engine* st);
 
 /*
 ```
@@ -35,7 +36,7 @@ wrapExpr
   ::= '(' semicolonExpr? ')'
    |  '[' semicolonExpr? ']'
    |  '{' semicolonExpr? '}'
-   |  indent semicolonExpr (newline semicolonExpr)* dedent
+   |  indent blockLine blockLine* dedent
 ```
 */
 static
@@ -97,7 +98,7 @@ eexpr* parseWrap(engine* st) {
     parser_pop(st);
     dynarr_init_eexpr_p(&out->as.list, 4);
     while (true) {
-      eexpr* subexpr = parseSemicolon(st);
+      eexpr* subexpr = parseBlockLine(st);
       if (subexpr != NULL) {
         dynarr_push_eexpr_p(&out->as.list, &subexpr);
       }
@@ -580,6 +581,69 @@ eexpr* parseSemicolon(engine* st) {
     else { // found a sub-expression, with no evidence of a semicolon before, and no evidence of a semicolon after
       return tmp;
     }
+  }
+}
+
+static
+void pushFrontBodge(eexpr* x, eexpr* xs) {
+  dynarr_eexpr_p newList; {
+    dynarr_init_eexpr_p(&newList, 1 + xs->as.list.len);
+    newList.len = xs->as.list.len + 1;
+  }
+  newList.data[0] = x;
+  for (size_t i = 0; i < xs->as.list.len; ++i) {
+    newList.data[i+1] = xs->as.list.data[i];
+  }
+  dynarr_deinit_eexpr_p(&xs->as.list);
+  xs->as.list = newList;
+}
+/*
+  blockLine
+    ::= ellipsisExpr ':' semicolonExpr
+     |  ellipsisExpr ';' semicolonExpr
+     |  ellipsisExpr ',' commaExpr (';' semicolonExpr)?
+*/
+static
+eexpr* parseBlockLine(engine* st) {
+  eexpr* expr1 = parseEllipsis(st);
+  eexpr_token* next = parser_peek(st);
+  if (next->type == EEXPR_TOK_COLON) {
+    eexpr_loc colonLoc = next->loc;
+    parser_pop(st);
+    eexpr* expr2 = parseSemicolon(st);
+    if (expr2 == NULL) {
+      expr1->loc.end = colonLoc.end;
+      return expr1;
+    }
+    eexpr* out = malloc(sizeof(eexpr));
+    checkOom(out);
+    out->type = EEXPR_COLON;
+    out->loc.start = expr1->loc.start;
+    out->loc.end = expr2->loc.end;
+    out->as.pair[0] = expr1;
+    out->as.pair[1] = expr2;
+    return out;
+  }
+  else if (next->type == EEXPR_TOK_SEMICOLON) thenSemicolon: {
+    eexpr* out = parseSemicolon(st);
+    assert(out->type == EEXPR_SEMICOLON);
+    pushFrontBodge(expr1, out);
+    return out;
+  }
+  else if (next->type == EEXPR_TOK_COMMA) {
+    eexpr* out = parseComma(st);
+    assert(out->type == EEXPR_COMMA);
+    pushFrontBodge(expr1, out);
+    next = parser_peek(st);
+    if (next->type == EEXPR_TOK_SEMICOLON) {
+      expr1 = out; goto thenSemicolon;
+    }
+    else {
+      return out;
+    }
+  }
+  else {
+    return expr1;
   }
 }
 

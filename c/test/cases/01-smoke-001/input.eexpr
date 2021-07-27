@@ -43,6 +43,11 @@ do:
    fourth
 do.:
   chained do
+:
+  a: 1, 2
+  b..d: 42
+  foo; bar
+  1, 2, 3; a, b, c
 
 "Hello, `toUpper name`!"
 "Goodbyte, `firstName` `lastName`!"

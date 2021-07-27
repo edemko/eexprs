@@ -113,14 +113,16 @@ isSymbolChar c = good && defensive
 */
 bool isSymbolChar(char32_t c) {
   static const char32_t miscChars[] =
-    { '_' // TODO more!
-    , '+', '-' // these are special because they can also start a number
-    , '\'' // I do allow primes, but not at the start of a symbol
+    { '!', '$', '%', '&', '\'', '*', '+', '-', '/'
+    , '<', '=', '>', '?', '@'
+    , '^', '_'
+    , '|', '~'
     , UCHAR_NULL};
   return ('a' <= c && c <= 'z')
       || ('A' <= c && c <= 'Z')
       || ('0' <= c && c <= '9')
       || ucharElem(c, miscChars) // found c in the noted characters
+      // TODO unicode symbolChars
       || c == 0x03BB // DEBUG
       ;
 }
