@@ -8,7 +8,7 @@ Further, indentation-sensitivity is difficult, but very nice.
 ## Why?
 
 Lisp has a very nice separation between parser (which creates an sexpr from a bytestream) and grammar (which gives semantics to those sexprs).
-The Lisp reader is not so different (ignoring reader macros) from a JSON or XML parser: there's still a step before you get to an abstract syntax tree, but at elast you don't have to deal with bytes and characters to understand an sexpr/JSON/XML document.
+The Lisp reader is not so different (ignoring reader macros) from a JSON or XML parser: there's still a step before you get to an abstract syntax tree, but at least you don't have to deal with bytes and characters to understand an sexpr/JSON/XML document.
 
 Most lispers probably think that sexprs have perfectly fine ergonomics as the representation of a programming language.
 I think Lisp is lacking, and---to be fair---a lot of people avoid Lisp just because it doesn't look fun to program in.
@@ -39,7 +39,7 @@ Not this time.
 This list is just known upcoming stuff; items are deleted not checked off.
 
   * design choices
-    * how to set tabstops in the source and automatically re-align without loosing those tabstops
+    * how to set tabstops in the source and automatically re-align without losing those tabstops
     * fat colon `a :: b` and fat chain `a::b` syntax
   * major features
     * pragma extraction
