@@ -271,7 +271,7 @@ recognize _ = Nothing</code></pre>
 </ul>
 <p>The question now is, if s-exprs are so great, why implement e-exprs? My view is that s-exprs, while they are far more ergonomic than JSON, are <em>not</em> ergonomic compared to common programming languages. A claim like that is certain to spark vocal argument, but to engage in it here would derail the main thrust of this paper. Instead, let’s jump straight into describing e-exprs and delay any rant-like objects until <a href="#suboptimality-of-s-exprs">later in the report</a>. Hopefully, the advantages of e-exprs will become clear as we examine them.</p>
 <h2 id="a-whirlwind-tour-of-e-exprs">A Whirlwind Tour of E-Exprs</h2>
-<p>The leaves of an eexpr are atoms such as numbers, symbols, and strings. A range of Unicode symbols<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> are also supported, and there is no distinction between different classes of symbols (such as operator, variable). In addition to C-style strings, there are also also be written sql-style, or as heredocs, which are equivalent in the abstract grammar. All other eexprs are simply various combinations of these leaves. FIXME move this to a more detailed place where I can include rationale: There is no special syntax for character literals.</p>
+<p>The leaves of an eexpr are atoms such as numbers, symbols, and strings. A range of Unicode symbols<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> are also supported, and there is no distinction between different classes of symbols (such as operator, variable). In addition to C-style strings, there are also also be written sql-style, or as heredocs, which are equivalent in the abstract grammar. All other eexprs are simply various combinations of these leaves.</p>
 <pre><code># numbers
 12
 0xf00d
@@ -362,13 +362,27 @@ do {:
 
 data NonEmpty a = a :| [a]
 data NonEmpty2 a = a :|| NonEmpty a</code></pre>
-<p>A sequence of dot-separated expressions is represented with the <code>Chain</code> constructor. I though the name <code>Dots</code> was a little misleading because the dots are sometimes optional, as in <code>array[i]</code>, which is a <code>Chain</code> that contains no dots at all in the concrete syntax.</p>
+<p>A sequence of dot-separated expressions is represented with the <code>Chain</code> constructor. I thought the name <code>Dots</code> was a little misleading because the dots are sometimes optional, as in <code>array[i]</code>, which is a <code>Chain</code> that contains no dots at all in the concrete syntax.</p>
 <p>The one constructor that isn’t widely-recognized is <code>Predot</code>, which represents an expression prefixed by a single dot.</p>
 <div class="Rationale">
 <p>In Haskell, named functions can be made into binary infix operators—e.g. <code>x `member` s</code> rather than <code>member x s</code>. Originally I wanted to generalize this so that arbitrary expressions can be made into infix operators—e.g. <code>map .(insert k) v</code>. However, I quickly realized that this could also be used to create “artifical methods”—e.g. rewrite <code>get theMap .insert k (compute blarg)</code> to <code>insert (get theMap) k (compute blarg)</code>. Even more generally, a prefix dot could be used to determine an alternate meaning of the expression it attaches to. In pattern matching for example, one must determine if a symbol is a constructor or a named hole; a prefix dot could be used on holes to distinguish them, rather than (say) enforcing a case convention. Regardless, it is up to the client language to determine the meaning of a prefix dot in various contexts, if it allows prefix dot at all; eexprs simply make the syntax available if there <em>is</em> a need.</p>
 </div>
 <h2 id="recognizer-combinators">Recognizer Combinators</h2>
-<p>FIXME: this paragraph is garbo. This grammar is representable by a simple ADT. To transform an eexpr term into a more specific syntax, you could simply pattern-match against this ADT. However, if you want to report (client) grammatical errors in context, then it it likely preferable to use an arrow-based api to match eexprs. I have implemented such such an api. It also includes an instance for <code>ArrowApp</code>, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style’s ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).</p>
+<p>FIXME: this paragraph is garbo. To transform an eexpr term into a more specific syntax, you could simply pattern-match against this ADT. However, if you want to report (client) grammatical errors in context, then it it likely preferable to use an arrow-based api to match eexprs. I have implemented such such an api. It also includes an instance for <code>ArrowApp</code>, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style’s ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).</p>
+<p>TODO ArrowApply is implemented so you can do things like (roughly)</p>
+<pre><code>specialForms :: Map Text ([Eexpr] ~&gt; Lang)
+parseSpecialForm :: NonEmpty Eexpr ~&gt; Lang
+parseSpecialForm = proc (x :| xs) -&gt; do
+  isSpecialForm &lt;- lookup x specialForms
+  case isSpecialForm of
+    Nothing -&gt; pure $ Apply x xs
+    Just form -&gt; form xs</code></pre>
+<p>Perhaps I don’t know arrows well and haven’t figured out how to write this without <code>app</code>, but it’s odd that if I inline the table as a syntactic case instead of a map datum, I can write:</p>
+<pre><code>parseSpecialForm :: NonEmpty Eexpr ~&gt; Lang
+parseSpecialForm = proc (x :| xs) -&gt; case x of
+  &quot;lambda&quot; -&gt; parseLambda xs
+  …
+  _ -&gt; pure $ Apply x xs</code></pre>
 <h2 id="concrete-syntax">Concrete Syntax</h2>
 <p>At least conceptually, the grammar of eexprs can be split into four phases:</p>
 <ol type="1">
@@ -377,57 +391,68 @@ data NonEmpty2 a = a :|| NonEmpty a</code></pre>
 <li>Token Cooker</li>
 <li>Parser</li>
 </ol>
-<p>Raw lexing identifies individual tokens in a Unicode stream. It can be described mostly with regular expressions, though at points we require capturing groups. In the reference implementation, we require at most three codepoints of lookahead.</p>
-<p>Cooking the token stream involves examining tokens in context to determine if they are relevant to the parser, and sometimes disambiguate how the token is to be used (e.g. space that separates eexprs vs. space which indicates indentation). This is described by a term rewrite system which only uses a few (TODO how many?) tokens of lookaround.</p>
-<p>Finally, the parser consumes the cooked token stream to produce an eexpr according to a context-free grammar.</p>
 <div class="Rationale">
 <p>The Unicode character set seems the most future-proof choice, since its goal is to subsume all other character sets. Choosing UTF-8 as the only encoding is less flexible, but detection of magic strings in their appropriate encodings is a source of complexity. Would that complexity be worth it? I don’t think so, and the <a href="http://utf8everywhere.org/">UTF-8 Everywhere Manifesto</a> presents the argument better than I can here.</p>
 </div>
+<p>Raw lexing identifies individual tokens in a Unicode stream. It can be described mostly with regular expressions, though at points we require capturing groups. In the reference implementation, we require at most three codepoints of lookahead.</p>
+<p>Cooking the token stream involves examining tokens in context to determine if they are relevant to the parser, and sometimes disambiguate how the token is to be used (e.g. space that separates eexprs vs. space which indicates indentation). This is described by a term rewrite system which only uses a few (TODO how many?) tokens of lookaround.</p>
+<p>Finally, the parser consumes the cooked token stream to produce an eexpr according to a context-free grammar.</p>
+<p>I’ve presented the parts of this pipeline in “reverse” order. AFter all, the rest of this paper is primarily a long list of definitions of tokens and terminals and character sets and… I hope you’ll be less distracted by questions like “Why are you defining this?” if you first see where it will be used. Of course, if you prefer to trudge through several dozen low-level definitions and slowly build up to anything useful, you’re welcome to read backwards. But for now, the parser:</p>
 <h3 id="parser">Parser</h3>
-<p>Since the raw lexer handled all the tricky parts of decoding a character stream, and the lexeme cooker handled almost all the tricky work of making sure the tokens relate to each other intuitively, the parser is refreshingly straightforward.</p>
+<p>The true point of the raw lexer is to handle tricky parts of decoding a character stream, and the lexeme cooker handles almost all the tricky work of making sure the tokens relate to each other intuitively, so the parser is refreshingly straightforward. There are some final intuition-driven intricacies for parsing the lines of indented blocks, but we will get to that later.</p>
+<p>The core of eexprs is the <code>Expr</code> rule; this is the start rule and is called back into to tie the recursive knot. It can be composed of an eexpr delimited on both sides (bracketed eexprs, indented blocks, and string templates), or an atom (which, since it is always one token long, can be said to delimit itself).</p>
 <pre><code>Expr ::= number
       |  symbol
-      |  StringTemplate
+      |  string(S, S)
       |  EnclosedExpr
 
-StringTemplate
-  ::= string(S, S)
-   |  string(S, T) SpaceExpr (string(T, T) SpaceExpr)* string(T, S)
-
-# FIXME I haven&#39;t actually done the rewriting for indent/newline/dedent tokens
 EnclosedExpr
   ::= encloser(Open, a) SemicolonExpr? encloser(Close, a)
-   |  indent(n) BlockLine (nl(n) BlockLine)* dedent(n)
-
-TODO I might allow leading comma/semicolon for block lines
-FIXME I think it&#39;d be work allowing `EllipsisExpr colon SemicolonExpr
-FIXME also, `EllipsisExpr? semicolon SemicolonExpr` and likewise for comma exprs
-BlockLine
-  ::= EllipsisExpr semicolon SemicolonExpr
-   |  EllipsisExpr comma CommaExpr (semicolon SemicolonExpr)?
-   |  EllipsisExpr colon EllipsisExpr
-   |  EllipsisExpr
-
-SemicolonExpr ::= semicolon? CommaExpr (semicolon CommaExpr)* semicolon?
-               |  CommaExpr
+   |  indent(n) BlockLine (nl BlockLine)* dedent(n)
+   |  string(S, T) SpaceExpr (string(T, T) SpaceExpr)* string(T, S)</code></pre>
+<div class="Rationale">
+<p>TODO why string templates hold spaces? I guess because you’re supposed to put a single (client lang) expression inside to be spliced in; what would it mean to put statements inside? If someone does come up with a use-case, I can extend the grammar later.</p>
+</div>
+<p>Beyond that, eexprs may be combined by various punctuation. It seems odd to speak about punctuation having precedence, so we will say that each form of punctuation has a different “strength”, with stronger punctuation appearing closer to the root of the parse tree. From strongest to weakest we have: semicolon, comma, colon, ellipsis, space, dot. Note that although bracketed expressions contain up to <code>SemicolonExpr</code>s, string templates contain <code>SpaceExpr</code>s (and again, indented blocks are a little odd).</p>
+<pre><code>SemicolonExpr ::= semicolon? CommaExpr (semicolon CommaExpr)* semicolon?
+               |  semicolon
 
 CommaExpr ::= comma? ColonExpr (comma ColonExpr)* comma?
-           |  ColonExpr
+           |  comma
 
-ColonExpr ::= EllipsisExpr colon EllipsisExpr
-           |  EllipsisExpr
+ColonExpr ::= EllipsisExpr (colon EllipsisExpr)?
 
 EllipsisExpr ::= SpaceExpr? ellipsis SpaceExpr?
               |  SpaceExpr
 
-SpaceExpr ::= ChainExpr (space ChainExpr)+
-           |  ChainExpr
+SpaceExpr ::= ChainExpr (space ChainExpr)*
 
-ChainExpr ::= Expr ChainTail+
-           |  Expr
+ChainExpr ::= Expr ChainTail*
 ChainTail ::= dot Expr
-           |  EnclosedExpr
-           |  StringTemplate</code></pre>
+           |  EnclosedExpr</code></pre>
+<p>Each type of punctuated expression allows different numbers of child expressions:</p>
+<ul>
+<li>Semicolons and commas both allow zero or more child expressions. When there are two or more, everything is straightforward; though the leading and trailing commas are both optional. To semicolon/comma separate a single expression, at least one of the leading/trailing commas must be present. A single semicolon/comma with no subexpressions on either side encodes zero separated eexprs.</li>
+<li>Colons require children on both sides.</li>
+<li>Ellipses allow a child on both sides, but do not require either; which child is on which side is meaningful.</li>
+<li>Spaces and dots allow two or more child expressions.</li>
+</ul>
+<p>In each line of a block, colons temporarily become sort-of stronger than semicolons. Intuitively, a block line holds semicolon-separated eexprs, but is also allowed a left-hand side before a colon, which is at most an <code>EllipsisExpr</code>. This easy-to-describe change requires the grammar for <code>BlockLine</code> to be rather more involved, unfortunately, but I guess that’s the nature of squishy human think-meat. To simplify the presentation, we use some explicit lookahead in these rules, which is notated with angle brackets.</p>
+<pre><code>BlockLine
+  ::= &lt;semicolon | comma&gt; SemicolonExpr
+   |  EllipsisExpr &lt;semicolon&gt; SemicolonExpr
+   |  EllipsisExpr &lt;comma&gt; CommaExpr (&lt;semicolon&gt; SemicolonExpr)?
+   |  EllipsisExpr (colon SemicolonExpr)?</code></pre>
+<div class="Rationale">
+<p>I claim that the “left-hand side” of block lines is intuitive, but at first block lines were simple semicolon-separated expressions, and why shouldn’t they be? Well, despite designing and implementing eexprs, I immediately screwed up writing a recognizer for mixfixes. I imagined that</p>
+<pre><code>mixfix add:
+  after: mul, exp</code></pre>
+<p>would parse the obviously-intended way, but instead it grouped <code>after: mul</code> together, leaving <code>exp</code> as a sibling. It’s certainly interesting that sometimes the intuitive rule leads to unintuitive results. One small change to the grammar later, and my recognizer was far easier to write. In any case, I realized that I wanted a LHS rule any way to support switch statements (and case/match expressions, and so on), such as:</p>
+<pre><code>switch c:
+  &#39;A&#39;…&#39;F&#39;: c -= 7; fallthrough
+  &#39;0&#39;…&#39;9&#39;: n += c - 48
+  default: return null</code></pre>
+</div>
 <h3 id="lexeme-cooker">Lexeme Cooker</h3>
 <p>The lexeme cooker is a string rewrite system over tokens It deals with mostly local interactions between tokens, especially normalizing whitespace and whitespace-sensitive tokens.</p>
 <p>The basic form of rewrite rule is <code>a ⇒ b</code> which replaces the token sequence <code>a</code> in the input with tokens on the right for output. We also allow the use of “non-terminal” patterns on the left of a rule; the patterns we use can be modeled as regular languages over tokens. We also use lookahead and lookbehind (collectively lookaround) in the left-hand side of a pattern. These affect only whether the rewrite rule fires, but the sequences matching the lookaround are not rewritten. We write <code>&lt;l&gt;</code> for lookaround which must match for a rule to fire, and <code>!&lt;l&gt;</code> for lookaround which must <em>not</em> match; of course, lookaround is only allowed at the start and/or end of the left-hand side of a rule.</p>
@@ -511,7 +536,7 @@ unknownColon !&lt;lws(_, _)&gt; ⇒ ERR # FIXME implement this in C</code></pre>
 indent(n ≤ lvl) (lvl:rest)⇒ ERR
 
 nl zlws(n &lt; lvl) (lvl:rest)⇒(rest) dedent(lvl) nl lws(n)
-nl zlws(n = lvl) (lvl:rest)⇒ nl(n)
+nl zlws(n = lvl) (lvl:rest)⇒ nl
 !&lt;dedent(_)&gt; nl zlws(n &gt; lvl) (lvl:rest)⇒ space
 &lt;EOF&gt; (lvl:rest)⇒(rest) dedent(lvl)
 
@@ -623,7 +648,7 @@ expLetter(12) ::= Ø
 expLetter(16) ::= &#39;h&#39; | &#39;H&#39;</code></pre>
 <p>Eexpr implementations should be careful when choosing an internal representation for parsed numbers. It is possible for a naïve implementation to consume all system memory. For example, numbers such as <span class="math inline">\(10^{(10^{100})}\)</span> can be represented in an eexpr with as few as 103 bytes, but when represented as an exact bigint, would require more memory than humans have ever manufactured. In the reference implementation, we do not attempt to expand the exponent, and instead leave it to client languages to determine whether (and how) to represent a number or emit an error. To help with this (TODO implement this), we have also included grammar combinators which only succeed for numbers that fit into various common representations.</p>
 <h4 id="symbols">Symbols</h4>
-<p>TODO TODO make sure to alter symbolChar later if I change the name here FIXME implement these choices</p>
+<p>TODO TODO make sure to alter symbolChar later if I change the name here FIXME implement these choices in C</p>
 <pre><code>symbol ::= symbolChar1 symbolChar* - sign digit(10) symbolChar*
 
 iIl,1o0O.

@@ -142,7 +142,6 @@ The leaves of an eexpr are atoms such as numbers, symbols, and strings.
 A range of Unicode symbols[^unicode-usefulness] are also supported, and there is no distinction between different classes of symbols (such as operator, variable).
 In addition to C-style strings, there are also also be written sql-style, or as heredocs, which are equivalent in the abstract grammar.
 All other eexprs are simply various combinations of these leaves.
-FIXME move this to a more detailed place where I can include rationale: There is no special syntax for character literals.
 ```
 # numbers
 12
@@ -276,7 +275,7 @@ data NonEmpty2 a = a :|| NonEmpty a
 ```
 
 A sequence of dot-separated expressions is represented with the `Chain` constructor.
-I though the name `Dots` was a little misleading because the dots are sometimes optional, as in `array[i]`, which is a `Chain` that contains no dots at all in the concrete syntax.
+I thought the name `Dots` was a little misleading because the dots are sometimes optional, as in `array[i]`, which is a `Chain` that contains no dots at all in the concrete syntax.
 
 The one constructor that isn't widely-recognized is `Predot`, which represents an expression prefixed by a single dot.
 
@@ -296,13 +295,29 @@ Regardless, it is up to the client language to determine the meaning of a prefix
 ## Recognizer Combinators
 
 FIXME: this paragraph is garbo.
-This grammar is representable by a simple ADT.
 To transform an eexpr term into a more specific syntax, you could simply pattern-match against this ADT.
 However, if you want to report (client) grammatical errors in context, then it it likely preferable to use an arrow-based api to match eexprs.
 I have implemented such such an api.
 It also includes an instance for `ArrowApp`, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style's ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).
 
-
+TODO ArrowApply is implemented so you can do things like (roughly)
+```
+specialForms :: Map Text ([Eexpr] ~> Lang)
+parseSpecialForm :: NonEmpty Eexpr ~> Lang
+parseSpecialForm = proc (x :| xs) -> do
+  isSpecialForm <- lookup x specialForms
+  case isSpecialForm of
+    Nothing -> pure $ Apply x xs
+    Just form -> form xs
+```
+Perhaps I don't know arrows well and haven't figured out how to write this without `app`, but it's odd that if I inline the table as a syntactic case instead of a map datum, I can write:
+```
+parseSpecialForm :: NonEmpty Eexpr ~> Lang
+parseSpecialForm = proc (x :| xs) -> case x of
+  "lambda" -> parseLambda xs
+  …
+  _ -> pure $ Apply x xs
+```
 
 
 ## Concrete Syntax
@@ -313,6 +328,13 @@ At least conceptually, the grammar of eexprs can be split into four phases:
   3. Token Cooker
   4. Parser
 
+::: Rationale
+The Unicode character set seems the most future-proof choice, since its goal is to subsume all other character sets.
+Choosing UTF-8 as the only encoding is less flexible, but detection of magic strings in their appropriate encodings is a source of complexity.
+Would that complexity be worth it?
+I don't think so, and the [UTF-8 Everywhere Manifesto](http://utf8everywhere.org/) presents the argument better than I can here.
+:::
+
 Raw lexing identifies individual tokens in a Unicode stream.
 It can be described mostly with regular expressions, though at points we require capturing groups.
 In the reference implementation, we require at most three codepoints of lookahead.
@@ -322,82 +344,120 @@ This is described by a term rewrite system which only uses a few (TODO how many?
 
 Finally, the parser consumes the cooked token stream to produce an eexpr according to a context-free grammar.
 
-::: Rationale
-The Unicode character set seems the most future-proof choice, since its goal is to subsume all other character sets.
-Choosing UTF-8 as the only encoding is less flexible, but detection of magic strings in their appropriate encodings is a source of complexity.
-Would that complexity be worth it?
-I don't think so, and the [UTF-8 Everywhere Manifesto](http://utf8everywhere.org/) presents the argument better than I can here.
-:::
-
-
+I've presented the parts of this pipeline in "reverse" order.
+AFter all, the rest of this paper is primarily a long list of definitions of tokens and terminals and character sets and…
+  I hope you'll be less distracted by questions like "Why are you defining this?" if you first see where it will be used.
+Of course, if you prefer to trudge through several dozen low-level definitions and slowly build up to anything useful, you're welcome to read backwards.
+But for now, the parser:
 
 
 ### Parser
 
-Since the raw lexer handled all the tricky parts of decoding a character stream,
-  and the lexeme cooker handled almost all the tricky work of making sure the tokens relate to each other intuitively,
-  the parser is refreshingly straightforward.
+The true point of the raw lexer is to handle tricky parts of decoding a character stream,
+  and the lexeme cooker handles almost all the tricky work of making sure the tokens relate to each other intuitively,
+  so the parser is refreshingly straightforward.
+There are some final intuition-driven intricacies for parsing the lines of indented blocks, but we will get to that later.
 
+The core of eexprs is the `Expr` rule; this is the start rule and is called back into to tie the recursive knot.
+It can be composed of an eexpr delimited on both sides (bracketed eexprs, indented blocks, and string templates),
+  or an atom (which, since it is always one token long, can be said to delimit itself).
 ```
 Expr ::= number
       |  symbol
-      |  StringTemplate
+      |  string(S, S)
       |  EnclosedExpr
 
-StringTemplate
-  ::= string(S, S)
-   |  string(S, T) SpaceExpr (string(T, T) SpaceExpr)* string(T, S)
-
-# FIXME I haven't actually done the rewriting for indent/newline/dedent tokens
 EnclosedExpr
   ::= encloser(Open, a) SemicolonExpr? encloser(Close, a)
-   |  indent(n) BlockLine (nl(n) BlockLine)* dedent(n)
+   |  indent(n) BlockLine (nl BlockLine)* dedent(n)
+   |  string(S, T) SpaceExpr (string(T, T) SpaceExpr)* string(T, S)
+```
+::: Rationale
+TODO why string templates hold spaces? I guess because you're supposed to put a
+single (client lang) expression inside to be spliced in; what would it mean to
+put statements inside? If someone does come up with a use-case, I can extend the
+grammar later.
+:::
 
-TODO I might allow leading comma/semicolon for block lines
-FIXME I think it'd be work allowing `EllipsisExpr colon SemicolonExpr
-FIXME also, `EllipsisExpr? semicolon SemicolonExpr` and likewise for comma exprs
-BlockLine
-  ::= EllipsisExpr semicolon SemicolonExpr
-   |  EllipsisExpr comma CommaExpr (semicolon SemicolonExpr)?
-   |  EllipsisExpr colon EllipsisExpr
-   |  EllipsisExpr
+Beyond that, eexprs may be combined by various punctuation.
+It seems odd to speak about punctuation having precedence, so we will say that each form of punctuation has a different "strength",
+  with stronger punctuation appearing closer to the root of the parse tree.
+From strongest to weakest we have: semicolon, comma, colon, ellipsis, space, dot.
+Note that although bracketed expressions contain up to `SemicolonExpr`s, string templates contain `SpaceExpr`s (and again, indented blocks are a little odd).
 
+```
 SemicolonExpr ::= semicolon? CommaExpr (semicolon CommaExpr)* semicolon?
-               |  CommaExpr
+               |  semicolon
 
 CommaExpr ::= comma? ColonExpr (comma ColonExpr)* comma?
-           |  ColonExpr
+           |  comma
 
-ColonExpr ::= EllipsisExpr colon EllipsisExpr
-           |  EllipsisExpr
+ColonExpr ::= EllipsisExpr (colon EllipsisExpr)?
 
 EllipsisExpr ::= SpaceExpr? ellipsis SpaceExpr?
               |  SpaceExpr
 
-SpaceExpr ::= ChainExpr (space ChainExpr)+
-           |  ChainExpr
+SpaceExpr ::= ChainExpr (space ChainExpr)*
 
-ChainExpr ::= Expr ChainTail+
-           |  Expr
+ChainExpr ::= Expr ChainTail*
 ChainTail ::= dot Expr
            |  EnclosedExpr
-           |  StringTemplate
 ```
 
+Each type of punctuated expression allows different numbers of child expressions:
+  * Semicolons and commas both allow zero or more child expressions.
+    When there are two or more, everything is straightforward; though the leading and trailing commas are both optional.
+    To semicolon/comma separate a single expression, at least one of the leading/trailing commas must be present.
+    A single semicolon/comma with no subexpressions on either side encodes zero separated eexprs.
+  * Colons require children on both sides.
+  * Ellipses allow a child on both sides, but do not require either; which child is on which side is meaningful.
+  * Spaces and dots allow two or more child expressions.
 
+In each line of a block, colons temporarily become sort-of stronger than semicolons.
+Intuitively, a block line holds semicolon-separated eexprs, but is also allowed a left-hand side before a colon, which is at most an `EllipsisExpr`.
+This easy-to-describe change requires the grammar for `BlockLine` to be rather more involved, unfortunately, but I guess that's the nature of squishy human think-meat.
+To simplify the presentation, we use some explicit lookahead in these rules, which is notated with angle brackets.
+
+```
+BlockLine
+  ::= <semicolon | comma> SemicolonExpr
+   |  EllipsisExpr <semicolon> SemicolonExpr
+   |  EllipsisExpr <comma> CommaExpr (<semicolon> SemicolonExpr)?
+   |  EllipsisExpr (colon SemicolonExpr)?
+```
+
+::: Rationale
+I claim that the "left-hand side" of block lines is intuitive, but at first block lines were simple semicolon-separated expressions, and why shouldn't they be?
+Well, despite designing and implementing eexprs, I immediately screwed up writing a recognizer for mixfixes.
+I imagined that
+```
+mixfix add:
+  after: mul, exp
+```
+would parse the obviously-intended way, but instead it grouped `after: mul` together, leaving `exp` as a sibling.
+It's certainly interesting that sometimes the intuitive rule leads to unintuitive results.
+One small change to the grammar later, and my recognizer was far easier to write.
+In any case, I realized that I wanted a LHS rule anyway to support switch statements (and case/match expressions, and so on), such as:
+```
+switch c:
+  'A'…'F': c -= 7; fallthrough
+  '0'…'9': n = n * 10 + (c - 48)
+  default: return null
+```
+:::
 
 
 ### Lexeme Cooker
 
-The lexeme cooker is a string rewrite system over tokens
+The lexeme cooker is a string rewrite system over tokens.
 It deals with mostly local interactions between tokens, especially normalizing whitespace and whitespace-sensitive tokens.
 
-The basic form of rewrite rule is `a ⇒ b` which replaces the token sequence `a` in the input with tokens on the right for output.
-We also allow the use of "non-terminal" patterns on the left of a rule; the patterns we use can be modeled as regular languages over tokens.
+The basic form of rewrite rule is `a ⇒ b` which replaces the token sequence `a` in the input with tokens `b` for output.
 We also use lookahead and lookbehind (collectively lookaround) in the left-hand side of a pattern.
 These affect only whether the rewrite rule fires, but the sequences matching the lookaround are not rewritten.
 We write `<l>` for lookaround which must match for a rule to fire, and `!<l>` for lookaround which must _not_ match;
   of course, lookaround is only allowed at the start and/or end of the left-hand side of a rule.
+Within lookaround sequences, we also use some "non-terminal" patterns; the patterns we use can be modeled as regular languages over tokens, so they're really just convenient shorthands.
 
 The rewrite system may also be required to report an error, which is written `lhs ⇒ ERR`.
 There are a number of places where an implementation may warn the user, written `lhs ⇒ WARN rhs`,
@@ -579,7 +639,7 @@ indent(n > lvl) (lvl:rest)⇒(n:lvl:rest) indent(n)
 indent(n ≤ lvl) (lvl:rest)⇒ ERR
 
 nl zlws(n < lvl) (lvl:rest)⇒(rest) dedent(lvl) nl lws(n)
-nl zlws(n = lvl) (lvl:rest)⇒ nl(n)
+nl zlws(n = lvl) (lvl:rest)⇒ nl
 !<dedent(_)> nl zlws(n > lvl) (lvl:rest)⇒ space
 <EOF> (lvl:rest)⇒(rest) dedent(lvl)
 
@@ -789,7 +849,7 @@ To help with this (TODO implement this), we have also included grammar combinato
 
 TODO
 TODO make sure to alter symbolChar later if I change the name here
-FIXME implement these choices
+FIXME implement these choices in C
 
 ```
 symbol ::= symbolChar1 symbolChar* - sign digit(10) symbolChar*

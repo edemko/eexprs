@@ -604,8 +604,16 @@ void pushFrontBodge(eexpr* x, eexpr* xs) {
 */
 static
 eexpr* parseBlockLine(engine* st) {
-  eexpr* expr1 = parseEllipsis(st);
   eexpr_token* next = parser_peek(st);
+  if (next->type == EEXPR_TOK_SEMICOLON) {
+    return parseSemicolon(st);
+  }
+  else if (next->type == EEXPR_TOK_COMMA) {
+    return parseSemicolon(st);
+  }
+  // else
+  eexpr* expr1 = parseEllipsis(st);
+  next = parser_peek(st);
   if (next->type == EEXPR_TOK_COLON) {
     eexpr_loc colonLoc = next->loc;
     parser_pop(st);
@@ -623,12 +631,6 @@ eexpr* parseBlockLine(engine* st) {
     out->as.pair[1] = expr2;
     return out;
   }
-  else if (next->type == EEXPR_TOK_SEMICOLON) thenSemicolon: {
-    eexpr* out = parseSemicolon(st);
-    assert(out->type == EEXPR_SEMICOLON);
-    pushFrontBodge(expr1, out);
-    return out;
-  }
   else if (next->type == EEXPR_TOK_COMMA) {
     eexpr* out = parseComma(st);
     assert(out->type == EEXPR_COMMA);
@@ -640,6 +642,12 @@ eexpr* parseBlockLine(engine* st) {
     else {
       return out;
     }
+  }
+  else if (next->type == EEXPR_TOK_SEMICOLON) thenSemicolon: {
+    eexpr* out = parseSemicolon(st);
+    assert(out->type == EEXPR_SEMICOLON);
+    pushFrontBodge(expr1, out);
+    return out;
   }
   else {
     return expr1;
