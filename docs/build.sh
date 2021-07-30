@@ -22,10 +22,13 @@ MONOFONT='DejaVu Sans Mono' # the spacing is a bit tight, but it has ~100 more c
 
 mkTarget() {
   local basename="$1"
-  pandoc "$basename.pandoc" --from "$FORMAT" --to html -s "$htmlTex" -o "$basename.html"
+  pandoc "$basename.pandoc" --from "$FORMAT" --to html \
+    -s --template "template.html" \
+    "$htmlTex" -o "$basename.html"
   pandoc "$basename.pandoc" --from "$FORMAT" \
     --to pdf --pdf-engine=xelatex \
       -V monofont="$MONOFONT" \
+      --template "template.tex" -L texfilters.lua \
     -o "$basename.pdf"
 }
 

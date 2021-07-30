@@ -7,6 +7,37 @@
   <meta name="author" content="Eric Demko" />
   <title>Report on E-Exprs</title>
   <style>
+    p {
+      text-align: justify;
+    }
+    .Rationale::before {
+      content: "Rationale";
+      font-size: 110%;
+      font-style: italic;
+    }
+    .Rationale {
+      margin-left: 1em;
+      margin-right: 1em;
+      font-size: 80%;
+    }
+    .Rationale > p:first-child {
+      margin-top: 0.4em;
+    }
+    .Warning::before {
+      content: "Warning";
+      font-size: 110%;
+      font-weight: bold;
+    }
+    .Warning {
+      margin-left: 1em;
+      margin-right: 1em;
+      font-size: 90%;
+    }
+    .Warning > p:first-child {
+      margin-top: 0.4em;
+    }
+  </style>
+  <style>
     html {
       line-height: 1.5;
       font-family: Georgia, serif;
@@ -154,10 +185,7 @@
 <h1 class="title">Report on E-Exprs</h1>
 <p class="author">Eric Demko</p>
 </header>
-<p>The key contribution of this report is a grammar and parser for a data language with optimized ergonomics for encoding a wide range of programming languages. They key idea—which has been used to great effect since the dawn of high-level languages<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a>—is to define the concrete syntax of one language as a subset of the concrete syntax of a previously-implemented data language. Thus, when implementing a new concrete syntax, one can re-use all of the work of converting a byte stream into a algebraic data type (ADT), and need only perform functional pattern matching to inject it into a type representing your abstract syntax. The rest of this report will define eexprs, explicate the implementation technique, and motivate/rationalize my design choices.</p>
-<div class="Warning">
-<p>asdf</p>
-</div>
+<p>This report describes a grammar and parser for a data language with optimized ergonomics for encoding a wide range of programming languages. They key technical idea—which has been used to great effect since the dawn of high-level languages<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a>—is to define the concrete syntax of one language as a subset of the concrete syntax of a previously-implemented data language. Thus, when implementing a new concrete syntax, one can re-use all of the work of converting a byte stream into a algebraic data type (ADT), and need only perform functional pattern matching to inject it into a type representing your abstract syntax. The main contribution is a selection of syntax that is familiar and therefore intuitive for programmers to read and write. The rest of this report will define eexprs, explicate the implementation technique, and motivate/rationalize my design choices.</p>
 <h2 id="motivation">Motivation</h2>
 <p>I’ve lost count of how many toy language implementations I’ve given up on after having put not-insignificant time into the parser; I’m <em>incredibly bored of writing parsers</em>. So, I resolved to stop writing them. As Lisp programmers are already aware, code is data: one obvious technique would be to encode the abstract syntax in an existing data format. While JSON parsers are readily available, actually reading or writing a term is physically painful. Other common data languages like XML and YAML suffer a similar fate. I think anyone would much prefer s-exprs or e-exprs.</p>
 <dl>
@@ -301,10 +329,11 @@ do {:
   thing-1
   thing-2
 }</code></pre>
-<p>Two eexprs can also be separated by a colon. These separating colons bind more tightly than comma, which makes it easy to encode key-value dictionaries in eexprs. Note that we can use indented blocks to allow the omission of oft-forgotten end-of-line commas.</p>
+<p>Two eexprs can also be separated by a colon. These separating colons bind more tightly than comma, which makes it easy to encode key-value dictionaries in eexprs. Commas are optional both before and after a comma-separated expression, and likewise for semicolons. With proper supoprt from the client language, we can use indented blocks to allow the omission of oft-forgotten end-of-line commas.</p>
 <pre><code>{
   type: &quot;point&quot;
-  lat: 51.388, lon: 30.099
+  altitude: 0
+  , lat: 51.388, lon: 30.099
 }</code></pre>
 <p>Finally there are a few minor syntaxes, such as ellipsis and prefix dot which we will go over in detail later. And of course there are line comments introduced by a hash—which we have already seen.</p>
 <p>In these examples, I have written eexprs suggestive of some underlying semantics so as to motivate the features. However, it is important to note that no specific semantics are imposed by eexprs. E.g. a client of eexprs could encode function calls with the Haskell-like <code>f x</code>, Lisp-like <code>(f x)</code>, Algol-like <code>f(x)</code>, Forth-like <code>x f</code>, or in innumerable other ways—assuming the client language supports function calls at all.</p>
@@ -314,9 +343,32 @@ do {:
 <li>ascii &lt;-&gt; unicode</li>
 </ul>
 <h2 id="abstract-syntax">Abstract Syntax</h2>
-<p>TODO show the data type</p>
-<p>FIXME: this paragraph is garbo. This grammar is representable by a simple ADT. To transform an eexpr term into a more specific syntax, you could simply pattern-match against this ADT. However, if you want to report (client) grammatical errors in context, then it it likely preferable to use an arrow-based api to match eexprs. I have implemented such such an api. It also includes an instance for <code>ArrowApp</code>, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style’s ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).</p>
+<p>E-exprs form a recursive algebraic data type, where each constructor represents a widely-recognized programming construct:</p>
+<pre><code>data Eexpr
+  = Symbol    ShortText
+  | Number    Bignum
+  | String    ShortText [(Eexpr, ShortText)]
+  | Paren     (Maybe (Eexpr))
+  | Bracket   (Maybe (Eexpr))
+  | Brace     (Maybe (Eexpr))
+  | Block     (NonEmpty (Eexpr))
+  | Predot    (Eexpr)
+  | Chain     (NonEmpty2 (Eexpr))
+  | Space     (NonEmpty2 (Eexpr))
+  | Ellipsis  (Maybe (Eexpr)) (Maybe (Eexpr))
+  | Colon     (Eexpr) (Eexpr)
+  | Comma     [Eexpr]
+  | Semicolon [Eexpr]
+
+data NonEmpty a = a :| [a]
+data NonEmpty2 a = a :|| NonEmpty a</code></pre>
+<p>A sequence of dot-separated expressions is represented with the <code>Chain</code> constructor. I though the name <code>Dots</code> was a little misleading because the dots are sometimes optional, as in <code>array[i]</code>, which is a <code>Chain</code> that contains no dots at all in the concrete syntax.</p>
+<p>The one constructor that isn’t widely-recognized is <code>Predot</code>, which represents an expression prefixed by a single dot.</p>
+<div class="Rationale">
+<p>In Haskell, named functions can be made into binary infix operators—e.g. <code>x `member` s</code> rather than <code>member x s</code>. Originally I wanted to generalize this so that arbitrary expressions can be made into infix operators—e.g. <code>map .(insert k) v</code>. However, I quickly realized that this could also be used to create “artifical methods”—e.g. rewrite <code>get theMap .insert k (compute blarg)</code> to <code>insert (get theMap) k (compute blarg)</code>. Even more generally, a prefix dot could be used to determine an alternate meaning of the expression it attaches to. In pattern matching for example, one must determine if a symbol is a constructor or a named hole; a prefix dot could be used on holes to distinguish them, rather than (say) enforcing a case convention. Regardless, it is up to the client language to determine the meaning of a prefix dot in various contexts, if it allows prefix dot at all; eexprs simply make the syntax available if there <em>is</em> a need.</p>
+</div>
 <h2 id="recognizer-combinators">Recognizer Combinators</h2>
+<p>FIXME: this paragraph is garbo. This grammar is representable by a simple ADT. To transform an eexpr term into a more specific syntax, you could simply pattern-match against this ADT. However, if you want to report (client) grammatical errors in context, then it it likely preferable to use an arrow-based api to match eexprs. I have implemented such such an api. It also includes an instance for <code>ArrowApp</code>, which technically means that it could be lifted into a monad; however, I am skeptical of the monadic style’s ability to correctly track pattern-matching context (without careful programmer diligence, which I know from personal experience to be a pipe dream).</p>
 <h2 id="concrete-syntax">Concrete Syntax</h2>
 <p>At least conceptually, the grammar of eexprs can be split into four phases:</p>
 <ol type="1">
@@ -325,12 +377,180 @@ do {:
 <li>Token Cooker</li>
 <li>Parser</li>
 </ol>
-<p>Raw lexing identifies individual tokens in a Unicode stream. It can be described mostly with regular expressions, though at points we require capturing groups. In the reference implementation, we require at most three (TODO verify) codepoints of lookahead.</p>
+<p>Raw lexing identifies individual tokens in a Unicode stream. It can be described mostly with regular expressions, though at points we require capturing groups. In the reference implementation, we require at most three codepoints of lookahead.</p>
 <p>Cooking the token stream involves examining tokens in context to determine if they are relevant to the parser, and sometimes disambiguate how the token is to be used (e.g. space that separates eexprs vs. space which indicates indentation). This is described by a term rewrite system which only uses a few (TODO how many?) tokens of lookaround.</p>
 <p>Finally, the parser consumes the cooked token stream to produce an eexpr according to a context-free grammar.</p>
 <div class="Rationale">
 <p>The Unicode character set seems the most future-proof choice, since its goal is to subsume all other character sets. Choosing UTF-8 as the only encoding is less flexible, but detection of magic strings in their appropriate encodings is a source of complexity. Would that complexity be worth it? I don’t think so, and the <a href="http://utf8everywhere.org/">UTF-8 Everywhere Manifesto</a> presents the argument better than I can here.</p>
 </div>
+<h3 id="parser">Parser</h3>
+<p>Since the raw lexer handled all the tricky parts of decoding a character stream, and the lexeme cooker handled almost all the tricky work of making sure the tokens relate to each other intuitively, the parser is refreshingly straightforward.</p>
+<pre><code>Expr ::= number
+      |  symbol
+      |  StringTemplate
+      |  EnclosedExpr
+
+StringTemplate
+  ::= string(S, S)
+   |  string(S, T) SpaceExpr (string(T, T) SpaceExpr)* string(T, S)
+
+# FIXME I haven&#39;t actually done the rewriting for indent/newline/dedent tokens
+EnclosedExpr
+  ::= encloser(Open, a) SemicolonExpr? encloser(Close, a)
+   |  indent(n) BlockLine (nl(n) BlockLine)* dedent(n)
+
+TODO I might allow leading comma/semicolon for block lines
+FIXME I think it&#39;d be work allowing `EllipsisExpr colon SemicolonExpr
+FIXME also, `EllipsisExpr? semicolon SemicolonExpr` and likewise for comma exprs
+BlockLine
+  ::= EllipsisExpr semicolon SemicolonExpr
+   |  EllipsisExpr comma CommaExpr (semicolon SemicolonExpr)?
+   |  EllipsisExpr colon EllipsisExpr
+   |  EllipsisExpr
+
+SemicolonExpr ::= semicolon? CommaExpr (semicolon CommaExpr)* semicolon?
+               |  CommaExpr
+
+CommaExpr ::= comma? ColonExpr (comma ColonExpr)* comma?
+           |  ColonExpr
+
+ColonExpr ::= EllipsisExpr colon EllipsisExpr
+           |  EllipsisExpr
+
+EllipsisExpr ::= SpaceExpr? ellipsis SpaceExpr?
+              |  SpaceExpr
+
+SpaceExpr ::= ChainExpr (space ChainExpr)+
+           |  ChainExpr
+
+ChainExpr ::= Expr ChainTail+
+           |  Expr
+ChainTail ::= dot Expr
+           |  EnclosedExpr
+           |  StringTemplate</code></pre>
+<h3 id="lexeme-cooker">Lexeme Cooker</h3>
+<p>The lexeme cooker is a string rewrite system over tokens It deals with mostly local interactions between tokens, especially normalizing whitespace and whitespace-sensitive tokens.</p>
+<p>The basic form of rewrite rule is <code>a ⇒ b</code> which replaces the token sequence <code>a</code> in the input with tokens on the right for output. We also allow the use of “non-terminal” patterns on the left of a rule; the patterns we use can be modeled as regular languages over tokens. We also use lookahead and lookbehind (collectively lookaround) in the left-hand side of a pattern. These affect only whether the rewrite rule fires, but the sequences matching the lookaround are not rewritten. We write <code>&lt;l&gt;</code> for lookaround which must match for a rule to fire, and <code>!&lt;l&gt;</code> for lookaround which must <em>not</em> match; of course, lookaround is only allowed at the start and/or end of the left-hand side of a rule.</p>
+<p>The rewrite system may also be required to report an error, which is written <code>lhs ⇒ ERR</code>. There are a number of places where an implementation may warn the user, written <code>lhs ⇒ WARN rhs</code>, or as <code>lhs ⇒ WARN</code> when no rewriting takes place. With appropriate configuration, warnings may also be elevated to errors, but eexprs which generate warnings are nevertheless valid and should be accepted by default.</p>
+<div class="Rationale">
+<p>The characteristic that distinguishes some conditions as warnings rather than errors is that those conditions could be unambiguously machine-corrected in the source code without a change to the resulting eexpr.</p>
+</div>
+<p>TODO: I am less familiar with the properties of rewrite systems, but I think these could be applied each in-order in a single pass over the string, or make several passes one for each. TODO: I’m also not sure how much these rules could be re-ordered, but I do know some must come before others (e.g. whitespace classification before indentation). Rules listed earlier in this system take precedence over rules listed later.</p>
+<p>Before cooking, the raw token stream is augmented with a start-of-file token <code>SOF</code> at the start and an <code>EOF</code> token at the end. Once cooking is complete, these special tokens are then removed. Implementations perhaps need not actually allocate space for such tokens; this practice just makes it easier to specify.</p>
+<h4 id="oddball-rules">Oddball Rules</h4>
+<p>Two commonly-used token patterns are for start- and end-of-line.</p>
+<pre><code>sol ::= nl | SOF
+eol ::= nl | EOF</code></pre>
+<p>It is recommended that every file of eexprs end with a trailing newline.</p>
+<pre><code>!sol EOF ⇒ WARN</code></pre>
+<div class="Rationale">
+<p>Given a set of valid files of eexprs that end with at least one trailing newline, any simple concat of these files would produce a valid file of eexprs. This property could come in handy when assembling eexprs mechanically. In particular, a compiler could simply prepend the dependencies of a module and compile the whole program at once, rather than needing to define an interface file format and perform linking. One of the goals of eexprs is to make it faster to produce reasonable quality experimental languages, so a feature that makes it easier to support multi-file source code is a no-brainer.</p>
+</div>
+<p>Mixed whitespace (adjacent tabs and spaces) is an error. It should be impossible for the lexer to produce adjacent whitespace tokens of the same type, but just in case, we can also merge such tokens at this point.</p>
+<pre><code>lws(x, _) lws(y ≠ x, _) ⇒ ERR
+lws(x, m) lws(x, n) ⇒ lws(x, n + m)`</code></pre>
+<p>Some rules are cumbersome to specify in this rewrite system, but are simple enough that prose should suffice:</p>
+<ul>
+<li>If there are two types of indentation (start-of-line tabs-vs-spaces) in-use, that is an error (TODO iirc, this includes heredoc indentation, not just line-leading whitespace tokens).</li>
+<li>If a single file uses two or more types of newline, that is a warning.</li>
+<li>Whenever there is trailing whitespace token (not necessarily whitespace characters, which may be part of a token), that is a warning.</li>
+</ul>
+<div class="Rationale">
+<p>In the endless religious war of tabs vs. spaces, there is only one real issue that bugs me: alignment. Namely, I think humans should not be aligning code by hand—it’s too fragile to justify the tedium. Somehow, we need to get machines to align code for us. Proposals have been made to enhance editors with smarter features, but I think it is unreasonable to expect all editors to choose the same methodology, or even to upgrade at all.</p>
+<p>I propose a separate tool which can operate over any text file, searching for special characters that indicate where alignment into a table should take place. Unfortunately, there isn’t a clearly good choice for an alignment indicator character. Importantly, whatever indicator is chosen should remain in-place so that code can be re-indented without re-inserting the indicator; thus, we cannot simply use any sequences of tabs and spaces, even if we were to ban one of them from all other uses. If we could just pick a codepoint without care, I would probably go for a zero-width space, or possibly repurpose one of the disused ASCII control characters; these are unfortunately not easy to type on any standard keyboard. For accessibility, backslash-space might be the best, but I expect it to have poor aesthetics, and possibly have complex interactions with tabs characters.</p>
+<p>In any case, it is reasonable to expect that some whitespace handling in eexprs will be adjusted in the future to enable the use of an external alignment tool.</p>
+</div>
+<h4 id="normalize-whitespace">Normalize Whitespace</h4>
+<p>Comments and blank lines are ignored, as is intuitive. When joining lines, only the leading whitespace of the final line is retained.</p>
+<pre><code>lws(_, _)? comment? &lt;eol&gt; ⇒ ɛ
+
+lws(_, _) lineJoin ⇒ lineJoin
+lineJoin lineJoin ⇒ lineJoin
+lineJoin lws(_, n) ⇒ lws(_, n)
+
+nl &lt;eol&gt; ⇒ ɛ</code></pre>
+<p>Linear whitespace immediately inside enclosers is ignored. E.g. <code>(a)</code> and <code>( a )</code> are indistinguishable to the grammar. The same logic applied to string templates, with appropriate adjustments for the middle parts of the string.</p>
+<pre><code>&lt;encloser(Open, _)&gt; lws(_, _) ⇒ ɛ
+lws(_, _) &lt;encloser(Close, _)&gt; ⇒ ɛ
+
+&lt;cStr(_, T)&gt; lws(_, _) ⇒ ɛ
+lws(_, _) &lt;cStr(T, _)&gt; ⇒ ɛ</code></pre>
+<h4 id="indentation">Indentation</h4>
+<p>The logic for indentation is that an end-of-line colon indicates that the next leading whitespace defines an indent level. Each logical/abstract line of an indented block must begin with the same amount of leading whitespace that defines the level of the block. A logical line may span multiple physical lines, but only of it obeys the “offsides rule”: extra physical lines must begin with more leading whitespace than the level of indent. Dedents are inserted whenever a line begins with less than the current indent level. However, dedents must return to an active indentation level.</p>
+<pre><code>block1:
+  block2: # activate an indent at two spaces
+    do lots of stuff # activate an indent at four spaces
+    do lots    # | these two lines are equivalent
+      of stuff # | to the line above
+  end block2 # deactivate the four-space indent
+ illegal # | this line starts with one space,
+         # | which is not an active indentation level</code></pre>
+<p>It is easy to insert indentation, since it is always starts at an end-of-line colon or open encloser. We also insert a synthetic space before indentation-colons, unless that colon is preceded by a dot. At the same time, we can classify other unknown colons. Separator colons must be followed by linear whitespace, but space around them is irrelevant to the grammar. Colons not followed by whitespace (linear or newline) are an error.</p>
+<pre><code>!&lt;sol | unknownDot | lws(_, _)&gt; unknownColon nl lws(_, n) ⇒ space indent(n)
+!&lt;sol | unknownDot | lws(_, _)&gt; unknownColon !&lt;lws(_, _)&gt; ⇒ space indent(0)
+&lt;sol | unknownDot | lws(_, _)&gt; unknownColon nl lws(_, n) ⇒ indent(n)
+&lt;sol | unknownDot | lws(_, _)&gt; unknownColon !&lt;lws(_, _)&gt; ⇒ indent(0)
+&lt;encloser(Open, x)&gt; nl lws(_, n) ⇒ indent(n)
+&lt;encloser(Open, x)&gt; ɛ !&lt;lws(_, _)&gt; ⇒ indent(0)
+
+lws(_, _)? unknownColon lws(_, _) ⇒ colon
+unknownColon !&lt;lws(_, _)&gt; ⇒ ERR # FIXME implement this in C</code></pre>
+<div class="Rationale">
+<p>I expect that indented blocks will much more often be the final element of a space-separated sequence of eexprs, rather than the final element of a dot-separated sequence. Thus, rather than group indent/dendent with other enclosers, if you wish to dot-separate an indented block, the dot is necessary. Inserting a synthetic space makes lines such as <code>do:</code> and <code>do :</code> equivalent, and thus allows the indentation colon to be placed directly against an eexpr rather than requiring an unnatural space to separate them. If a block at the end of a dot-separated sequence is desired, explicit dots <code>do.:</code> can achieve it.</p>
+</div>
+<div class="Rationale">
+<p>When an open encloser is at the end of the line, the following lines are almost always indented, be it for statements in a block, elements in a list, arguments for a function, or what-have-you. Thus, eexprs automatically begin an indent immediately after a line ending with an open encloser. This may seem redundant, but is exactly this redundancy which helps detect inconsistencies between the structure of bracketing and the structure of layout, which have caused security vulnerabilities (at least one I know of, which means there must be others that I do not know of, and others still that were not made public). This behavior can be suppressed if desired with line joining.</p>
+</div>
+<div class="Rationale">
+<p>I’m still debating whether to allow colons in symbols, and whether to allow fat colons. By requiring space after a colon, any decision can be made backwards-compatibly.</p>
+<p>FIXME I’m thinking more about whether to join a colon-nospace-symbol into a single symbol, but there’s not a good way to express this in the rewrite rules. Perhaps it can go in the symbol raw lexer rule for symbols, but it doesn’t belong to this phase. I guess for now I’ll require lws after regular colons, just to play it safe. It’s not just ‘::’ that I want, but also ‘:=’ and especially ‘::=’. It seems I really do want to allow colons in identifiers in some capacity; I just have to make sure trailing colons are disallowed.</p>
+</div>
+<p>You may be able to see that the logic for inserting dedents is not presentable with the rewrite system we have so far. Instead, we will need to augment it with a stack. Now that we need it, we introduce the notation <code>a s⇒t b</code> for a rewrite rule which updates the initial state <code>s</code> to <code>t</code> while also rewriting <code>a</code> to <code>b</code>. When <code>s</code> is left out, that indicates that the initial state is irrelevant, and when <code>t</code> is left out, there is no change to the state. We use a non-empty cons list to as the stack, and use Haskell-like notation for it (<code>x:xs</code> for cons, and <code>[x]</code> for singletons).</p>
+<p>These next rules use the state to ensure that indents are valid (they are deeper than any active indent) and insert dedents. The initial state for the rewrite system is <code>[0]</code>. It makes sure that dedents are valid by using two rules for when leading whitespace is greater than the active indentation level. If we are not already dedenting, we begin dedenting, which leaves a trail of dedent tokens behind. So, if we detect leading whitespace greater than the active indent level, but have just seen a dedent, we know that a dedent has failed to return to a known indent.</p>
+<pre><code>indent(n &gt; lvl) (lvl:rest)⇒(n:lvl:rest) indent(n)
+indent(n ≤ lvl) (lvl:rest)⇒ ERR
+
+nl zlws(n &lt; lvl) (lvl:rest)⇒(rest) dedent(lvl) nl lws(n)
+nl zlws(n = lvl) (lvl:rest)⇒ nl(n)
+!&lt;dedent(_)&gt; nl zlws(n &gt; lvl) (lvl:rest)⇒ space
+&lt;EOF&gt; (lvl:rest)⇒(rest) dedent(lvl)
+
+&lt;dedent(_)&gt; nl zlws(n &gt; lvl) (lvl:rest)⇒ ERR</code></pre>
+<div class="Rationale">
+<p>I experimented with no requiring dedents to return to a known indentation level, which would be a simpler algorithm to describe. However, I think it is too difficult to see when there are spaces after a dedent, even though that makes a significant change to the structure of the eexpr. Client languages which wish to space-separate blocks should instead enclose those blocks. For example, the following is a valid eexpr with two space-separated (enclosed and) indented blocks</p>
+<pre><code>if condition then {
+  thing 1
+  thing 2
+} else {
+  other thing
+}</code></pre>
+</div>
+<p>Out final rule for indentation is that the first eexpr in a file cannot have leading whitespace. Then, all other eexprs in a file are (proper) subexpressions of the first, or else part of another eexpr on a different logical line.</p>
+<pre><code>SOF lws(n) ⇒ ERR</code></pre>
+<p>At this point, all trailing whitespace has been removed and all leading whitespace converted into indentation structure. Thus, we can transform all remaining linear whitespace into simple space tokens.</p>
+<pre><code>lws(_, _) ⇒ space</code></pre>
+<h4 id="space-sensitive-constructs">Space-Sensitive Constructs</h4>
+<p>Finally, we look at tokens which are sensitive to surrounding whitespace. The first of these are dots, which must be classified into</p>
+<ul>
+<li>prefix dots, which have a space before them, but not after,</li>
+<li>chain dots, which have no space before or after, and</li>
+<li>all other combinations of dot and whitespace are illegal.</li>
+</ul>
+<pre><code>!&lt;space | sol&gt; unknownDot !&lt;space | eol&gt; ⇒ dot
+&lt;space | sol&gt; unknownDot !&lt;space | eol&gt; ⇒ prefixDot
+unknownDot &lt;space | eol&gt; ⇒ ERR</code></pre>
+<p>Finally, we are left with token sequences which can be difficult for humans to read quickly. For example, <code>1+2</code> would parse as a sequence of two tokens <code>1</code> and <code>+2</code>, and <code>a+b</code> would parse as a single symbol. We rule these sequences out with the following rules:</p>
+<pre><code># symbols and numbers have too much in common to smush together
+(number | symbol) (number | symbol) ⇒ ERR
+
+# don&#39;t make readers try to count dots in a row
+(dot | ellipsis | prefixDot) (ellipsis | dot) ⇒ ERR
+
+# a dot after a number could be confused for a decimal point
+number dot ⇒ ERR
+
+# adjacent strings looks too much like C implicit string catenation
+cStr(_, S) cStr(S, _) ⇒ ERR</code></pre>
 <h3 id="raw-lexer">Raw Lexer</h3>
 <p>TODO what all metasyntax do I use? only introduce it just before it is needed, not all at once</p>
 <pre><code>token ::= nl | lws(_, _) | lineJoin | comment
@@ -377,7 +597,7 @@ digit(10) ::= &#39;0&#39;…&#39;9&#39;
 digit(12) ::= radixChar(10) | (&#39;↊&#39; | &#39;X&#39;) | (&#39;↋&#39; | &#39;E&#39;)
 digit(16) ::= radixChar(10) | &#39;a&#39;…&#39;f&#39; | &#39;A&#39;…&#39;F&#39;</code></pre>
 <div class="Rationale">
-<p>Allowing underscores in numbers makes it possible to group digits in ways that make large numbers easy to identify by subitizing rather than the more costly method of counting. Allowing multiple underscores makes it possible to have multiple levels of grouping; as numbers get larger, it becomes difficult to idenify how many groups there are. Consider <code>18_446_744__073_709_551_616</code> vs. <code>18_446_744_073_467_709_551_616</code> vs. <code>18446744073709551616</code>: it is easy to see that the first is about 18 million billion, but in the second I have to count the groups to estimate 18 <em>billion</em> billion, and in the third I have to count every digits to verify that it’s back to 18 million billion. I picked this example specifically because I had trouble remembering roughly how much <span class="math inline">\(2^{64}\)</span> is: unlike <span class="math inline">\(2^{32}\)</span>, there are just too many thousands groups to subitize.</p>
+<p>Allowing underscores in numbers makes it possible to group digits in ways that make large numbers easy to identify by subitizing rather than the more costly method of counting. Allowing multiple underscores makes it possible to have multiple levels of grouping; as numbers get larger, it becomes difficult to idenify how many groups there are. Consider <code>18_446_744__073_709_551_616</code> vs. <code>18_446_744_073_467_709_551_616</code> vs. <code>18446744073709551616</code>: it is easy to see that the first is about 18 million billion, but in the second I have to count the groups to estimate 18 <em>billion</em> billion, and in the third I have to count every digit to verify that it’s back to 18 million billion. I picked this example specifically because I had trouble remembering roughly how much <span class="math inline">\(2^{64}\)</span> is: unlike <span class="math inline">\(2^{32}\)</span>, there are just too many thousands groups to subitize.</p>
 </div>
 <div class="Rationale">
 <p>Base twelve is thrown in there basically just for fun, though it does help that the Unicode Consortium added dedicated codepoints for dec and el digits. The alternate ASCII glyphs <code>X</code> and <code>E</code> were chosen because the Dozenal Society of America voted for those forms where Unicode is poorly supported.</p>
@@ -411,11 +631,11 @@ iIl,1o0O.
 symbolChar ::= alphaNum | asciiSymb
             |  greekAlpha | hebrewAlpha
             |  mathAlpha | blackboard
-            |  arrows
+            |  mathSymb | arrows | extraDots
             | unsortedCharsTODO
-            | &#39;💣&#39; | &#39;💥&#39; # TODO explosion-related images, for when a named value might be unsafe
+symbolChar1 ::- symbolChar - SQ
 
-alphaNum ::= &#39;a&#39;…&#39;z&#39; | &#39;A&#39;…&#39;Z&#39; | &#39;0&#39;…&#39;9&#39;
+alphaNum ::= &#39;a&#39;…&#39;z&#39; | &#39;A&#39;…&#39;Z&#39; | &#39;0&#39;…&#39;9&#39; | &#39;↊&#39; | &#39;↋&#39;
 asciiSymb ::=
   | &#39;!&#39; | &#39;$&#39; | &#39;%&#39; | &#39;&amp;&#39; | SQ | &#39;*&#39; | &#39;+&#39; | &#39;-&#39; | &#39;/&#39;
   | &#39;&lt;&#39; | &#39;=&#39; | &#39;&gt;&#39; | &#39;?&#39; | &#39;@&#39;
@@ -433,6 +653,7 @@ greekAlpha ::=
 hebrewAlpha ::=
   # TODO oh yeah, some hebrew letters get used in math as well
   | &#39;ℵ&#39;…&#39;ℸ&#39;
+
 mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝓐𝓪, 𝔄𝔞, 𝔸𝕒)
   # TODO I removed bold fraktur b/c it&#39;s not different enough from normal fraktur
     &#39;𝒜&#39;…&#39;𝔷&#39; - &lt;reserved points in this range&gt;
@@ -444,17 +665,127 @@ blackboard ::=
   | &#39;𝟘&#39;…&#39;𝟡&#39;
   | &#39;ℼ&#39; | &#39;ℽ&#39; | &#39;ℾ&#39; | &#39;ℿ&#39; | &#39;⅀&#39; # greek
 
-&quot;you can have one alternate head or tail, but not both&quot;
-&quot;you can also drop the head with an alternate tail&quot;
-&quot;there are no straight strokes, only slash strokes&quot;
+mathSymb ::= setSymb | logicSymb
+         | arithSymb | calculusSymb
+         | mathRels | mathOps | mathTurnstiles
+         | mathShapes
+         | &#39;′&#39; # prime
+         | extraMathSymb
 
+extraDots ::= &#39;∴&#39; | &#39;∵&#39; | &#39;∷&#39;
+
+setSymb ::=
+  ∅∞
+  ∩∪⨿×
+  ⋂⋃∐⨉ # n-ary
+  ∈∉∋∌
+  ⊂⊃⊄⊅⊆⊇⊈⊉⊊⊋
+logicSymb ::=
+  ⊤⊥
+  ¬∀∃∄
+  ∧∨⊻⊼⊽
+  ⅋ # linear logic (also uses &amp;!?⊗⊕, which are elsewhere)
+  ⋀⋁ # n-ary
+arithSymb ::=
+  ±∓⋅÷√
+  ∏∑⨊ # n-ary
+  ‰‱
+calculusSymb ::=
+  ∂∆∇∫
+mathRels ::= equivRels | compareRels
+equivRels ::=
+  ≠≡≢≣≟⩵⩶≝≜⩴≔≕ # &quot;equal&quot;
+  ≃≄≅≇≆ #iso
+  ∼≁≈≉≋ # approximate
+  ≍≭≎≏⪮ # bendy
+  ∝
+compareRels ::=
+  ≤≥⪇⪈≮≯≰≱ # straight
+  ≶≷≸≹⋚⋛ # posets
+  ≲≳≴≵⋦⋧ # approximate
+  ≺≻≼≽⊀⊁⋠⋡⋞⋟ # cusp
+  ⊏⊐⊑⊒⋢⋣⋤⋥ # square
+  ⊲⊳⊴⊵⋪⋫⋬⋭ # closed
+  ≬≪≫⋘⋙
+mathOps ::=
+  ∘⨾ # composition
+  ⧺⧻∔∸ # plus and minus variants
+  ≀ # wreath product
+  ⊕⊖⊗⊙⊘⦼⨸⊚⊛⊜⊝
+  ⊞⊟⊠⊡⧄⧇⧆
+  ⨹⨺⨻
+  ⨀⨁⨂ # n-ary
+  ⋈⋉⋊
+  ∗⋄⋆
+mathTurnstiles
+  ⊢⊨⊩⊫⟝
+mathShapes ::=
+  □⬠⬡○
+  ◊⬭⬯
+  ◇☆⯎⯏
+  ⋕⩩ # I&#39;ve seen the last used in &quot;SICP for GR&quot; or whatever it&#39;s called
+
+
+extraMathSymb ::=
+# set theory
+  ⨃⨄⨅⨆ # n-ary
+  ⊌⊍⊎⋒⋓⊓⊔⩀⩁⩂⩃⩄⩅⩐⩎⩏
+  ⋐⋑⪽⪾⪿⫀⫁⫂⫃⫄⫅⫆⫇⫈⫉⫊⫋⫌
+# logic
+  ⋎⋏
+  ⌐⨼⨽
+  ⟑⟇⟎⟏⩑⩒⩓⩔⩕⩖⩗⩘⩙⩚⩛⩜⩝⩞⩟⩠⩢⩣
+  ⨇⨈ # n-ary
+# arithmetic
+  ⨪⨫⨬ # dotted minuses
+# calculus
+  ∬∭∮∯∰∱∲∳⨋⨌⨍⨎⨏⨐⨑⨒⨓⨔⨕⨖⨗⨘⨙⨚⨛⨜
+# relations
+  ≖≗≘≙≚≛≞ # straight
+  ⩪⩫∻∽∾⩯ # wiggles
+  ≂≊≌⋍⩬⩭⩰⩳ # straight and wiggly
+  ≐⩦⩧≑≒≓⩷⩸⩮ # dotted
+  ⋖⋗⋜⋝⩹⩺⩻⩼⪅⪆⪉⪊⪋⪌⪍⪎⪏⪐⪑⪒⪙⪚⪝⪞⪟⪠≦≧≨≩
+  ⩽⩾⩿⪀⪁⪂⪃⪄⪓⪔⪕⪖⪗⪘⪛⪜⫹⫺
+  ≾≿⋨⋩⪯⪰⪱⪲⪳⪴⪵⪶⪷⪸⪹⪺⪻⪼
+  ∹⊰⊱
+  ⪡⪢⫷⫸⪣⪤⪥⪪⪫⪬⪭⩤⩥⪦⪧⪨⪩
+# operators
+  ⩱⩲
+  ⦶⦷⦸⦹⦺⦻⦽⧀⧁⧂⧃⨭⨮⨴⨵
+  ⧅⧈⧉
+  ⧊⧋⧌⧍⧎⧏⧐
+  ⋋⋌
+  ⋇⟐
+  ⊹⊺ # I honestly have no idea what these are
+# tacks
+  ⊭⫤
+  ⊬⊣
+  ⊮⫣
+  ⊯⫥
+  ⫢⊪⫦
+  ⟞
+  ⫝̸⫝
+  ⟘⟙⫧⫨⫩⫪⫫
+# database
+  ⟕⟖⟗
+  ⨝⨞
+# misc
+  ∎ # QED/tombstone
+  ∿
+  ⦰⦱⦲⦳⦴⦵
+
+
+# you can have one alternate head or tail, but not both
+# you can also drop the head with an alternate tail
+# there are no straight strokes, only slash strokes
 arrows ::= #TODO fix metasyntax
   ←↑→↓↔↕ # straight
-  ↚↛↮ # stroked
   ⇐⇑⇒⇓⇔⇕ # double
+  ↚↛↮ # stroked
   ⇍⇎⇏ # stroked double
   ↜↝↭ # wave
-  ⇜⇝ # sqiggle
+  ⇜⇝ # squiggle
   ⤸⤹⤺⤻ # arc
   ⇚⇛⤊⤋ # triple
   ⟰⟱⭅⭆ # quadruple
@@ -468,6 +799,7 @@ arrows ::= #TODO fix metasyntax
   ↞↟↠↡ # two headed
   ↼↽↾↿⇀⇁⇂⇃⥊⥋⥌⥍⥎⥏⥐⥑ # harpoon
   ⇤⇥⤒⤓ # to bar
+  ⊸⟜⫯⫰⧟
 # alt tails
   ↢↣ # tail
   ↩↪ # hook
@@ -493,28 +825,49 @@ arrows ::= #TODO fix metasyntax
   ⇋⇌ # paired harpoon
   ⇶⬱ # three
   ⥢⥣⥤⥥⥦⥧⥨⥩⥪⥫⥬⥭⥮⥯ # paired harpoons
+
+
 unsortedCharsTODO ::=
   # TODO random stuff from letterlike symbols
-  | &#39;ℓ&#39; | &#39;℘&#39; | &#39;⅋&#39; | &#39;№&#39; | &#39;℧&#39;
-symbolChar1 ::- symbolChar - SQ</code></pre>
+  | &#39;ℓ&#39; | &#39;℘&#39; | &#39;№&#39; | &#39;℧&#39;
+  | &#39;†&#39; | &#39;‡&#39; # or use these instead of emoji for unsafe functions</code></pre>
+<div class="Warning">
+<p>If you use non-ASCII notation in your language or library, it is not enough to include suggestions for ASCII alternatives. Instead, there must be a tool to convert losslessly between Unicode and ASCII.</p>
+</div>
 <div class="Warning">
 <p>The selection of available symbol characters is not yet set in stone. So far, I have only examined the Basic Latin Unicode block for useful characters. I would like to allow mathematical operators, arrows, greek letters at least, and I may include a number of other scripts if it comes to it. However, I’ll also want to use some normalization algorithm to ensure visually-identical symbols are treated identically. I am loathe to include characters from scripts I am not fluent with; if they are to be added, it should be in consultation with people who <em>do</em> understand these scripts.</p>
 <p>Here is a list of blocks that I have examined or plan to examine:</p>
 <ul class="task-list">
 <li><input type="checkbox" disabled="" checked="" />
 Basic Latin</li>
-<li><input type="checkbox" disabled="" />
+<li><input type="checkbox" disabled="" checked="" />
 math-related:<ul class="task-list">
-<li><input type="checkbox" disabled="" />
+<li><input type="checkbox" disabled="" checked="" />
 Mathematical Operators</li>
 <li><input type="checkbox" disabled="" checked="" />
 Mathematical Alphanumeric Symbols</li>
 <li><input type="checkbox" disabled="" checked="" />
 Letterlike Symbols</li>
-<li><input type="checkbox" disabled="" />
-whatever block ◊ is in</li>
+<li><input type="checkbox" disabled="" checked="" />
+Miscellaneous Symbols</li>
+<li><input type="checkbox" disabled="" checked="" />
+Miscellaneous Symbols and Arrows</li>
+<li><input type="checkbox" disabled="" checked="" />
+Miscellaneous Mathematical Symbols-A</li>
+<li><input type="checkbox" disabled="" checked="" />
+Miscellaneous Mathematical Symbols-B</li>
+<li><input type="checkbox" disabled="" checked="" />
+Supplemental Mathematical Operators</li>
+<li><input type="checkbox" disabled="" checked="" />
+Latin-1 Supplement</li>
+<li><input type="checkbox" disabled="" checked="" />
+Geometric Shapes (I’ve only taken the white ones b/c they’re easy to print, and all of the same “size”)</li>
+<li><input type="checkbox" disabled="" checked="" />
+Miscellaneous Technical</li>
+<li><input type="checkbox" disabled="" checked="" />
+General Punctuation</li>
 </ul></li>
-<li><input type="checkbox" disabled="" />
+<li><input type="checkbox" disabled="" checked="" />
 arrows:<ul class="task-list">
 <li><input type="checkbox" disabled="" checked="" />
 Arrows</li>
@@ -529,8 +882,6 @@ Miscellaneous Symbols and Arrows</li>
 </ul></li>
 <li><input type="checkbox" disabled="" />
 SI unit symbols (not a block)</li>
-<li><input type="checkbox" disabled="" />
-Miscellaneous Technical</li>
 <li><input type="checkbox" disabled="" checked="" />
 greek:<ul class="task-list">
 <li><input type="checkbox" disabled="" checked="" />
@@ -558,8 +909,6 @@ Superscripts and Subscripts</li>
 Currency Symbols</li>
 <li><input type="checkbox" disabled="" />
 Geometric Shapes, Geometric Shapes Extended, Miscellaneous Symbols, Dingbats, Ornamental Dingbats</li>
-<li><input type="checkbox" disabled="" />
-Miscellaneous Mathematical Symbols-A and -B, Supplemental Mathematical Operators</li>
 <li><input type="checkbox" disabled="" checked="" />
 IPA extensions, Spacing Modifier Letters (I don’t think the IPA script is really useful for variable names)</li>
 <li><input type="checkbox" disabled="" checked="" />
@@ -662,67 +1011,18 @@ encloser(Close, Paren) ::= &#39;)&#39;
 encloser(Close, Bracket) ::= &#39;]&#39;
 encloser(Close, Brace) ::= &#39;}&#39;
 
-separator(Semicolon) ::= &#39;;&#39;
-separator(Comma) ::= &#39;,&#39;
+  # TODO more enclosers
+  # ⌈⌉⌊⌋⟅⟆⟦⟧⟨⟩⟪⟫⟬⟭⟮⟯«»
+  # ⦃⦄⦅⦆⦇⦈⦉⦊⦋⦌⦍⦎⦏⦐⦑⦒⦓⦔⦕⦖⦗⦘
+  # ⧼⧽
+  # how to rewrite in ASCII? perhaps use fat colon + parens `⟬f x y⟭ → ap::(f x y) ≡ f &lt;$&gt; x &lt;*&gt; y`
+
+semicolon ::= &#39;;&#39;
+comma ::= &#39;,&#39;
 
 unknownDot ::= &#39;.&#39;
 unknownColon ::= &#39;:&#39;
 ellipsis ::= &#39;..&#39; # TODO probly also include &#39;…&#39;</code></pre>
-<h3 id="lexeme-cooker">Lexeme Cooker</h3>
-<p>The lexeme cooker is a sequence of rewrite rules. TODO: I am less familiar with the properties of rewrite systems, but I think these could be applied each in-order in a single pass over the string, or make several passes one for each. TODO: I’m also not sure how much these rules could be re-ordered, but I do know some must come before others (e.g. whitespace classification before indentation). Rules listed earlier in this system take precedence over rules listed later.</p>
-<p>Before applying this system, the token stream is augmented with a start-of-file token <code>SOF</code> at the start and an <code>EOF</code> token at the end. Implementations perhaps need not actually allocate space for such tokens, but this practice at least makes it easier to specify.</p>
-<p>TODO A few rules don’t really fit anywhere. In the reference implementation, it is a warning for a file to use two different types of newline. Trailing whitespace is a warning.</p>
-<p><code>MIXED_SPACE, MIXED_NEWLINES, MIXED_INDENTATION, TRAILING_SPACE, NO_TRAILING_NEWLINE</code></p>
-<p>It is recommended for implementations to emit warnings in these cases, and allow users to suppress them or escalate them into errors.</p>
-<pre><code>!sol EOF ⇒ Ø?</code></pre>
-<div class="Rationale">
-<p>Given a set of valid files of eexprs that end with at least one trailing newline, any simple concat of these files would produce a valid file of eexprs. This property could come in handy when assembling eexprs mechanically. In particular, a compiler could simply prepend the dependencies of a module and compile the whole program at once, rather than needing to define an interface file format and perform linking. One of the goals of eexprs is to make it faster to produce reasonable quality experimental languages, so a feature that makes it easier to support multi-file source code is a no-brainer.</p>
-</div>
-<div class="Rationale">
-<p>In the endless religious war of tabs vs. spaces, there is only one real issue that bugs me: alignment. Namely, I think humans should not be aligning code by hand—it’s too fragile to justify the tedium. Somehow, we need to get machines to align code for us. Proposals have been made to enhance editors with smarter features, but I think it is unreasonable to expect all editors to choose the same methodology, or even to upgrade at all.</p>
-<p>I propose a separate tool which can operate over any text file, searching for special characters that indicate where alignment into a table should take place. Unfortunately, there isn’t a clearly good choice for an alignment indicator character. Importantly, whatever indicator is chosen should remain in-place so that code can be re-indented without re-inserting the indicator; thus, we cannot simply use any sequences of tabs and spaces, even if we were to ban one of them from all other uses. If we could just pick a codepoint without care, I would probably go for a zero-width space, or possibly repurpose one of the disused ASCII control characters; these are unfortunately not easy to type on any standard keyboard. For accessibility, backslash-space might be the best, but I expect it to have poor aesthetics, and possibly have complex interactions with tabs characters.</p>
-<p>In any case, it is reasonable to expect that some whitespace handling in eexprs will be adjusted in the future to enable the use of an external alignment tool.</p>
-</div>
-<h4 id="managing-whitespace">Managing Whitespace</h4>
-<pre><code>sol ::= nl | SOF
-eol ::= nl | EOF
-</code></pre>
-<p>TODO mixed whitespace is an error</p>
-<pre><code>lws(x, _) lws(y ≠ x, _) ⇒ Ø</code></pre>
-<p>It should be impossible for the lexer to produce two <code>lws</code> tokens of the same type, but just in case, the rule <code>lws(x, m) lws(x, n) ⇒ lws(x, n + m)</code> would fix up such an issue.</p>
-<p>TODO ignore comments, trailing newline, line continues, and blank lines</p>
-<pre><code>lws(_)? comment? eol ⇒ eol
-lws(_) lineJoin ⇒ lineJoin
-lineJoin lws(n) ⇒ lws(n)
-nl eol ⇒ eol</code></pre>
-<p>TODO colons at the end of a line indicate indentation, otherwise are separating colons FIXME and also I should disallow separating colons without a space afterwards TODO and also a space is inserted when needed</p>
-<pre><code>unknownColon nl lws(n) ⇒ indent(n)
-unknownColon nl ⇒ indent(0)
-unknownColon EOF ⇒ indent(0) EOF
-unknownColon lws(_) ⇒ colon
-unknownColon ⇒ Ø # FIXME implement this
-
-(?before ≠ space | sol | unknownDot) indent ⇒ \before space indent</code></pre>
-<p>FIXME I’m thinking more about whether to join a colon-nospace-symbol into a single symbol, but there’s not a good way to express this in the rewrite rules. Perhaps it can go in the symbol raw lexer rule for symbols, but it doesn’t belong to this phase. I guess for now I’ll require lws after regular colons, just to play it safe.</p>
-<p>TODO indentation is weird ’cause I need a stack. I mean, I could thread an attributeful token through the stream, but I think the stack explanation is clearer. Perhaps I annotate the rewriter with a state when I need to <code>A (i = [3, rest..])⇒(i = [rest..]) B</code>.</p>
-<p>TODO at this point, that all nl and lws have been rewritten</p>
-<pre><code>nl | lws(_) ⇒ Ø</code></pre>
-<p>TODO spaces are irrelevant immediately inside enclosers</p>
-<pre><code>encloser(Open, a) space ⇒ encloser(Open, a)
-space encloser(Close, a) ⇒ encloser(Close, a)
-
-cStr(a, T) space ⇒ cStr(a, T)
-space cStr(T, a) ⇒ cStr(T, a)</code></pre>
-<p>TODO dots with no space around are chain dots. TODO dots with space only before are prefix dots TODO other dots are errors</p>
-<pre><code>(?1 ≠ space | sol) unknownDot (?2 ≠ space | eol) ⇒ \1 dot \2
-(?1 = space | sol) unknownDot (?2 ≠ space | eol) ⇒ \1 prefixDot \2
-unknownDot ⇒ Ø</code></pre>
-<p>TODO punctuation built out of dots cannot be adjacent TODO dot after a number is an error (confusable with a trailing decimal point TODO symbol and number cannot be adjacent (confusable as a single symbol) TODO string next to string is an error (looks too much like implicit catenation?) detectCramming(st);</p>
-<pre><code>(dot | ellipsis | prefixDot) (ellipsis | dot) ⇒ Ø
-number dot ⇒ Ø
-(number | symbol) (number | symbol) ⇒ Ø
-cStr(_, S) cStr(S, _) ⇒ Ø</code></pre>
-<h3 id="grammar">Grammar</h3>
 <h2 id="suboptimality-of-s-exprs">Suboptimality of S-Exprs</h2>
 <p>TODO now that this is in a different part of the report, it needs new linking verbiage</p>
 <p>As powerful as the recognizer technique is, I don’t think s-exprs is its best medium. I don’t want to rant about s-exprs too much, since that’s not the point; if you stopped reading right now and used recognizers over s-exprs instead of writing parsers, your life would improve plenty. That said, if you have used enough s-exprs, you have probably experienced some pain points that e-exprs would improve on. At the other end of the spectrum, if you have resisted learning a Lisp because it looks too alien, then perhaps it would be better to jump directly to e-exprs.</p>
