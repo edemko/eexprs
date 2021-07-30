@@ -1,11 +1,15 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.Eexpr.Grammar.Internal
   ( Grammar(..)
+  , InnerResult
   , Context
+  , Errors
   , Error(..)
   , runGrammar
   , liftEither
@@ -14,14 +18,18 @@ module Data.Eexpr.Grammar.Internal
   , context
   , map
   , mapErrors
+  , ZipGrammar(..)
+  , zip1
+  , zip2
+  , zip3
   -- * Altered Alternative
   , choice
   , fail
   ) where
 
-import Prelude hiding (id,map,fail)
+import Prelude hiding (id,map,zip3,fail)
 
-import Control.Arrow (Arrow(..),ArrowApply(..),(>>>))
+import Control.Arrow (Arrow(..),ArrowChoice(..),ArrowApply(..),(>>>))
 import Control.Category (Category(..))
 import Control.Monad (join)
 import Data.Eexpr.Types (Eexpr(..))
@@ -40,15 +48,17 @@ import Data.Profunctor(Profunctor(..))
 -- I've chosen to expose 'Grammar' primarily as an 'Arrow'.
 -- Exposing a 'Monad' directly would make it too easy to mismanage context information, thus creating unacepptably inaccurate error messages.
 newtype Grammar ann err a b = Grammar
-  { unGrammar :: Context ann -> a -> Either (NonEmpty (Error ann err)) (Context ann, b) }
+  { unGrammar :: Context ann -> a -> InnerResult ann err b }
+type InnerResult ann err a = Either (Errors ann err) (Context ann, a)
 
 type Context ann = NonEmpty (Eexpr ann)
 
+type Errors ann err = NonEmpty (Error ann err)
 data Error ann err = Error (Context ann) err
   deriving stock (Read, Show)
   deriving stock (Functor)
 
-runGrammar :: Grammar ann err (Eexpr ann) a -> Eexpr ann -> Either (NonEmpty (Error ann err)) a
+runGrammar :: Grammar ann err (Eexpr ann) a -> Eexpr ann -> Either (Errors ann err) a
 runGrammar g e = snd <$> unGrammar g (e :| []) e
 
 context :: Grammar ann err a (Context ann)
@@ -91,10 +101,13 @@ choice err alts = Grammar $ \ctx a -> go ctx a (toList alts)
   go ctx a (Grammar g:gs) = case g ctx a of
     Right b -> Right b
     Left _ -> go ctx a gs
-  go ctx a [] = unGrammar (fail err) ctx a
+  go ctx _ [] = innerFail ctx err
 
 fail :: err -> Grammar ann err a b
 fail err = Grammar $ \ctx _ -> Left $ Error ctx err :| []
+
+innerFail :: Context ann -> err -> InnerResult ann err any
+innerFail ctx err = Left $ Error ctx err :| []
 
 instance Category (Grammar ann err) where
   id = Grammar $ \ctx a -> Right (ctx, a)
@@ -112,13 +125,81 @@ instance Arrow (Grammar ann err) where
       (Right _, Left e2) -> Left e2
       (Left e1, Left e2) -> Left $ e1 <> e2
 
+instance ArrowChoice (Grammar ann err) where
+  (Grammar gl) +++ (Grammar gr) = Grammar $ \ctx -> \case
+    Left xl -> case gl ctx xl of
+      Right (ctx', l) -> Right (ctx', Left l)
+      Left err -> Left err
+    Right xr -> case gr ctx xr of
+      Right (ctx', r) -> Right (ctx', Right r)
+      Left err -> Left err
+
 instance ArrowApply (Grammar ann err) where
   app = Grammar $ \ctx (Grammar g, x) -> g ctx x
 
-map :: Grammar ann err a b -> Grammar ann err [a] [b]
-map (Grammar g) = Grammar $ \ctx as -> g ctx <$> as & partitionEithers & \case
-  ([], bs) -> Right (ctx, snd <$> bs)
-  (e:es, _) -> Left $ join (e :| es)
+map :: Foldable t => Grammar ann err a b -> Grammar ann err (t a) [b]
+map (Grammar g) = Grammar $ \ctx as -> g ctx <$> toList as
+  & partitionEithers & \case
+    ([], bs) -> Right (ctx, snd <$> bs)
+    (e:es, _) -> Left $ join (e :| es)
+
+data ZipGrammar ann err a b = ZG (Grammar ann err a b) err
+
+zip1 :: ZipGrammar ann err a b1
+        -- ^ grammar for the first given expression
+     -> (a -> err) -- ^ create error when more exprs are given than expected
+     -> Grammar ann err [a] b1
+zip1 (ZG g1 err1) unexpected = Grammar $ \ctx -> \case
+  [] -> innerFail ctx err1
+  [a1] -> unGrammar g1 ctx a1
+  a1 : a2 : _ ->
+    let err = Error ctx (unexpected a2) :| []
+     in case unGrammar g1 ctx a1 of
+          Right _ -> Left err
+          Left errs -> Left $ errs <> err
+
+zip2 :: (ZipGrammar ann err a b1, ZipGrammar ann err a b2)
+        -- ^ grammars for the frist two given expression
+     -> (a -> err) -- ^ create error when more exprs are given than expected
+     -> Grammar ann err [a] (b1, b2)
+zip2 (ZG g1 err1, zg2) unexpected = Grammar $ \ctx -> \case
+  [] -> innerFail ctx err1
+  a1 : rest -> case (unGrammar g1 ctx a1, unGrammar (zip1 zg2 unexpected) ctx rest) of
+    (Right (_, b1), Right (_, b2)) -> Right (ctx, (b1, b2))
+    (Left err, Left errs) -> Left $ err <> errs
+    (Left err, _) -> Left err
+    (_, Left errs) -> Left errs
+
+zip3 :: (ZipGrammar ann err a b1, ZipGrammar ann err a b2, ZipGrammar ann err a b3)
+        -- ^ grammars for the frist two given expression
+     -> (a -> err) -- ^ create error when more exprs are given than expected
+     -> Grammar ann err [a] (b1, b2, b3)
+zip3 (ZG g1 err1, zg2, zg3) unexpected = Grammar $ \ctx -> \case
+  [] -> innerFail ctx err1
+  a1 : rest -> case (unGrammar g1 ctx a1, unGrammar (zip2 (zg2, zg3) unexpected) ctx rest) of
+    (Right (_, b1), Right (_, (b2, b3))) -> Right (ctx, (b1, b2, b3))
+    (Left err, Left errs) -> Left $ err <> errs
+    (Left err, _) -> Left err
+    (_, Left errs) -> Left errs
+
+
+-- zip :: forall f ann err a bs. (Foldable f)
+--     => NTuple (Map (ZipGrammar ann err a) bs)
+--     -> (a -> err)
+--     -> Grammar ann err (f a) (NTuple bs)
+-- zip gs0 unexpected = Grammar $ \ctx as0 ->
+--   let loop :: forall bs'. NTuple (Map (ZipGrammar ann err a) bs') -> [a] -> Either (Errors ann err) (NTuple bs')
+--       loop (ZG g missing ::: gs) (a : as) = case unGrammar g ctx a of
+--         Right (_, b) -> case loop gs as of
+--           Right bs -> Right $ b ::: bs
+--           Left errs -> Left errs
+--         Left err -> case loop gs as of
+--           Right _ -> Left err
+--           Left errs -> Left $ err <> errs
+--       loop TNil [] = Right TNil
+--    in case loop gs0 (toList as0) of
+--         Right bs -> Right (ctx, bs)
+--         Left errs -> Left errs
 
 mapErrors :: (err -> err') -> Grammar ann err a b -> Grammar ann err' a b
 mapErrors f (Grammar g) = Grammar $ \ctx x -> case g ctx x of

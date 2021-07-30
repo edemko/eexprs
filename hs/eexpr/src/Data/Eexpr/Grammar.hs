@@ -15,6 +15,10 @@ module Data.Eexpr.Grammar
   , annotation
   , map
   , mapErrors
+  , ZipGrammar(..)
+  , zip1
+  , zip2
+  , zip3
   , predicate
   -- ** Altered Alternative
   , choice
@@ -51,13 +55,14 @@ module Data.Eexpr.Grammar
   ,(>>>)
   ,(<<<)
   , Arrow(..)
+  , ArrowChoice(..)
   , ArrowApply(..)
   ) where
 
 import Data.Eexpr.Grammar.Internal
-import Prelude hiding (id,(.),map,fail)
+import Prelude hiding (id,(.),map,zip3,fail)
 
-import Control.Arrow (Arrow(..),ArrowApply(..))
+import Control.Arrow (Arrow(..),ArrowChoice(..),ArrowApply(..))
 import Control.Category (Category(..),(>>>),(<<<))
 import Data.Eexpr.Types (Eexpr(..), Bignum(..))
 import Data.List.NonEmpty ((<|))
@@ -75,7 +80,7 @@ predicate err p = liftEither $ \a -> if p a then Right a else Left err
 annotation :: Grammar ann err a ann
 annotation = (Eexpr.annotation . NE.head) <$> context
 
-notTheEexpr :: NonEmpty (Eexpr ann) -> err -> Either (NonEmpty (Error ann err)) any
+notTheEexpr :: NonEmpty (Eexpr ann) -> err -> InnerResult ann err any
 notTheEexpr ctx err = Left (Error ctx err :| [])
 
 ------------------------ Primitive Grammars ------------------------

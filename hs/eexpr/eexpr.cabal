@@ -21,6 +21,7 @@ library
     Data.Eexpr.Mixfix
     Data.Eexpr.Mixfix.Grammar
     Data.List.Reverse
+    Data.NTuple
     Numeric.Interval.Compare
   -- other-modules:
   build-depends:
@@ -39,11 +40,15 @@ test-suite test
   main-is: Main.hs
   type: exitcode-stdio-1.0
   build-depends:
-    , eexpr
     , base
+    , bytestring
+    , containers
+    , eexpr
+    , eexpr-bindings
+    , eexpr-core
+    , tasty
+    , tasty-hunit
     -- , quickcheck-classes
-    -- , tasty
-    -- , tasty-hunit
     -- , tasty-quickcheck
   default-language: Haskell2010
   ghc-options: -Wall -O2

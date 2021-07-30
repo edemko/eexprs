@@ -13,22 +13,23 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Data.Eexpr.Mixfix
-  ( MixfixDefinition(..)
+  ( -- * Mixfix Definitions
+    Definition(..)
+  , mapAnnotation
   , Associativity(..)
-  , MixfixTemplate(Nil,ConsHole,Cons)
-  , MixfixTemplElem(..)
+  , Template(Nil,ConsHole,Cons)
+  , TemplElem(..)
   , toTemplate
-  , MixfixTemplateError(..)
-  , MixfixError(..)
-  , mkMixfixTable
+  , TemplateError(..)
+  , Error(..)
+  -- * Mixfix Tables
+  , tabulate
+  , Table(..)
   ) where
-
-import Data.Eexpr.Types
 
 import Control.Monad (forM_,when)
 import Data.List (find)
 import Data.List.Reverse (RList, snoc)
-import Data.Maybe (fromMaybe)
 import Data.Set (Set, union, intersection, difference)
 import Data.Text.Short (ShortText)
 
@@ -36,26 +37,33 @@ import qualified Data.List.Reverse as RList
 import qualified Data.Set as Set
 
 
-data MixfixDefinition ann = MixfixDef
+data Definition ann = MixfixDef
   { annotation :: !ann
+  -- TODO context (which is just a string), or perhaps tags (just a list of strings)
   , name :: !ShortText
   , lowerPrecedenceThan :: !(Set ShortText)
   , samePrecedenceAs :: !(Set ShortText)
   , higherPrecedenceThan :: !(Set ShortText)
   , associativity :: !Associativity
-  , template :: !MixfixTemplate
+  , template :: !Template
   }
   deriving stock (Read, Show)
+  deriving stock (Eq)
+
+mapAnnotation :: (a -> b) -> Definition a -> Definition b
+mapAnnotation f d = d{annotation = f (annotation d) }
 
 data Associativity
   = LeftAssociative
   | RightAssociative
   | NonAssociative
   deriving stock (Read, Show)
+  deriving stock (Eq)
 
-newtype MixfixTemplate = Templ [MixfixTemplElem]
+newtype Template = Templ [TemplElem]
   deriving stock (Read, Show)
-data MixfixTemplElem
+  deriving stock (Eq)
+data TemplElem
   = Literal ShortText
   | Hole
   deriving stock (Read, Show)
@@ -63,22 +71,22 @@ data MixfixTemplElem
 
 {-# COMPLETE Nil, ConsHole, Cons #-}
 
-pattern Nil :: MixfixTemplate
+pattern Nil :: Template
 pattern Nil = Templ []
 
-pattern ConsHole :: MixfixTemplate -> MixfixTemplate
+pattern ConsHole :: Template -> Template
 pattern ConsHole xs <- (fromConsHole -> Just xs)
-fromConsHole :: MixfixTemplate -> Maybe MixfixTemplate
+fromConsHole :: Template -> Maybe Template
 fromConsHole (Templ (Hole:xs)) = Just (Templ xs)
 fromConsHole _ = Nothing
 
-pattern Cons :: ShortText -> MixfixTemplate -> MixfixTemplate
+pattern Cons :: ShortText -> Template -> Template
 pattern Cons x xs <- (fromCons -> Just (x, xs))
-fromCons :: MixfixTemplate -> Maybe (ShortText, MixfixTemplate)
+fromCons :: Template -> Maybe (ShortText, Template)
 fromCons (Templ (Literal x:xs)) = Just (x, Templ xs)
 fromCons _ = Nothing
 
-toTemplate :: [MixfixTemplElem] -> Either MixfixTemplateError MixfixTemplate
+toTemplate :: [TemplElem] -> Either TemplateError Template
 toTemplate xs
   | null xs = Left EmptyTemplate
   | Nothing <- find (== Hole) xs = Left ZeroHoles
@@ -89,7 +97,7 @@ toTemplate xs
   checkSequence _ (Literal _ : rest) = checkSequence True rest
   checkSequence _ [] = Nothing
 
-data MixfixTemplateError
+data TemplateError
   = EmptyTemplate
   | ZeroHoles
   | ZeroLiterals
@@ -97,27 +105,35 @@ data MixfixTemplateError
   deriving stock (Read, Show)
   deriving stock (Eq)
 
-data MixfixError ann
-  = UnknownNames !(MixfixDefinition ann) (Set ShortText)
+data Error ann
+  = UnknownNames !(Definition ann) (Set ShortText)
   | UnsolvablePrecedence
-    { definition :: !(MixfixDefinition ann)
+    { definition :: !(Definition ann)
     , mustBeLower :: Set ShortText
     , mustBeSame :: Set ShortText
     , mustBeHigher :: Set ShortText
     }
   deriving stock (Read, Show)
 
-mkMixfixTable :: [MixfixDefinition ann] -> ([MixfixError ann], Maybe [[MixfixDefinition ann]])
-mkMixfixTable defs = extract $ unMonad (forM_ defs insert >> gets tree) (emptySt, RList.nil)
-  where
-  extract (_, errs, Nothing) = (RList.toList errs, Nothing)
-  extract (_, errs, Just t) = (RList.toList errs, Just $ postorder t)
-  postorder :: Tree ann -> [[MixfixDefinition ann]]
-  postorder (Tip xs) = [RList.toList xs]
-  postorder (Branch (_, l) xs (_, r)) = (postorder r) ++ (RList.toList xs) : (postorder l)
-
 
 ------------ Creating a Mixfix Table ------------
+
+newtype Table ann = Table { rows :: [[Definition ann]] }
+  deriving stock (Read, Show)
+  deriving stock (Eq)
+
+-- result is a table in ascending order of precedence; order within each precedence level is the order of definition
+tabulate :: [Definition ann] -> ([Error ann], Maybe (Table ann))
+tabulate defs = extract $ unMonad (forM_ defs insert >> gets tree) (emptySt, RList.nil)
+  where
+  extract (_, errs, Nothing) = (RList.toList errs, Nothing)
+  extract (_, errs, Just t) = (RList.toList errs, Just . Table $ preorder t)
+  preorder :: Tree ann -> [[Definition ann]]
+  preorder (Tip xs) = if RList.null xs then [] else [RList.toList xs]
+  preorder (Branch (_, l) xs (_, r))
+    =  preorder l
+    ++ (if RList.null xs then [] else [RList.toList xs])
+    ++ preorder r
 
 data MixfixState ann = St
   { knownNames :: !(Set ShortText)
@@ -125,8 +141,8 @@ data MixfixState ann = St
   }
 
 data Tree ann
-  = Tip (RList (MixfixDefinition ann))
-  | Branch (Set ShortText, Tree ann) (RList (MixfixDefinition ann)) (Set ShortText, Tree ann)
+  = Tip (RList (Definition ann))
+  | Branch (Set ShortText, Tree ann) (RList (Definition ann)) (Set ShortText, Tree ann)
 
 emptySt :: MixfixState ann
 emptySt = St
@@ -139,41 +155,55 @@ namesAtNode (Tip xs) = RList.toSet $ name <$> xs
 namesAtNode (Branch _ xs _) = RList.toSet $ name <$> xs
 
 
-insert :: MixfixDefinition ann -> MixfixMonad ann ()
+insert :: Definition ann -> MixfixMonad ann ()
 insert def = do
-  st@St{knownNames,tree} <- gets id
+  St{knownNames,tree} <- gets id
   let constrainingNames = lowerPrecedenceThan def `union` samePrecedenceAs def `union` higherPrecedenceThan def
       unknownNames = constrainingNames `difference` knownNames
   when (not $ Set.null unknownNames) $ do
     tell $ UnknownNames def unknownNames
-  tree' <- fromMaybe tree <$> insertTree def tree
-  put st{tree = tree'}
-  pure ()
+  insertTree def tree >>= \case
+    Nothing -> pure ()
+    Just tree' -> put St
+      { knownNames = Set.insert (name def) knownNames
+      , tree = tree'
+      }
 
-insertTree :: MixfixDefinition ann -> Tree ann -> MixfixMonad ann (Maybe (Tree ann))
+insertTree :: Definition ann -> Tree ann -> MixfixMonad ann (Maybe (Tree ann))
 insertTree def (Tip defs) = case surCmp def (RList.toSet $ name <$> defs) of
   -- the def is less than any definition here
-  Right LT -> pure . Just $ Branch (Set.singleton $ name def, Tip (RList.nil `snoc` def)) defs (Set.empty, Tip RList.nil)
+  Right (Just LT) -> goLeft
   -- the def is equal to or unconstranied by any definition here
-  Right EQ -> pure . Just $ Tip (defs `snoc` def)
+  Right (Just EQ) -> goHere
+  Right Nothing -> goHere
   -- the def is greater than any definition here
-  Right GT -> pure . Just $ Branch (Set.empty, Tip RList.nil) defs (Set.singleton $ name def, Tip (RList.nil `snoc` def))
+  Right (Just GT) -> goRight
   -- inconsistency
   Left err -> tell err >> pure Nothing
+  where
+  goLeft = pure . Just $ Branch (Set.singleton $ name def, Tip (RList.nil `snoc` def)) defs (Set.empty, Tip RList.nil)
+  goHere = pure . Just $ Tip (defs `snoc` def)
+  goRight = pure . Just $ Branch (Set.empty, Tip RList.nil) defs (Set.singleton $ name def, Tip (RList.nil `snoc` def))
 insertTree def here@(Branch (l, lTree) s (r, rTree)) = case (surCmp def l, surCmp def (RList.toSet $ name <$> s), surCmp def r) of
-  -- the def is less than than anything rightwards or here, so recurse into the left subtree
-  (_, Right LT, Right LT) -> insertTree def lTree >>= \case
-    Nothing -> pure Nothing
-    Just lTree' -> pure . Just $
-      Branch (Set.insert (name def) l, lTree') s (r, rTree)
   -- the def is greater than anything leftwards, less than anything rightwards, and equal-to/unconstrained-by anything here
-  (Right GT, Right EQ, Right LT) -> pure . Just $
-    Branch (l, lTree) (s `snoc` def) (r, rTree)
+  (Right (Just GT), Right (Just EQ), Right (Just LT)) -> goHere
+  (Right (Just GT), Right (Just EQ), Right Nothing) -> goHere
+  (Right (Just GT), Right Nothing, Right (Just LT)) -> goHere
+  (Right (Just GT), Right Nothing, Right Nothing) -> goHere
+  (Right Nothing, Right (Just EQ), Right (Just LT)) -> goHere
+  (Right Nothing, Right (Just EQ), Right Nothing) -> goHere
+  (Right Nothing, Right Nothing, Right (Just LT)) -> goHere
+  (Right Nothing, Right Nothing, Right Nothing) -> goHere
+  -- the def is less than than anything rightwards or here, so recurse into the left subtree
+  (_, Right (Just LT), Right (Just LT)) -> goLeft
+  (_, Right (Just LT), Right Nothing) -> goLeft
+  (_, Right Nothing, Right (Just LT)) -> goLeft
+  (_, Right Nothing, Right Nothing) -> goLeft
   -- the def is greater than anything leftwards or here, so recurse into the right subtree
-  (Right GT, Right GT, _) -> insertTree def rTree >>= \case
-    Nothing -> pure Nothing
-    Just rTree' -> pure . Just $
-      Branch (l, lTree) s (Set.insert (name def) r, rTree')
+  (Right (Just GT), Right (Just GT), _) -> goRight
+  (Right (Just GT), Right Nothing, _) -> goRight
+  (Right Nothing, Right (Just GT), _) -> goRight
+  (Right Nothing, Right Nothing, _) -> goRight
   -- if we get inconsistent ordering from any set that hasn't been previously handled
   -- (i.e. the inconsistencies potentially resolvable by recursion)
   -- then just report that error
@@ -184,26 +214,48 @@ insertTree def here@(Branch (l, lTree) s (r, rTree)) = case (surCmp def l, surCm
   -- TODO these errors are likely to be awful, but I think they should also be less common
   (Right lCmp, Right sCmp, Right rCmp) -> do
     let err = case (lCmp, sCmp, rCmp) of
-                (GT, EQ, LT) -> error "unreachable"
-                (GT, GT, _) -> error "unreachable"
-                (_, LT, LT) -> error "unreachable"
+                (Just GT, Just EQ, Just LT) -> error "unreachable"
+                (Just GT, Just EQ, Nothing) -> error "unreachable"
+                (Just GT, Nothing, Just LT) -> error "unreachable"
+                (Just GT, Nothing, Nothing) -> error "unreachable"
+                (Nothing, Just EQ, Just LT) -> error "unreachable"
+                (Nothing, Just EQ, Nothing) -> error "unreachable"
+                (Nothing, Nothing, Just LT) -> error "unreachable"
+                (Nothing, Nothing, Nothing) -> error "unreachable"
+                (_, Just LT, Just LT) -> error "unreachable"
+                (_, Just LT, Nothing) -> error "unreachable"
+                (_, Nothing, Just LT) -> error "unreachable"
+                (_, Nothing, Nothing) -> error "unreachable"
+                (Just GT, Just GT, _) -> error "unreachable"
+                (Just GT, Nothing, _) -> error "unreachable"
+                (Nothing, Just GT, _) -> error "unreachable"
+                (Nothing, Nothing, _) -> error "unreachable"
                 -- strict disorder
-                (LT, _, GT) -> UnsolvablePrecedence def (namesAtNode lTree) Set.empty (namesAtNode rTree)
-                (LT, GT, _) -> UnsolvablePrecedence def (namesAtNode lTree) Set.empty (namesAtNode here)
-                (_, LT, GT) -> UnsolvablePrecedence def (namesAtNode here) Set.empty (namesAtNode rTree)
+                (Just LT, _, Just GT) -> UnsolvablePrecedence def (namesAtNode lTree) Set.empty (namesAtNode rTree)
+                (Just LT, Just GT, _) -> UnsolvablePrecedence def (namesAtNode lTree) Set.empty (namesAtNode here)
+                (_, Just LT, Just GT) -> UnsolvablePrecedence def (namesAtNode here) Set.empty (namesAtNode rTree)
                 -- half-strict disorder
-                (LT, _, EQ) -> UnsolvablePrecedence def (namesAtNode lTree) (namesAtNode rTree) Set.empty
-                (EQ, _, GT) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree) (namesAtNode rTree)
-                (LT, EQ, _) -> UnsolvablePrecedence def (namesAtNode lTree) (namesAtNode here) Set.empty
-                (_, EQ, GT) -> UnsolvablePrecedence def Set.empty (namesAtNode here) (namesAtNode rTree)
-                (EQ, GT, _) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree) (namesAtNode here)
-                (_, LT, EQ) -> UnsolvablePrecedence def (namesAtNode here) (namesAtNode rTree) Set.empty
+                (Just LT, _, Just EQ) -> UnsolvablePrecedence def (namesAtNode lTree) (namesAtNode rTree) Set.empty
+                (Just EQ, _, Just GT) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree) (namesAtNode rTree)
+                (Just LT, Just EQ, _) -> UnsolvablePrecedence def (namesAtNode lTree) (namesAtNode here) Set.empty
+                (_, Just EQ, Just GT) -> UnsolvablePrecedence def Set.empty (namesAtNode here) (namesAtNode rTree)
+                (Just EQ, Just GT, _) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree) (namesAtNode here)
+                (_, Just LT, Just EQ) -> UnsolvablePrecedence def (namesAtNode here) (namesAtNode rTree) Set.empty
                 -- disjoint sets must be equal
-                (EQ, _, EQ) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree `union` namesAtNode rTree) Set.empty
-                (EQ, EQ, _) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree `union` namesAtNode here) Set.empty
-                (_, EQ, EQ) -> UnsolvablePrecedence def Set.empty (namesAtNode here `union` namesAtNode rTree) Set.empty
+                (Just EQ, _, Just EQ) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree `union` namesAtNode rTree) Set.empty
+                (Just EQ, Just EQ, _) -> UnsolvablePrecedence def Set.empty (namesAtNode lTree `union` namesAtNode here) Set.empty
+                (_, Just EQ, Just EQ) -> UnsolvablePrecedence def Set.empty (namesAtNode here `union` namesAtNode rTree) Set.empty
     tell err >> pure Nothing
-
+  where
+  goLeft = insertTree def lTree >>= \case
+    Nothing -> pure Nothing
+    Just lTree' -> pure . Just $
+      Branch (Set.insert (name def) l, lTree') s (r, rTree)
+  goHere = pure . Just $ Branch (l, lTree) (s `snoc` def) (r, rTree)
+  goRight = insertTree def rTree >>= \case
+    Nothing -> pure Nothing
+    Just rTree' -> pure . Just $
+      Branch (l, lTree) s (Set.insert (name def) r, rTree')
 
 -- I'm using a non-standard definition of surreals.
 -- Normally, a surreal is defined with left and right sets `{L|R}`, but I also allow a surreal to be defined as "the same as" another surreal.
@@ -227,26 +279,25 @@ insertTree def here@(Branch (l, lTree) s (r, rTree)) = case (surCmp def l, surCm
 -- Here, we check a possibly-valid surreal number `{L_x|S_x|R_x}` against a set of surreals `Y`.
 -- Really, we are only comparing by names, so we look if any of the names in one of `L_x`, `S_x`, or `R_x` is included in the names of `Y`.
 -- If exactly one of these intersections is non-empty, then the ordering is trivial.
--- If all of them are empty, then there are no constraints that would make the surreal different from the youngest surreal in `Y`;
---   i.e. I return an equal ordering.
+-- If all of them are empty, then there are no constraints on ordering.
 -- If more than one is non-empty, then we must have had something in `L_x` not strictly less than something in `S_x` or `R_x`,
 --   or something similar with one of `R_x` not strictly greater than something in the others.
-surCmp :: MixfixDefinition ann -> Set ShortText -> Either (MixfixError ann) Ordering
+surCmp :: Definition ann -> Set ShortText -> Either (Error ann) (Maybe Ordering)
 surCmp def@MixfixDef{lowerPrecedenceThan,samePrecedenceAs,higherPrecedenceThan} names =
   let lt = lowerPrecedenceThan `intersection` names
       eq = samePrecedenceAs `intersection` names
       gt = higherPrecedenceThan `intersection` names
    in case (not $ Set.null lt, not $ Set.null eq, not $ Set.null gt) of
-    (False, False, False) -> Right EQ
-    (True, False, False) -> Right LT
-    (False, True, False) -> Right EQ
-    (False, False, True) -> Right GT
+    (False, False, False) -> Right Nothing
+    (True, False, False) -> Right (Just LT)
+    (False, True, False) -> Right (Just EQ)
+    (False, False, True) -> Right (Just GT)
     _ -> Left $ UnsolvablePrecedence def lt eq gt
 
 ------ Supporting Monad ------
 
 newtype MixfixMonad ann a = MixfixMonad
-  { unMonad :: (MixfixState ann, RList (MixfixError ann)) -> (MixfixState ann, RList (MixfixError ann), Maybe a)
+  { unMonad :: (MixfixState ann, RList (Error ann)) -> (MixfixState ann, RList (Error ann), Maybe a)
   }
 
 instance Functor (MixfixMonad ann) where
@@ -278,5 +329,5 @@ gets f = MixfixMonad $ \(st, errs) -> (st, errs, Just (f st))
 put :: MixfixState ann -> MixfixMonad ann ()
 put st' = MixfixMonad $ \(_, errs) -> (st', errs, Just ())
 
-tell :: MixfixError ann -> MixfixMonad ann ()
+tell :: Error ann -> MixfixMonad ann ()
 tell err = MixfixMonad $ \(st, errs) -> (st, errs `snoc` err, Just ())

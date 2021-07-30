@@ -37,6 +37,7 @@ data Eexpr ann
   | Comma     ann [Eexpr ann]
   | Semicolon ann [Eexpr ann]
   deriving stock (Read, Show)
+  deriving stock (Eq)
 
 mapAnnotation :: (a -> b) -> Eexpr a -> Eexpr b
 mapAnnotation f (Symbol a x) = Symbol (f a) x
@@ -79,6 +80,7 @@ data Bignum = Bignum
   , explicitExponent :: Integer
   }
   deriving stock (Read, Show)
+  deriving stock (Eq)
 
 newtype Radix = Radix Word8
   deriving stock (Read, Show)
@@ -107,12 +109,14 @@ data Location = Location
   , end :: {-# UNPACK #-} !LocPoint
   }
   deriving stock(Read, Show)
+  deriving stock (Eq)
 data LocPoint = LocPoint
   { byteOff :: {-# UNPACK #-} !Word
   , lineOff :: {-# UNPACK #-} !Word
   , colOff :: {-# UNPACK #-} !Word
   }
   deriving stock(Read, Show)
+  deriving stock (Eq)
 
 
 ------------------------ Errors and Warnings ------------------------

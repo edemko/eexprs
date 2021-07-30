@@ -254,7 +254,6 @@ eexpr* parseTemplate(engine* st) {
 atomicExpr
   ::= symbol
    |  number
-   |  codepoint
    |  stringTemplate
    |  wrapExpr
 ```
@@ -388,7 +387,7 @@ eexpr* parseChain(engine* st) {
 }
 
 /*
-spaceExpr ::= chainExpr (whitespace chainExpr)*
+spaceExpr ::= chainExpr (whitespace chainExpr)+
 */
 static
 eexpr* parseSpace(engine* st) {
