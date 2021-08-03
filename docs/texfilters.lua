@@ -19,5 +19,15 @@ function Div(el)
       el.content,
       pandoc.RawBlock("latex", "\\end{Warning}"))
   end
+  if el.classes[1] == "comment" then
+    -- insert element in front
+    table.insert(
+      el.content, 1,
+      pandoc.RawBlock("latex", "\\begin{comment}"))
+    -- insert element at the back
+    table.insert(
+      el.content,
+      pandoc.RawBlock("latex", "\\end{comment}"))
+  end
   return el
 end

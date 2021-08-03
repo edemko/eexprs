@@ -854,14 +854,16 @@ FIXME implement these choices in C
 ```
 symbol ::= symbolChar1 symbolChar* - sign digit(10) symbolChar*
 
-iIl,1o0O.
-
 symbolChar ::= alphaNum | asciiSymb
-            |  greekAlpha | hebrewAlpha
-            |  mathAlpha | blackboard
-            |  mathSymb | arrows | extraDots
-            | unsortedCharsTODO
-symbolChar1 ::- symbolChar - SQ
+            |  letterlikeSymb
+            |  greekAlpha | mathHebrew
+            |  blackboard | mathAlpha
+            |  superscriptChars | subscriptChars
+            |  mathSymb | arrows
+            |  unlikelyMath | unlikelyArrows
+            |  unsortedCharsTODO
+symbolChar1 ::= symbolChar - SQ
+
 
 alphaNum ::= 'a'…'z' | 'A'…'Z' | '0'…'9' | '↊' | '↋'
 asciiSymb ::=
@@ -870,91 +872,176 @@ asciiSymb ::=
   | '^' | '_'
   | '|' | '~'
 
+letterlikeSymb ::=
+  | 'ℓ' | '№' | '℘' | 'ℏ'
+  | '‽' | '†' | '‡' # suggested for "unsafe" functions
 greekAlpha ::=
   | 'Α'…'Ω' - <U+03A2> | 'α'…'ω'
   # variant forms
   | 'ϐ' | 'ϴ' | 'ϑ' | 'ϒ' | 'ϕ' | 'ϖ' | 'ϰ' | 'ϱ' | 'ϵ'
-  # archaic and numeral
-  | 'Ͱ'…'ͳ' | 'ϗ'…'ϡ' | 'Ϻ'…'ϻ'
-  # modified forms
-  | '϶' | 'ϼ'
-hebrewAlpha ::=
-  # TODO oh yeah, some hebrew letters get used in math as well
+mathHebrew ::=
+  # note that these are not part of the unicode hebrew script; they are from the
+  # Letterlike Symbols block, so they are typeset left-to-right
   | 'ℵ'…'ℸ'
 
-mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝓐𝓪, 𝔄𝔞, 𝔸𝕒)
-  # TODO I removed bold fraktur b/c it's not different enough from normal fraktur
-    '𝒜'…'𝔷' - <reserved points in this range>
-  | 'ℬ' | 'ℰ' | 'ℱ' | 'ℋ' | 'ℐ' | 'ℒ' | 'ℳ' | 'ℛ'
-  | 'ℯ' | 'ℊ' | 'ℴ'
-  | 'ℭ' | 'ℌ' | 'ℑ' | 'ℜ' | 'ℨ'
 blackboard ::=
-    '𝔸'…'𝕫' - <reserved points in this range> | 'ℂ' | 'ℍ' | 'ℕ' | 'ℙ'…'ℝ' | 'ℤ'
+    '𝔸'…'𝕫' - <reserved points in this range> | 'ℂ' | 'ℍ' | 'ℕ' | 'ℙ' | 'ℚ' | 'ℝ' | 'ℤ'
   | '𝟘'…'𝟡'
   | 'ℼ' | 'ℽ' | 'ℾ' | 'ℿ' | '⅀' # greek
+mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝔄𝔞)
+  # TODO I removed bold fraktur b/c it's not different enough from normal fraktur
+    '𝒜'…'𝓏' - <reserved points in this range>
+  | 'ℬ' | 'ℰ' | 'ℱ' | 'ℋ' | 'ℐ' | 'ℒ' | 'ℳ' | 'ℛ'
+  | 'ℯ' | 'ℊ' | 'ℴ'
+  | '𝔄'…'𝔷' - <reserved points in this range>
+  | 'ℭ' | 'ℌ' | 'ℑ' | 'ℜ' | 'ℨ'
+
+# as Unicode adds more miniscule latin sub/superscripts, these should be accepted as well
+superscriptChars ::=
+    'ᵃ' | 'ᵇ' | 'ᶜ' | 'ᵈ' | 'ᵉ' | 'ᶠ' | 'ᵍ' | 'ʰ' | 'ⁱ' | 'ʲ' | 'ᵏ' | 'ˡ' | 'ᵐ'
+  | 'ⁿ' | 'ᵒ' | 'ᵖ'       | 'ʳ' | 'ˢ' | 'ᵗ' | 'ᵘ' | 'ᵛ' | 'ʷ' | 'ˣ' | 'ʸ' | 'ᶻ'
+  | '⁰' | '¹' | '²' | '³' | '⁴' | '⁵' | '⁶' | '⁷' | '⁸' | '⁹'
+subscriptChars ::=
+    'ₐ'                   | 'ₑ'             | 'ₕ' | 'ᵢ' | 'ⱼ' | 'ₖ' | 'ₗ' | 'ₘ'
+  | 'ₙ' | 'ₒ' | 'ₚ'        | 'ᵣ' | 'ₛ' | 'ₜ' | 'ᵤ' | 'ᵥ'         | 'ₓ'
+  | '₀' | '₁' | '₂' | '₃' | '₄' | '₅' | '₆' | '₇' | '₈' | '₉'
 
 mathSymb ::= setSymb | logicSymb
-         | arithSymb | calculusSymb
-         | mathRels | mathOps | mathTurnstiles
-         | mathShapes
-         | '′' # prime
-         | extraMathSymb
-
-extraDots ::= '∴' | '∵' | '∷'
+          |  arithSymb | calculusSymb
+          |  mathOps | mathRels | mathTurnstiles
+          |  mathShapes
+          |  '′' # prime
+          |  nArySymb
 
 setSymb ::=
-  ∅∞
-  ∩∪⨿×
-  ⋂⋃∐⨉ # n-ary
-  ∈∉∋∌
-  ⊂⊃⊄⊅⊆⊇⊈⊉⊊⊋
+    '∅' | '∞'
+  | '∩' | '∪' | '⨿' | '×'
+  | '∈' | '∋' | '∉' | '∌'
+  | '⊂' | '⊃' | '⊆' | '⊇' | '⊄' | '⊅' | '⊈' | '⊉'
 logicSymb ::=
-  ⊤⊥
-  ¬∀∃∄
-  ∧∨⊻⊼⊽
-  ⅋ # linear logic (also uses &!?⊗⊕, which are elsewhere)
-  ⋀⋁ # n-ary
+    '⊤' | '⊥'
+  | '∀' | '∃' | '∄'
+  | '¬' | '∧' | '∨' | '⊻' | '⊼' | '⊽'
+  | '⅋' # linear logic (also uses &!?⊗⊕, which are elsewhere)
+  | '□' | '◊' # modal logic
 arithSymb ::=
-  ±∓⋅÷√
-  ∏∑⨊ # n-ary
-  ‰‱
+    '±' | '∓' | '⋅' | '÷' | '√'
+  | '‰' | '‱'
 calculusSymb ::=
-  ∂∆∇∫
+    '∂' | '∫' | '∇' | '∆'
+
+mathOps ::=
+    '∘' | '⨾' # composition
+  | '⧺' # catenation
+  | '⋆' | '∗' | '⋄'
+  | '⊕' | '⊖' | '⊗' | '⊘' | '⊛' | '⊙' | '⊚'
+  | '⊞' | '⊟' | '⊠' | '⧄' | '⧆' | '⊡' | '⧇'
+  | '⋈' | '⋉' | '⋊'
+
 mathRels ::= equivRels | compareRels
 equivRels ::=
-  ≠≡≢≣≟⩵⩶≝≜⩴≔≕ # "equal"
-  ≃≄≅≇≆ #iso
-  ∼≁≈≉≋ # approximate
-  ≍≭≎≏⪮ # bendy
-  ∝
+    '≠' | '≡' | '≢' # straight
+  | '≃' | '≄' | '≅' | '≇' # semi-wiggly
+  | '≁' | '≈' | '≉' # wiggly
+  | '≟' | '⩵' | '⩶' # predicates
+  | '≝' | '≜' | '⩴' | '≔' | '≕' # define/assign
+  | '≍' | '≭' | '≎' | '≏' # bendy
 compareRels ::=
-  ≤≥⪇⪈≮≯≰≱ # straight
-  ≶≷≸≹⋚⋛ # posets
-  ≲≳≴≵⋦⋧ # approximate
-  ≺≻≼≽⊀⊁⋠⋡⋞⋟ # cusp
-  ⊏⊐⊑⊒⋢⋣⋤⋥ # square
-  ⊲⊳⊴⊵⋪⋫⋬⋭ # closed
-  ≬≪≫⋘⋙
-mathOps ::=
-  ∘⨾ # composition
-  ⧺⧻∔∸ # plus and minus variants
-  ≀ # wreath product
-  ⊕⊖⊗⊙⊘⦼⨸⊚⊛⊜⊝
-  ⊞⊟⊠⊡⧄⧇⧆
-  ⨹⨺⨻
-  ⨀⨁⨂ # n-ary
-  ⋈⋉⋊
-  ∗⋄⋆
-mathTurnstiles
-  ⊢⊨⊩⊫⟝
-mathShapes ::=
-  □⬠⬡○
-  ◊⬭⬯
-  ◇☆⯎⯏
-  ⋕⩩ # I've seen the last used in "SICP for GR" or whatever it's called
+  # FIXME do I really need both handednesses of ≶≷≸≹⋚⋛?
+    '≤' | '≥' | '≮' | '≯' | '≰' | '≱' # straight
+  | '≺' | '≻' | '≼' | '≽' | '⊀' | '⊁' | '⋠' | '⋡'  # cusp
+  | '⊏' | '⊐' | '⊑' | '⊒' | '⋢' | '⋣' # square
+  | '≶' | '≷' | '≸' | '≹' | '⋚' | '⋛' # posets
+  | '≲' | '≳' | '≴' | '≵' # approximate
+  | '≪' | '≫' | '⋘' | '⋙' # multiple
+mathTurnstiles ::=
+    '⊢' | '⊨' | '⊩' | '⊫'
+
+nArySymb ::=
+    '⋃' | '⋂' | '∐' | '⨉' # sets
+  | '⋁' | '⋀' # logic
+  | '∑' | '∏' | '⨊' # arithmetic
+  | '⨁' | '⨂' | '⨀' # circled
+
+arrows ::=
+    '←' | '↑' | '→' | '↓' | '↔' | '↕' # straight
+  | '↚'       | '↛'       | '↮'       # stroked
+  | '⇐' | '⇑' | '⇒' | '⇓' | '⇔' | '⇕' # double
+  | '⇍'       | '⇏'       | '⇎'       # stroked double
+  # alternate bodies
+  | '↜'       | '↝'       | '↭'       # wave
+  | '⇜'       | '⇝'                   # squiggle
+  # alternate heads
+  | '↞' | '↟' | '↠' | '↡' # two headed
+  | '↼' | '↾' | '⇀' | '⇂' # harpoons
+  | '⇤' | '⤒' | '⇥' | '⤓' # to bar
+  | '⟜' | '⫯' | '⊸' | '⫰' # sometimes used in linear logic as well
+  # alternate tails
+  | '↢'       | '↣'       # tail
+  | '↩'       | '↪'       # hook
+  | '↤' | '↥' | '↦' | '↧' # from bar
+  | '⤆'       | '⤇'       # double from bar
+  # only tails
+  | '⤙' | '⤚' # single tail
+  | '⤛' | '⤜' # double tail
 
 
-extraMathSymb ::=
+unlikelyMath ::=
+  # archaic and numeral greek
+    'Ͱ'…'ͳ' | 'ϗ'…'ϡ' | 'Ϻ'…'ϻ'
+  # modified greek letters
+  | '϶' | 'ϼ'
+  # extra dots
+  | '∴' | '∵' | '∷'
+  # operators
+  | '⧻' | '∔' | '∸' # plus and minus variants
+  | '≀' # wreath product
+  | '⦼' | '⨸' | '⊜' | '⊝'
+  | '⨹' | '⨺' | '⨻'
+  # equivalence relations
+  | '≣' | '≋' | '∝'
+  # proper relations
+  | '⊊' | '⊋' | '⋤' | '⋥' | '⪇' | '⪈' | '⋦' | '⋧' | '≆'
+  # closed triangle relations
+  | '⊲' | '⊳' | '⊴' | '⊵' | '⋪' | '⋫' | '⋬' | '⋭'
+  # other relations
+  | '⋞' | '⋟' | '⪮'
+  | '≬' # listed as "between", but I don't see how this is a trinary relation
+  # math shapes (logic symbols have square and lozenge)
+  | '⬠' | '⬡' | '○'
+  | '⬭' | '⬯'
+  | '◇' | '☆' | '⯎' | '⯏'
+  | '⋕' | '⩩' # I've seen the last used in "SICP for GR" or whatever it's called
+  # there are even more math symbols in Unicode!
+  | moreUnlikelyMath
+
+unlikelyArrows ::=
+    '⇚' | '⇛' | '⤊' | '⤋' # triple body
+  | '⟰' | '⟱' | '⭅' | '⭆' # quadruple body
+  | '⤸' | '⤹' | '⤺' | '⤻' # arc (only down and left are available)
+  | '⥊' | '⥋' | '⥌' | '⥍' | '⥎' | '⥏' | '⥐' | '⥑' # double harpoon
+  | '↽' | '↿' | '⇁' | '⇃' # other-handed harpoons
+  | '⧟'
+  | '↫' | '↬' # loop tail
+  | '⥼' | '⥽' | '⥾' | '⥿' # fish tail
+  | '⤅' | '⬶' # two headed from bar
+  # turning
+  | '↰' | '↱' | '↲' | '↳' | '⬎' | '⬏' | '⬐' | '⬑' # tip turn
+  | '⤴' | '⤵' | '⤶' | '⤷' # curving
+  | '↶' | '↷' | '⤾' | '⤿' # semicircle
+  | '⮌' | '⮍' | '⮎' | '⮏' # (triangle-headed) u-shaped
+  | '↺' | '↻' # circle
+  | '⟲' | '⟳' # gapped circle
+  | '⥀' | '⥁' # closed circle
+  # multiple
+  | '⇄' | '⇅' | '⇆' | '⇇' | '⇈' | '⇉' | '⇊' | '⇵' # paired
+  | '⥢' | '⥣' | '⥤' | '⥥' # \ paired harpoons
+  | '⥮' | '⥯' | '⇋' | '⇌' # |
+  | '⥦' | '⥧' | '⥨' | '⥩' # |
+  | '⥪' | '⥫' | '⥬' | '⥭' # /
+  | '⇶' | '⬱' # three
+
+moreUnlikelyMath ::=
 # set theory
   ⨃⨄⨅⨆ # n-ary
   ⊌⊍⊎⋒⋓⊓⊔⩀⩁⩂⩃⩄⩅⩐⩎⩏
@@ -992,7 +1079,6 @@ extraMathSymb ::=
   ⊮⫣
   ⊯⫥
   ⫢⊪⫦
-  ⟞
   ⫝̸⫝
   ⟘⟙⫧⫨⫩⫪⫫
 # database
@@ -1002,63 +1088,6 @@ extraMathSymb ::=
   ∎ # QED/tombstone
   ∿
   ⦰⦱⦲⦳⦴⦵
-
-
-# you can have one alternate head or tail, but not both
-# you can also drop the head with an alternate tail
-# there are no straight strokes, only slash strokes
-arrows ::= #TODO fix metasyntax
-  ←↑→↓↔↕ # straight
-  ⇐⇑⇒⇓⇔⇕ # double
-  ↚↛↮ # stroked
-  ⇍⇎⇏ # stroked double
-  ↜↝↭ # wave
-  ⇜⇝ # squiggle
-  ⤸⤹⤺⤻ # arc
-  ⇚⇛⤊⤋ # triple
-  ⟰⟱⭅⭆ # quadruple
-# long
-  ⟵⟶⟷ # long
-  ⟸⟹⟺ # long double
-  ⟻⟼ # long from bar
-  ⟽⟾ # long double from bar
-  ⟿⬳ # long squiggle
-#alt heads
-  ↞↟↠↡ # two headed
-  ↼↽↾↿⇀⇁⇂⇃⥊⥋⥌⥍⥎⥏⥐⥑ # harpoon
-  ⇤⇥⤒⤓ # to bar
-  ⊸⟜⫯⫰⧟
-# alt tails
-  ↢↣ # tail
-  ↩↪ # hook
-  ↤↥↦↧ # from bar
-  ↫↬ # loop
-# no head, alt tail
-  ⤙⤚ # only tail
-  ⤛⤜ # only double tail
-  ⥼⥽⥾⥿ # fish tail
-# to/from endpoints
-  ⤅⬶ # two headed from bar
-  ⤆⤇ # double from bar
-# turning
-  ↰↱↲↳⬎⬏⬐⬑ # tip turn
-  ⤴⤵⤶⤷ # curving
-  ↶↷⤾⤿ # semicircle
-  ⮌⮍⮎⮏ # (triangle-headed) u-shaped
-  ↺↻ # circle
-  ⟲⟳ # gapped circle
-  ⥀⥁ # closed circle
-# multiple
-  ⇄⇅⇆⇇⇈⇉⇊⇵ # paired
-  ⇋⇌ # paired harpoon
-  ⇶⬱ # three
-  ⥢⥣⥤⥥⥦⥧⥨⥩⥪⥫⥬⥭⥮⥯ # paired harpoons
-
-
-unsortedCharsTODO ::=
-  # TODO random stuff from letterlike symbols
-  | 'ℓ' | '℘' | '№' | '℧'
-  | '†' | '‡' # or use these instead of emoji for unsafe functions
 ```
 
 ::: Warning
@@ -1068,11 +1097,18 @@ Instead, there must be a tool to convert losslessly between Unicode and ASCII.
 
 ::: Warning
 The selection of available symbol characters is not yet set in stone.
-So far, I have only examined the Basic Latin Unicode block for useful characters.
-I would like to allow mathematical operators, arrows, greek letters at least, and I may include a number of other scripts if it comes to it.
-However, I'll also want to use some normalization algorithm to ensure visually-identical symbols are treated identically.
-I am loathe to include characters from scripts I am not fluent with; if they are to be added, it should be in consultation with people who _do_ understand these scripts.
+So far, I have only examined a portion of Unicode for useful characters.
+My goal was to identify mathematical operators/relations/symbols, arrows, greek letters, and fancy alphanumerics at least.
+If something you need is missing, it may simply be because I couldn't easily find why certain symbols are used; let me know and I'll try to add it.
+I may include a number of other scripts if it comes to it, but I am loathe to include characters from scripts I am not fluent with; if they are to be added, it should be in consultation with people who _do_ understand these scripts.
+:::
 
+::: Warning
+I have not gone through the available symbols to handle visually-confusable characters.
+I expect I'll allow visually-identical symbols, but use some normalization algorithm to ensure they are treated identically and normalized.
+:::
+
+::: comment
 Here is a list of blocks that I have examined or plan to examine:
   - [x] Basic Latin
   - [x] math-related:
@@ -1086,28 +1122,30 @@ Here is a list of blocks that I have examined or plan to examine:
     - [x] Supplemental Mathematical Operators
     - [x] Latin-1 Supplement
     - [x] Geometric Shapes (I've only taken the white ones b/c they're easy to print, and all of the same "size")
+    - [ ] Geometric Shapes Extended
     - [x] Miscellaneous Technical
     - [x] General Punctuation
+    - [x] Supplemental Punctuation
   - [x] arrows:
     - [x] Arrows
     - [x] Supplemental Arrows-A
     - [x] Supplemental Arrows-B
     - [x] Supplemental Arrows-C (no, these are mostly thickness variants and some wingdings-looking stuff, though there are a few arrowheads)
     - [x] Miscellaneous Symbols and Arrows
+  - [ ] Superscripts and Subscripts
   - [ ] SI unit symbols (not a block)
   - [x] greek:
     - [x] Greek and Coptic
     - [x] Greek Extended
-  - [ ] Hebrew
+  - [x] Hebrew
   - [ ] keyboard key symbols (not a block)
   - [ ] Latin-1 Supplement, Latin Extended-A -B -C -D and -E, Latin Extended Additional
-  - [ ] Combining Diacritical Marks, Combining Diacritical Marks Extended, Combining Diacritical Marks Supplement
-  - [ ] Combining Diacritical Marks for Symbols
-  - [ ] Combining Half Marks
-  - [ ] General Punctuation, Supplemental Punctuation
-  - [ ] Superscripts and Subscripts
+  - [x] combining marks (just no much work to normalize them)
+    - [x] Combining Diacritical Marks, Combining Diacritical Marks Extended, Combining Diacritical Marks Supplement
+    - [x] Combining Diacritical Marks for Symbols
+    - [x] Combining Half Marks
   - [ ] Currency Symbols
-  - [ ] Geometric Shapes, Geometric Shapes Extended, Miscellaneous Symbols, Dingbats, Ornamental Dingbats
+  - [x] Dingbats, Ornamental Dingbats
   - [x] IPA extensions, Spacing Modifier Letters (I don't think the IPA script is really useful for variable names)
   - [x] Number Forms (I already have the dozenal digits, the fractions are too limited in scope, roman numerals are unneeded)
   - [x] Control Pictures (I find it unlikely that adding these won't introduce confusion)
@@ -1340,7 +1378,7 @@ S-expr
 
 Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue.
 However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages.
-A design philosophy I used for eexprs is "the easier it is to write with tooling, the easier it is everywhere"[^accessibility].
+A design philosophy I used for eexprs is "the easier it is to write without tooling, the easier it is everywhere"[^accessibility].
 Indeed, while I'm developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.
 
 [^accessibility]: 

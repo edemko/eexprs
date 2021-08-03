@@ -447,15 +447,15 @@ ChainTail ::= dot Expr
 <p>I claim that the “left-hand side” of block lines is intuitive, but at first block lines were simple semicolon-separated expressions, and why shouldn’t they be? Well, despite designing and implementing eexprs, I immediately screwed up writing a recognizer for mixfixes. I imagined that</p>
 <pre><code>mixfix add:
   after: mul, exp</code></pre>
-<p>would parse the obviously-intended way, but instead it grouped <code>after: mul</code> together, leaving <code>exp</code> as a sibling. It’s certainly interesting that sometimes the intuitive rule leads to unintuitive results. One small change to the grammar later, and my recognizer was far easier to write. In any case, I realized that I wanted a LHS rule any way to support switch statements (and case/match expressions, and so on), such as:</p>
+<p>would parse the obviously-intended way, but instead it grouped <code>after: mul</code> together, leaving <code>exp</code> as a sibling. It’s certainly interesting that sometimes the intuitive rule leads to unintuitive results. One small change to the grammar later, and my recognizer was far easier to write. In any case, I realized that I wanted a LHS rule anyway to support switch statements (and case/match expressions, and so on), such as:</p>
 <pre><code>switch c:
   &#39;A&#39;…&#39;F&#39;: c -= 7; fallthrough
-  &#39;0&#39;…&#39;9&#39;: n += c - 48
+  &#39;0&#39;…&#39;9&#39;: n = n * 10 + (c - 48)
   default: return null</code></pre>
 </div>
 <h3 id="lexeme-cooker">Lexeme Cooker</h3>
-<p>The lexeme cooker is a string rewrite system over tokens It deals with mostly local interactions between tokens, especially normalizing whitespace and whitespace-sensitive tokens.</p>
-<p>The basic form of rewrite rule is <code>a ⇒ b</code> which replaces the token sequence <code>a</code> in the input with tokens on the right for output. We also allow the use of “non-terminal” patterns on the left of a rule; the patterns we use can be modeled as regular languages over tokens. We also use lookahead and lookbehind (collectively lookaround) in the left-hand side of a pattern. These affect only whether the rewrite rule fires, but the sequences matching the lookaround are not rewritten. We write <code>&lt;l&gt;</code> for lookaround which must match for a rule to fire, and <code>!&lt;l&gt;</code> for lookaround which must <em>not</em> match; of course, lookaround is only allowed at the start and/or end of the left-hand side of a rule.</p>
+<p>The lexeme cooker is a string rewrite system over tokens. It deals with mostly local interactions between tokens, especially normalizing whitespace and whitespace-sensitive tokens.</p>
+<p>The basic form of rewrite rule is <code>a ⇒ b</code> which replaces the token sequence <code>a</code> in the input with tokens <code>b</code> for output. We also use lookahead and lookbehind (collectively lookaround) in the left-hand side of a pattern. These affect only whether the rewrite rule fires, but the sequences matching the lookaround are not rewritten. We write <code>&lt;l&gt;</code> for lookaround which must match for a rule to fire, and <code>!&lt;l&gt;</code> for lookaround which must <em>not</em> match; of course, lookaround is only allowed at the start and/or end of the left-hand side of a rule. Within lookaround sequences, we also use some “non-terminal” patterns; the patterns we use can be modeled as regular languages over tokens, so they’re really just convenient shorthands.</p>
 <p>The rewrite system may also be required to report an error, which is written <code>lhs ⇒ ERR</code>. There are a number of places where an implementation may warn the user, written <code>lhs ⇒ WARN rhs</code>, or as <code>lhs ⇒ WARN</code> when no rewriting takes place. With appropriate configuration, warnings may also be elevated to errors, but eexprs which generate warnings are nevertheless valid and should be accepted by default.</p>
 <div class="Rationale">
 <p>The characteristic that distinguishes some conditions as warnings rather than errors is that those conditions could be unambiguously machine-corrected in the source code without a change to the resulting eexpr.</p>
@@ -651,14 +651,16 @@ expLetter(16) ::= &#39;h&#39; | &#39;H&#39;</code></pre>
 <p>TODO TODO make sure to alter symbolChar later if I change the name here FIXME implement these choices in C</p>
 <pre><code>symbol ::= symbolChar1 symbolChar* - sign digit(10) symbolChar*
 
-iIl,1o0O.
-
 symbolChar ::= alphaNum | asciiSymb
-            |  greekAlpha | hebrewAlpha
-            |  mathAlpha | blackboard
-            |  mathSymb | arrows | extraDots
-            | unsortedCharsTODO
-symbolChar1 ::- symbolChar - SQ
+            |  letterlikeSymb
+            |  greekAlpha | mathHebrew
+            |  blackboard | mathAlpha
+            |  superscriptChars | subscriptChars
+            |  mathSymb | arrows
+            |  unlikelyMath | unlikelyArrows
+            |  unsortedCharsTODO
+symbolChar1 ::= symbolChar - SQ
+
 
 alphaNum ::= &#39;a&#39;…&#39;z&#39; | &#39;A&#39;…&#39;Z&#39; | &#39;0&#39;…&#39;9&#39; | &#39;↊&#39; | &#39;↋&#39;
 asciiSymb ::=
@@ -667,91 +669,176 @@ asciiSymb ::=
   | &#39;^&#39; | &#39;_&#39;
   | &#39;|&#39; | &#39;~&#39;
 
+letterlikeSymb ::=
+  | &#39;ℓ&#39; | &#39;№&#39; | &#39;℘&#39; | &#39;ℏ&#39;
+  | &#39;‽&#39; | &#39;†&#39; | &#39;‡&#39; # suggested for &quot;unsafe&quot; functions
 greekAlpha ::=
   | &#39;Α&#39;…&#39;Ω&#39; - &lt;U+03A2&gt; | &#39;α&#39;…&#39;ω&#39;
   # variant forms
   | &#39;ϐ&#39; | &#39;ϴ&#39; | &#39;ϑ&#39; | &#39;ϒ&#39; | &#39;ϕ&#39; | &#39;ϖ&#39; | &#39;ϰ&#39; | &#39;ϱ&#39; | &#39;ϵ&#39;
-  # archaic and numeral
-  | &#39;Ͱ&#39;…&#39;ͳ&#39; | &#39;ϗ&#39;…&#39;ϡ&#39; | &#39;Ϻ&#39;…&#39;ϻ&#39;
-  # modified forms
-  | &#39;϶&#39; | &#39;ϼ&#39;
-hebrewAlpha ::=
-  # TODO oh yeah, some hebrew letters get used in math as well
+mathHebrew ::=
+  # note that these are not part of the unicode hebrew script; they are from the
+  # Letterlike Symbols block, so they are typeset left-to-right
   | &#39;ℵ&#39;…&#39;ℸ&#39;
 
-mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝓐𝓪, 𝔄𝔞, 𝔸𝕒)
-  # TODO I removed bold fraktur b/c it&#39;s not different enough from normal fraktur
-    &#39;𝒜&#39;…&#39;𝔷&#39; - &lt;reserved points in this range&gt;
-  | &#39;ℬ&#39; | &#39;ℰ&#39; | &#39;ℱ&#39; | &#39;ℋ&#39; | &#39;ℐ&#39; | &#39;ℒ&#39; | &#39;ℳ&#39; | &#39;ℛ&#39;
-  | &#39;ℯ&#39; | &#39;ℊ&#39; | &#39;ℴ&#39;
-  | &#39;ℭ&#39; | &#39;ℌ&#39; | &#39;ℑ&#39; | &#39;ℜ&#39; | &#39;ℨ&#39;
 blackboard ::=
-    &#39;𝔸&#39;…&#39;𝕫&#39; - &lt;reserved points in this range&gt; | &#39;ℂ&#39; | &#39;ℍ&#39; | &#39;ℕ&#39; | &#39;ℙ&#39;…&#39;ℝ&#39; | &#39;ℤ&#39;
+    &#39;𝔸&#39;…&#39;𝕫&#39; - &lt;reserved points in this range&gt; | &#39;ℂ&#39; | &#39;ℍ&#39; | &#39;ℕ&#39; | &#39;ℙ&#39; | &#39;ℚ&#39; | &#39;ℝ&#39; | &#39;ℤ&#39;
   | &#39;𝟘&#39;…&#39;𝟡&#39;
   | &#39;ℼ&#39; | &#39;ℽ&#39; | &#39;ℾ&#39; | &#39;ℿ&#39; | &#39;⅀&#39; # greek
+mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝔄𝔞)
+  # TODO I removed bold fraktur b/c it&#39;s not different enough from normal fraktur
+    &#39;𝒜&#39;…&#39;𝓏&#39; - &lt;reserved points in this range&gt;
+  | &#39;ℬ&#39; | &#39;ℰ&#39; | &#39;ℱ&#39; | &#39;ℋ&#39; | &#39;ℐ&#39; | &#39;ℒ&#39; | &#39;ℳ&#39; | &#39;ℛ&#39;
+  | &#39;ℯ&#39; | &#39;ℊ&#39; | &#39;ℴ&#39;
+  | &#39;𝔄&#39;…&#39;𝔷&#39; - &lt;reserved points in this range&gt;
+  | &#39;ℭ&#39; | &#39;ℌ&#39; | &#39;ℑ&#39; | &#39;ℜ&#39; | &#39;ℨ&#39;
+
+# as Unicode adds more miniscule latin sub/superscripts, these should be accepted as well
+superscriptChars ::=
+    &#39;ᵃ&#39; | &#39;ᵇ&#39; | &#39;ᶜ&#39; | &#39;ᵈ&#39; | &#39;ᵉ&#39; | &#39;ᶠ&#39; | &#39;ᵍ&#39; | &#39;ʰ&#39; | &#39;ⁱ&#39; | &#39;ʲ&#39; | &#39;ᵏ&#39; | &#39;ˡ&#39; | &#39;ᵐ&#39;
+  | &#39;ⁿ&#39; | &#39;ᵒ&#39; | &#39;ᵖ&#39;       | &#39;ʳ&#39; | &#39;ˢ&#39; | &#39;ᵗ&#39; | &#39;ᵘ&#39; | &#39;ᵛ&#39; | &#39;ʷ&#39; | &#39;ˣ&#39; | &#39;ʸ&#39; | &#39;ᶻ&#39;
+  | &#39;⁰&#39; | &#39;¹&#39; | &#39;²&#39; | &#39;³&#39; | &#39;⁴&#39; | &#39;⁵&#39; | &#39;⁶&#39; | &#39;⁷&#39; | &#39;⁸&#39; | &#39;⁹&#39;
+subscriptChars ::=
+    &#39;ₐ&#39;                   | &#39;ₑ&#39;             | &#39;ₕ&#39; | &#39;ᵢ&#39; | &#39;ⱼ&#39; | &#39;ₖ&#39; | &#39;ₗ&#39; | &#39;ₘ&#39;
+  | &#39;ₙ&#39; | &#39;ₒ&#39; | &#39;ₚ&#39;        | &#39;ᵣ&#39; | &#39;ₛ&#39; | &#39;ₜ&#39; | &#39;ᵤ&#39; | &#39;ᵥ&#39;         | &#39;ₓ&#39;
+  | &#39;₀&#39; | &#39;₁&#39; | &#39;₂&#39; | &#39;₃&#39; | &#39;₄&#39; | &#39;₅&#39; | &#39;₆&#39; | &#39;₇&#39; | &#39;₈&#39; | &#39;₉&#39;
 
 mathSymb ::= setSymb | logicSymb
-         | arithSymb | calculusSymb
-         | mathRels | mathOps | mathTurnstiles
-         | mathShapes
-         | &#39;′&#39; # prime
-         | extraMathSymb
-
-extraDots ::= &#39;∴&#39; | &#39;∵&#39; | &#39;∷&#39;
+          |  arithSymb | calculusSymb
+          |  mathOps | mathRels | mathTurnstiles
+          |  mathShapes
+          |  &#39;′&#39; # prime
+          |  nArySymb
 
 setSymb ::=
-  ∅∞
-  ∩∪⨿×
-  ⋂⋃∐⨉ # n-ary
-  ∈∉∋∌
-  ⊂⊃⊄⊅⊆⊇⊈⊉⊊⊋
+    &#39;∅&#39; | &#39;∞&#39;
+  | &#39;∩&#39; | &#39;∪&#39; | &#39;⨿&#39; | &#39;×&#39;
+  | &#39;∈&#39; | &#39;∋&#39; | &#39;∉&#39; | &#39;∌&#39;
+  | &#39;⊂&#39; | &#39;⊃&#39; | &#39;⊆&#39; | &#39;⊇&#39; | &#39;⊄&#39; | &#39;⊅&#39; | &#39;⊈&#39; | &#39;⊉&#39;
 logicSymb ::=
-  ⊤⊥
-  ¬∀∃∄
-  ∧∨⊻⊼⊽
-  ⅋ # linear logic (also uses &amp;!?⊗⊕, which are elsewhere)
-  ⋀⋁ # n-ary
+    &#39;⊤&#39; | &#39;⊥&#39;
+  | &#39;∀&#39; | &#39;∃&#39; | &#39;∄&#39;
+  | &#39;¬&#39; | &#39;∧&#39; | &#39;∨&#39; | &#39;⊻&#39; | &#39;⊼&#39; | &#39;⊽&#39;
+  | &#39;⅋&#39; # linear logic (also uses &amp;!?⊗⊕, which are elsewhere)
+  | &#39;□&#39; | &#39;◊&#39; # modal logic
 arithSymb ::=
-  ±∓⋅÷√
-  ∏∑⨊ # n-ary
-  ‰‱
+    &#39;±&#39; | &#39;∓&#39; | &#39;⋅&#39; | &#39;÷&#39; | &#39;√&#39;
+  | &#39;‰&#39; | &#39;‱&#39;
 calculusSymb ::=
-  ∂∆∇∫
+    &#39;∂&#39; | &#39;∫&#39; | &#39;∇&#39; | &#39;∆&#39;
+
+mathOps ::=
+    &#39;∘&#39; | &#39;⨾&#39; # composition
+  | &#39;⧺&#39; # catenation
+  | &#39;⋆&#39; | &#39;∗&#39; | &#39;⋄&#39;
+  | &#39;⊕&#39; | &#39;⊖&#39; | &#39;⊗&#39; | &#39;⊘&#39; | &#39;⊛&#39; | &#39;⊙&#39; | &#39;⊚&#39;
+  | &#39;⊞&#39; | &#39;⊟&#39; | &#39;⊠&#39; | &#39;⧄&#39; | &#39;⧆&#39; | &#39;⊡&#39; | &#39;⧇&#39;
+  | &#39;⋈&#39; | &#39;⋉&#39; | &#39;⋊&#39;
+
 mathRels ::= equivRels | compareRels
 equivRels ::=
-  ≠≡≢≣≟⩵⩶≝≜⩴≔≕ # &quot;equal&quot;
-  ≃≄≅≇≆ #iso
-  ∼≁≈≉≋ # approximate
-  ≍≭≎≏⪮ # bendy
-  ∝
+    &#39;≠&#39; | &#39;≡&#39; | &#39;≢&#39; # straight
+  | &#39;≃&#39; | &#39;≄&#39; | &#39;≅&#39; | &#39;≇&#39; # semi-wiggly
+  | &#39;≁&#39; | &#39;≈&#39; | &#39;≉&#39; # wiggly
+  | &#39;≟&#39; | &#39;⩵&#39; | &#39;⩶&#39; # predicates
+  | &#39;≝&#39; | &#39;≜&#39; | &#39;⩴&#39; | &#39;≔&#39; | &#39;≕&#39; # define/assign
+  | &#39;≍&#39; | &#39;≭&#39; | &#39;≎&#39; | &#39;≏&#39; # bendy
 compareRels ::=
-  ≤≥⪇⪈≮≯≰≱ # straight
-  ≶≷≸≹⋚⋛ # posets
-  ≲≳≴≵⋦⋧ # approximate
-  ≺≻≼≽⊀⊁⋠⋡⋞⋟ # cusp
-  ⊏⊐⊑⊒⋢⋣⋤⋥ # square
-  ⊲⊳⊴⊵⋪⋫⋬⋭ # closed
-  ≬≪≫⋘⋙
-mathOps ::=
-  ∘⨾ # composition
-  ⧺⧻∔∸ # plus and minus variants
-  ≀ # wreath product
-  ⊕⊖⊗⊙⊘⦼⨸⊚⊛⊜⊝
-  ⊞⊟⊠⊡⧄⧇⧆
-  ⨹⨺⨻
-  ⨀⨁⨂ # n-ary
-  ⋈⋉⋊
-  ∗⋄⋆
-mathTurnstiles
-  ⊢⊨⊩⊫⟝
-mathShapes ::=
-  □⬠⬡○
-  ◊⬭⬯
-  ◇☆⯎⯏
-  ⋕⩩ # I&#39;ve seen the last used in &quot;SICP for GR&quot; or whatever it&#39;s called
+  # FIXME do I really need both handednesses of ≶≷≸≹⋚⋛?
+    &#39;≤&#39; | &#39;≥&#39; | &#39;≮&#39; | &#39;≯&#39; | &#39;≰&#39; | &#39;≱&#39; # straight
+  | &#39;≺&#39; | &#39;≻&#39; | &#39;≼&#39; | &#39;≽&#39; | &#39;⊀&#39; | &#39;⊁&#39; | &#39;⋠&#39; | &#39;⋡&#39;  # cusp
+  | &#39;⊏&#39; | &#39;⊐&#39; | &#39;⊑&#39; | &#39;⊒&#39; | &#39;⋢&#39; | &#39;⋣&#39; # square
+  | &#39;≶&#39; | &#39;≷&#39; | &#39;≸&#39; | &#39;≹&#39; | &#39;⋚&#39; | &#39;⋛&#39; # posets
+  | &#39;≲&#39; | &#39;≳&#39; | &#39;≴&#39; | &#39;≵&#39; # approximate
+  | &#39;≪&#39; | &#39;≫&#39; | &#39;⋘&#39; | &#39;⋙&#39; # multiple
+mathTurnstiles ::=
+    &#39;⊢&#39; | &#39;⊨&#39; | &#39;⊩&#39; | &#39;⊫&#39;
+
+nArySymb ::=
+    &#39;⋃&#39; | &#39;⋂&#39; | &#39;∐&#39; | &#39;⨉&#39; # sets
+  | &#39;⋁&#39; | &#39;⋀&#39; # logic
+  | &#39;∑&#39; | &#39;∏&#39; | &#39;⨊&#39; # arithmetic
+  | &#39;⨁&#39; | &#39;⨂&#39; | &#39;⨀&#39; # circled
+
+arrows ::=
+    &#39;←&#39; | &#39;↑&#39; | &#39;→&#39; | &#39;↓&#39; | &#39;↔&#39; | &#39;↕&#39; # straight
+  | &#39;↚&#39;       | &#39;↛&#39;       | &#39;↮&#39;       # stroked
+  | &#39;⇐&#39; | &#39;⇑&#39; | &#39;⇒&#39; | &#39;⇓&#39; | &#39;⇔&#39; | &#39;⇕&#39; # double
+  | &#39;⇍&#39;       | &#39;⇏&#39;       | &#39;⇎&#39;       # stroked double
+  # alternate bodies
+  | &#39;↜&#39;       | &#39;↝&#39;       | &#39;↭&#39;       # wave
+  | &#39;⇜&#39;       | &#39;⇝&#39;                   # squiggle
+  # alternate heads
+  | &#39;↞&#39; | &#39;↟&#39; | &#39;↠&#39; | &#39;↡&#39; # two headed
+  | &#39;↼&#39; | &#39;↾&#39; | &#39;⇀&#39; | &#39;⇂&#39; # harpoons
+  | &#39;⇤&#39; | &#39;⤒&#39; | &#39;⇥&#39; | &#39;⤓&#39; # to bar
+  | &#39;⟜&#39; | &#39;⫯&#39; | &#39;⊸&#39; | &#39;⫰&#39; # sometimes used in linear logic as well
+  # alternate tails
+  | &#39;↢&#39;       | &#39;↣&#39;       # tail
+  | &#39;↩&#39;       | &#39;↪&#39;       # hook
+  | &#39;↤&#39; | &#39;↥&#39; | &#39;↦&#39; | &#39;↧&#39; # from bar
+  | &#39;⤆&#39;       | &#39;⤇&#39;       # double from bar
+  # only tails
+  | &#39;⤙&#39; | &#39;⤚&#39; # single tail
+  | &#39;⤛&#39; | &#39;⤜&#39; # double tail
 
 
-extraMathSymb ::=
+unlikelyMath ::=
+  # archaic and numeral greek
+    &#39;Ͱ&#39;…&#39;ͳ&#39; | &#39;ϗ&#39;…&#39;ϡ&#39; | &#39;Ϻ&#39;…&#39;ϻ&#39;
+  # modified greek letters
+  | &#39;϶&#39; | &#39;ϼ&#39;
+  # extra dots
+  | &#39;∴&#39; | &#39;∵&#39; | &#39;∷&#39;
+  # operators
+  | &#39;⧻&#39; | &#39;∔&#39; | &#39;∸&#39; # plus and minus variants
+  | &#39;≀&#39; # wreath product
+  | &#39;⦼&#39; | &#39;⨸&#39; | &#39;⊜&#39; | &#39;⊝&#39;
+  | &#39;⨹&#39; | &#39;⨺&#39; | &#39;⨻&#39;
+  # equivalence relations
+  | &#39;≣&#39; | &#39;≋&#39; | &#39;∝&#39;
+  # proper relations
+  | &#39;⊊&#39; | &#39;⊋&#39; | &#39;⋤&#39; | &#39;⋥&#39; | &#39;⪇&#39; | &#39;⪈&#39; | &#39;⋦&#39; | &#39;⋧&#39; | &#39;≆&#39;
+  # closed triangle relations
+  | &#39;⊲&#39; | &#39;⊳&#39; | &#39;⊴&#39; | &#39;⊵&#39; | &#39;⋪&#39; | &#39;⋫&#39; | &#39;⋬&#39; | &#39;⋭&#39;
+  # other relations
+  | &#39;⋞&#39; | &#39;⋟&#39; | &#39;⪮&#39;
+  | &#39;≬&#39; # listed as &quot;between&quot;, but I don&#39;t see how this is a trinary relation
+  # math shapes (logic symbols have square and lozenge)
+  | &#39;⬠&#39; | &#39;⬡&#39; | &#39;○&#39;
+  | &#39;⬭&#39; | &#39;⬯&#39;
+  | &#39;◇&#39; | &#39;☆&#39; | &#39;⯎&#39; | &#39;⯏&#39;
+  | &#39;⋕&#39; | &#39;⩩&#39; # I&#39;ve seen the last used in &quot;SICP for GR&quot; or whatever it&#39;s called
+  # there are even more math symbols in Unicode!
+  | moreUnlikelyMath
+
+unlikelyArrows ::=
+    &#39;⇚&#39; | &#39;⇛&#39; | &#39;⤊&#39; | &#39;⤋&#39; # triple body
+  | &#39;⟰&#39; | &#39;⟱&#39; | &#39;⭅&#39; | &#39;⭆&#39; # quadruple body
+  | &#39;⤸&#39; | &#39;⤹&#39; | &#39;⤺&#39; | &#39;⤻&#39; # arc (only down and left are available)
+  | &#39;⥊&#39; | &#39;⥋&#39; | &#39;⥌&#39; | &#39;⥍&#39; | &#39;⥎&#39; | &#39;⥏&#39; | &#39;⥐&#39; | &#39;⥑&#39; # double harpoon
+  | &#39;↽&#39; | &#39;↿&#39; | &#39;⇁&#39; | &#39;⇃&#39; # other-handed harpoons
+  | &#39;⧟&#39;
+  | &#39;↫&#39; | &#39;↬&#39; # loop tail
+  | &#39;⥼&#39; | &#39;⥽&#39; | &#39;⥾&#39; | &#39;⥿&#39; # fish tail
+  | &#39;⤅&#39; | &#39;⬶&#39; # two headed from bar
+  # turning
+  | &#39;↰&#39; | &#39;↱&#39; | &#39;↲&#39; | &#39;↳&#39; | &#39;⬎&#39; | &#39;⬏&#39; | &#39;⬐&#39; | &#39;⬑&#39; # tip turn
+  | &#39;⤴&#39; | &#39;⤵&#39; | &#39;⤶&#39; | &#39;⤷&#39; # curving
+  | &#39;↶&#39; | &#39;↷&#39; | &#39;⤾&#39; | &#39;⤿&#39; # semicircle
+  | &#39;⮌&#39; | &#39;⮍&#39; | &#39;⮎&#39; | &#39;⮏&#39; # (triangle-headed) u-shaped
+  | &#39;↺&#39; | &#39;↻&#39; # circle
+  | &#39;⟲&#39; | &#39;⟳&#39; # gapped circle
+  | &#39;⥀&#39; | &#39;⥁&#39; # closed circle
+  # multiple
+  | &#39;⇄&#39; | &#39;⇅&#39; | &#39;⇆&#39; | &#39;⇇&#39; | &#39;⇈&#39; | &#39;⇉&#39; | &#39;⇊&#39; | &#39;⇵&#39; # paired
+  | &#39;⥢&#39; | &#39;⥣&#39; | &#39;⥤&#39; | &#39;⥥&#39; # \ paired harpoons
+  | &#39;⥮&#39; | &#39;⥯&#39; | &#39;⇋&#39; | &#39;⇌&#39; # |
+  | &#39;⥦&#39; | &#39;⥧&#39; | &#39;⥨&#39; | &#39;⥩&#39; # |
+  | &#39;⥪&#39; | &#39;⥫&#39; | &#39;⥬&#39; | &#39;⥭&#39; # /
+  | &#39;⇶&#39; | &#39;⬱&#39; # three
+
+moreUnlikelyMath ::=
 # set theory
   ⨃⨄⨅⨆ # n-ary
   ⊌⊍⊎⋒⋓⊓⊔⩀⩁⩂⩃⩄⩅⩐⩎⩏
@@ -789,7 +876,6 @@ extraMathSymb ::=
   ⊮⫣
   ⊯⫥
   ⫢⊪⫦
-  ⟞
   ⫝̸⫝
   ⟘⟙⫧⫨⫩⫪⫫
 # database
@@ -798,69 +884,17 @@ extraMathSymb ::=
 # misc
   ∎ # QED/tombstone
   ∿
-  ⦰⦱⦲⦳⦴⦵
-
-
-# you can have one alternate head or tail, but not both
-# you can also drop the head with an alternate tail
-# there are no straight strokes, only slash strokes
-arrows ::= #TODO fix metasyntax
-  ←↑→↓↔↕ # straight
-  ⇐⇑⇒⇓⇔⇕ # double
-  ↚↛↮ # stroked
-  ⇍⇎⇏ # stroked double
-  ↜↝↭ # wave
-  ⇜⇝ # squiggle
-  ⤸⤹⤺⤻ # arc
-  ⇚⇛⤊⤋ # triple
-  ⟰⟱⭅⭆ # quadruple
-# long
-  ⟵⟶⟷ # long
-  ⟸⟹⟺ # long double
-  ⟻⟼ # long from bar
-  ⟽⟾ # long double from bar
-  ⟿⬳ # long squiggle
-#alt heads
-  ↞↟↠↡ # two headed
-  ↼↽↾↿⇀⇁⇂⇃⥊⥋⥌⥍⥎⥏⥐⥑ # harpoon
-  ⇤⇥⤒⤓ # to bar
-  ⊸⟜⫯⫰⧟
-# alt tails
-  ↢↣ # tail
-  ↩↪ # hook
-  ↤↥↦↧ # from bar
-  ↫↬ # loop
-# no head, alt tail
-  ⤙⤚ # only tail
-  ⤛⤜ # only double tail
-  ⥼⥽⥾⥿ # fish tail
-# to/from endpoints
-  ⤅⬶ # two headed from bar
-  ⤆⤇ # double from bar
-# turning
-  ↰↱↲↳⬎⬏⬐⬑ # tip turn
-  ⤴⤵⤶⤷ # curving
-  ↶↷⤾⤿ # semicircle
-  ⮌⮍⮎⮏ # (triangle-headed) u-shaped
-  ↺↻ # circle
-  ⟲⟳ # gapped circle
-  ⥀⥁ # closed circle
-# multiple
-  ⇄⇅⇆⇇⇈⇉⇊⇵ # paired
-  ⇋⇌ # paired harpoon
-  ⇶⬱ # three
-  ⥢⥣⥤⥥⥦⥧⥨⥩⥪⥫⥬⥭⥮⥯ # paired harpoons
-
-
-unsortedCharsTODO ::=
-  # TODO random stuff from letterlike symbols
-  | &#39;ℓ&#39; | &#39;℘&#39; | &#39;№&#39; | &#39;℧&#39;
-  | &#39;†&#39; | &#39;‡&#39; # or use these instead of emoji for unsafe functions</code></pre>
+  ⦰⦱⦲⦳⦴⦵</code></pre>
 <div class="Warning">
 <p>If you use non-ASCII notation in your language or library, it is not enough to include suggestions for ASCII alternatives. Instead, there must be a tool to convert losslessly between Unicode and ASCII.</p>
 </div>
 <div class="Warning">
-<p>The selection of available symbol characters is not yet set in stone. So far, I have only examined the Basic Latin Unicode block for useful characters. I would like to allow mathematical operators, arrows, greek letters at least, and I may include a number of other scripts if it comes to it. However, I’ll also want to use some normalization algorithm to ensure visually-identical symbols are treated identically. I am loathe to include characters from scripts I am not fluent with; if they are to be added, it should be in consultation with people who <em>do</em> understand these scripts.</p>
+<p>The selection of available symbol characters is not yet set in stone. So far, I have only examined a portion of Unicode for useful characters. My goal was to identify mathematical operators/relations/symbols, arrows, greek letters, and fancy alphanumerics at least. If something you need is missing, it may simply be because I couldn’t easily find why certain symbols are used; let me know and I’ll try to add it. I may include a number of other scripts if it comes to it, but I am loathe to include characters from scripts I am not fluent with; if they are to be added, it should be in consultation with people who <em>do</em> understand these scripts.</p>
+</div>
+<div class="Warning">
+<p>I have not gone through the available symbols to handle visually-confusable characters. I expect I’ll allow visually-identical symbols, but use some normalization algorithm to ensure they are treated identically and normalized.</p>
+</div>
+<div class="comment">
 <p>Here is a list of blocks that I have examined or plan to examine:</p>
 <ul class="task-list">
 <li><input type="checkbox" disabled="" checked="" />
@@ -887,10 +921,14 @@ Supplemental Mathematical Operators</li>
 Latin-1 Supplement</li>
 <li><input type="checkbox" disabled="" checked="" />
 Geometric Shapes (I’ve only taken the white ones b/c they’re easy to print, and all of the same “size”)</li>
+<li><input type="checkbox" disabled="" />
+Geometric Shapes Extended</li>
 <li><input type="checkbox" disabled="" checked="" />
 Miscellaneous Technical</li>
 <li><input type="checkbox" disabled="" checked="" />
 General Punctuation</li>
+<li><input type="checkbox" disabled="" checked="" />
+Supplemental Punctuation</li>
 </ul></li>
 <li><input type="checkbox" disabled="" checked="" />
 arrows:<ul class="task-list">
@@ -906,6 +944,8 @@ Supplemental Arrows-C (no, these are mostly thickness variants and some wingding
 Miscellaneous Symbols and Arrows</li>
 </ul></li>
 <li><input type="checkbox" disabled="" />
+Superscripts and Subscripts</li>
+<li><input type="checkbox" disabled="" />
 SI unit symbols (not a block)</li>
 <li><input type="checkbox" disabled="" checked="" />
 greek:<ul class="task-list">
@@ -914,26 +954,25 @@ Greek and Coptic</li>
 <li><input type="checkbox" disabled="" checked="" />
 Greek Extended</li>
 </ul></li>
-<li><input type="checkbox" disabled="" />
+<li><input type="checkbox" disabled="" checked="" />
 Hebrew</li>
 <li><input type="checkbox" disabled="" />
 keyboard key symbols (not a block)</li>
 <li><input type="checkbox" disabled="" />
 Latin-1 Supplement, Latin Extended-A -B -C -D and -E, Latin Extended Additional</li>
-<li><input type="checkbox" disabled="" />
+<li><input type="checkbox" disabled="" checked="" />
+combining marks (just no much work to normalize them)<ul class="task-list">
+<li><input type="checkbox" disabled="" checked="" />
 Combining Diacritical Marks, Combining Diacritical Marks Extended, Combining Diacritical Marks Supplement</li>
-<li><input type="checkbox" disabled="" />
+<li><input type="checkbox" disabled="" checked="" />
 Combining Diacritical Marks for Symbols</li>
-<li><input type="checkbox" disabled="" />
+<li><input type="checkbox" disabled="" checked="" />
 Combining Half Marks</li>
-<li><input type="checkbox" disabled="" />
-General Punctuation, Supplemental Punctuation</li>
-<li><input type="checkbox" disabled="" />
-Superscripts and Subscripts</li>
+</ul></li>
 <li><input type="checkbox" disabled="" />
 Currency Symbols</li>
-<li><input type="checkbox" disabled="" />
-Geometric Shapes, Geometric Shapes Extended, Miscellaneous Symbols, Dingbats, Ornamental Dingbats</li>
+<li><input type="checkbox" disabled="" checked="" />
+Dingbats, Ornamental Dingbats</li>
 <li><input type="checkbox" disabled="" checked="" />
 IPA extensions, Spacing Modifier Letters (I don’t think the IPA script is really useful for variable names)</li>
 <li><input type="checkbox" disabled="" checked="" />
@@ -1072,7 +1111,7 @@ ellipsis ::= &#39;..&#39; # TODO probly also include &#39;…&#39;</code></pre>
     (init-wsl))))</code></pre>
 </dd>
 </dl>
-<p>Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue. However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages. A design philosophy I used for eexprs is “the easier it is to write with tooling, the easier it is everywhere”<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a>. Indeed, while I’m developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.</p>
+<p>Of course, there are tools to help manipulate s-exprs, so one might argue that the ergonomics are not a real issue. However, tooling does not exist everywhere: unconfigured (or worse: badly-configured) editors, whiteboards and paper, web pages. A design philosophy I used for eexprs is “the easier it is to write without tooling, the easier it is everywhere”<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a>. Indeed, while I’m developing eexprs, I have no tooling for them, but I find it no more difficult than using sexprs with tools.</p>
 <p>Before moving on, I just want to point out one non-advantage of s-exprs. I have heard it argued that the minimalist syntax of Lisp is the price you pay for Lisp’s most iconic advantage: its macro system. Indeed, one can very easily construct new sexprs from templates simply by introducing special forms for <code>quasiquote</code>, <code>unquote</code> and <code>unquote-splicing</code>. However, it is not necessary for s-exprs to be so minimalistic; it is sufficient that they form an algebraic data type. With an appropriate set of quasiquoters and unquoters, any language representable in an ADT can also take advantage of quasiquotation to implement metaprogramming. Nevertheless, I can see why in the 1960’s they went with sexprs rather than a richer system.<a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a></p>
 <h1 id="notes">NOTES</h1>
 <p>parse a “level 0/1” int by checking that <code>radix^exp</code> is less than <code>2^n</code> for some reasonable <code>n</code> (perhaps 64 for known small ints, but if you allow exact big ints, then some larger n like <code>8^m</code> for a max of <code>m</code> bytes of memory (maybe 4096 is good? just how big a bigint do you need‽</p>

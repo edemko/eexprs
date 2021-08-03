@@ -19,6 +19,7 @@ htmlTex=--mathjax="$mathjaxUrl"
 # above here is mostly ruled-out
 MONOFONT='Source Code Pro' # I like the spacing here, but there are lots of missing chars relative to DejaVu
 MONOFONT='DejaVu Sans Mono' # the spacing is a bit tight, but it has ~100 more chars than Source Code Pro
+MONOFONT='Eexpr Reference Mono' # my own font, built from Source Code Pro and others
 
 mkTarget() {
   local basename="$1"
