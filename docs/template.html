@@ -18,6 +18,20 @@ $if(description-meta)$
 $endif$
   <title>$if(title-prefix)$$title-prefix$ – $endif$$pagetitle$</title>
   <style>
+    $styles.html()$
+  </style>
+  <style>
+    @font-face {
+      font-family: 'EexprReferenceMono';
+      src: url('http://files.okuno.info/fonts/EexprReferenceMono-Regular.woff') format('woff'),
+           url('http://files.okuno.info/fonts/EexprReferenceMono-Regular.ttf') format('truetype');
+    }
+    code {
+      font-family: 'EexprReferenceMono',
+                   Menlo, Monaco, 'Lucida Console', Consolas,
+                   monospace;
+    }
+
     p {
       text-align: justify;
     }
@@ -47,9 +61,6 @@ $endif$
     .Warning > p:first-child {
       margin-top: 0.4em;
     }
-  </style>
-  <style>
-    $styles.html()$
   </style>
 $for(css)$
   <link rel="stylesheet" href="$css$" />

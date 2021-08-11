@@ -716,8 +716,8 @@ TODO what all metasyntax do I use? only introduce it just before it is needed, n
 
 ```
 token ::= nl | lws(_, _) | lineJoin | comment
-       | number | symbol
-       | TODO
+       | number | symbol | string(_, _)
+       | punctuation
 ```
 
 #### Whitespace
@@ -888,8 +888,7 @@ blackboard ::=
     '𝔸'…'𝕫' - <reserved points in this range> | 'ℂ' | 'ℍ' | 'ℕ' | 'ℙ' | 'ℚ' | 'ℝ' | 'ℤ'
   | '𝟘'…'𝟡'
   | 'ℼ' | 'ℽ' | 'ℾ' | 'ℿ' | '⅀' # greek
-mathAlpha ::= # alternate alphanum fonts for math (𝒜𝒶, 𝔄𝔞)
-  # TODO I removed bold fraktur b/c it's not different enough from normal fraktur
+mathAlpha ::=
     '𝒜'…'𝓏' - <reserved points in this range>
   | 'ℬ' | 'ℰ' | 'ℱ' | 'ℋ' | 'ℐ' | 'ℒ' | 'ℳ' | 'ℛ'
   | 'ℯ' | 'ℊ' | 'ℴ'
@@ -1192,7 +1191,7 @@ cEscapeChar ::= BS | SQ | DQ | BQ
              |  '&'
 cStrLineJoin ::= nl lws(_)
 
-# TODO I should likely eliminate non-printing characters as well
+# FIXME I should likely eliminate non-printing characters as well
 cStrChar ::= 1 - (BS | DQ | BQ | nl)
 ```
 
@@ -1317,7 +1316,7 @@ encloser(Close, Paren) ::= ')'
 encloser(Close, Bracket) ::= ']'
 encloser(Close, Brace) ::= '}'
 
-  # TODO more enclosers
+  # FIXME more enclosers
   # ⌈⌉⌊⌋⟅⟆⟦⟧⟨⟩⟪⟫⟬⟭⟮⟯«»
   # ⦃⦄⦅⦆⦇⦈⦉⦊⦋⦌⦍⦎⦏⦐⦑⦒⦓⦔⦕⦖⦗⦘
   # ⧼⧽
@@ -1328,7 +1327,7 @@ comma ::= ','
 
 unknownDot ::= '.'
 unknownColon ::= ':'
-ellipsis ::= '..' # TODO probly also include '…'
+ellipsis ::= '..' # FIXME probly also include '…'
 ```
 
 
