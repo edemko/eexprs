@@ -90,23 +90,23 @@ def dozenal(font, scp):
   scp.copy()
   font.selection.select(("ranges",), ord("↊"), ord("↋"))
   font.paste()
-  if ord('↊') not in font: # rotate two to dek
-    dek = font[ord('↊')]
-    xform = aroundCentroid(dek, mat.rotate(math.pi))
-    dek.transform(compose(
-      xform,
-      mat.scale(1, 0.96),
-      mat.translate(0, -12),
-    ), ('round',))
-    dek.width, dek.vwidth = monosize
-  if ord('↋') not in font: # rotate three to el
-    el = font[ord('↋')]
-    xform = aroundCentroid(el, mat.rotate(math.pi))
-    el.transform(compose(
-      xform,
-      mat.scale(1, 0.96),
-    ), ('round',))
-    el.width, el.vwidth = monosize
+  # rotate two to dek
+  dek = font[ord('↊')]
+  xform = aroundCentroid(dek, mat.rotate(math.pi))
+  dek.transform(compose(
+    xform,
+    mat.scale(1, 0.96),
+    mat.translate(0, -12),
+  ), ('round',))
+  dek.width, dek.vwidth = monosize
+  # rotate three to el
+  el = font[ord('↋')]
+  xform = aroundCentroid(el, mat.rotate(math.pi))
+  el.transform(compose(
+    xform,
+    mat.scale(1, 0.96),
+  ), ('round',))
+  el.width, el.vwidth = monosize
 
 def script(font, felipa):
   vratio = 681/754
