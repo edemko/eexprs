@@ -1,0 +1,32 @@
+[ Space
+    ()
+    (Symbol () "do" :||
+       (Block
+          ()
+          (Space
+             ()
+             (Symbol () "years" :||
+                (Symbol () "=" :|
+                   [ Chain () (Symbol () "dog" :|| (Symbol () "age" :| []))
+                   , Symbol () "+"
+                   , Number
+                       ()
+                       Bignum
+                         { significand = 55
+                         , radix = Radix 10
+                         , fractionalExponent = 0
+                         , explicitExponent = 0
+                         }
+                   ])) :|
+             [ Chain
+                 ()
+                 (Symbol () "print" :||
+                    (Paren
+                       ()
+                       (Just
+                          (String
+                             () "The dog is " [ ( Symbol () "years" , " years old!" ) ])) :|
+                       []))
+             ]) :|
+          []))
+]
