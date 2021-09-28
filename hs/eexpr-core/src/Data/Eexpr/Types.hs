@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE PatternSynonyms #-}
 
@@ -37,7 +38,7 @@ data Eexpr ann
   | Comma     ann [Eexpr ann]
   | Semicolon ann [Eexpr ann]
   deriving stock (Read, Show)
-  deriving stock (Eq)
+  deriving stock (Eq,Functor)
 
 mapAnnotation :: (a -> b) -> Eexpr a -> Eexpr b
 mapAnnotation f (Symbol a x) = Symbol (f a) x
